@@ -8,8 +8,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    // cleartext and allowMixedContent REMOVED for production.
-    // All API calls go to HTTPS (Vercel). HTTP is not needed.
+    cleartext: true
   },
   plugins: {
     CapacitorSQLite: {

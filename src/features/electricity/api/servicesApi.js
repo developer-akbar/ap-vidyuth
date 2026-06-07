@@ -25,6 +25,12 @@ import { db } from '../../../shared/db/storage.js';
 export function apiBase() {
   const env = import.meta.env?.VITE_API_URL;
   if (env && !env.includes('127.0.0.1:5173') && !env.includes('localhost:5173')) return env.replace(/\/$/, '');
+  
+  // Fallback for native Android/iOS when VITE_API_URL is not baked in correctly
+  if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
+    return 'https://ap-vidyuth.vercel.app/api';
+  }
+  
   return '/api';
 }
 
@@ -32,8 +38,11 @@ export async function apiPost(path, body) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s global timeout
 
+  const url = `${apiBase()}${path}`;
+  console.log(`[servicesApi] POST ${url}`);
+
   try {
-    const res = await fetch(`${apiBase()}${path}`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
