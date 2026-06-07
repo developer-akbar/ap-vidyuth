@@ -7,7 +7,7 @@
         android:shortcutLongLabel="@string/shortcut_refresh_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="mydashboard://action/refresh"
+            android:data="apvidyuth://action/refresh"
             android:targetPackage="com.akbar.apvidyuth"
             android:targetClass="com.akbar.apvidyuth.MainActivity" />
     </shortcut>
@@ -20,7 +20,7 @@
         android:shortcutLongLabel="@string/shortcut_pay_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="mydashboard://action/pay"
+            android:data="apvidyuth://action/pay"
             android:targetPackage="com.akbar.apvidyuth"
             android:targetClass="com.akbar.apvidyuth.MainActivity" />
     </shortcut>
@@ -33,7 +33,7 @@
         android:shortcutLongLabel="@string/shortcut_add_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="mydashboard://action/add"
+            android:data="apvidyuth://action/add"
             android:targetPackage="com.akbar.apvidyuth"
             android:targetClass="com.akbar.apvidyuth.MainActivity" />
     </shortcut>
