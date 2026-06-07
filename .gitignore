@@ -43,3 +43,4 @@ wrong_captcha.html
 
 # Keep .env.example
 !.env.example
+.env*
