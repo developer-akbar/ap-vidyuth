@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AP Vidyuth</string>
+    <string name="title_activity_main">AP Vidyuth</string>
+    <string name="package_name">com.akbar.apvidyuth</string>
+    <string name="custom_url_scheme">com.akbar.apvidyuth</string>
+    <string name="shortcut_refresh_short">Refresh</string>
+    <string name="shortcut_refresh_long">Refresh all bills</string>
+    <string name="shortcut_pay_short">Pay Home</string>
+    <string name="shortcut_pay_long">Pay home electricity bill</string>
+    <string name="shortcut_add_short">Add Service</string>
+    <string name="shortcut_add_long">Add a new connection</string>
+</resources>

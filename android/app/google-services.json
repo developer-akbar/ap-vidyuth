@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "542521622791",
+    "project_id": "my-dashboard-mobile",
+    "storage_bucket": "my-dashboard-mobile.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:542521622791:android:5ff117b6996500192805a2",
+        "android_client_info": {
+          "package_name": "com.akbar.mydashboard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDy4nAoYV3Rq_bjWh69hQpOEGzxXi2tP_I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

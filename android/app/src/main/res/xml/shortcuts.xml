@@ -1,0 +1,41 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="refresh_bills"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_refresh_short"
+        android:shortcutLongLabel="@string/shortcut_refresh_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="mydashboard://action/refresh"
+            android:targetPackage="com.akbar.apvidyuth"
+            android:targetClass="com.akbar.apvidyuth.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="pay_home"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_pay_short"
+        android:shortcutLongLabel="@string/shortcut_pay_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="mydashboard://action/pay"
+            android:targetPackage="com.akbar.apvidyuth"
+            android:targetClass="com.akbar.apvidyuth.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="add_service"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_add_short"
+        android:shortcutLongLabel="@string/shortcut_add_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="mydashboard://action/add"
+            android:targetPackage="com.akbar.apvidyuth"
+            android:targetClass="com.akbar.apvidyuth.MainActivity" />
+    </shortcut>
+</shortcuts>
+cuts>

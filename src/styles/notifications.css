@@ -1,0 +1,140 @@
+/* ── Header Badge ── */
+.header-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--red);
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+  border-radius: 10px;
+  padding: 1px 4px;
+  min-width: 14px;
+  border: 1.5px solid var(--surface-1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  line-height: 1;
+}
+
+/* ── Sticky Header Styles ── */
+.page__header--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-2);
+  border-bottom: 1px solid transparent;
+}
+
+.page--scrolled .page__header--sticky {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  background: var(--bg-2);
+}
+
+.page--scrolled .page__header .icon-btn {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+.page--scrolled .page__header .icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ── Notification Inbox ── */
+.inbox-dialog {
+  width: 450px !important;
+  max-width: 95vw !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.inbox-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.inbox-item {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.inbox-item:hover {
+  background: var(--surface-2);
+}
+
+.inbox-item--unread {
+  background: rgba(var(--primary-rgb), 0.05);
+}
+
+.inbox-item--unread::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--primary);
+}
+
+.inbox-item__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+}
+
+.inbox-item__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.inbox-item__title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text-1);
+}
+
+.inbox-item__time {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.inbox-item__body {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.inbox-item__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--primary);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+@media (max-width: 500px) {
+  .inbox-dialog {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+  }
+}

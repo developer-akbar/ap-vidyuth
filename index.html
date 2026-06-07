@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Primary meta -->
+    <title>AP Vidyuth — Electricity Bill Tracker</title>
+    <meta name="google-site-verification" content="XZVNjrn0g4Twe0nloCwniCpi9DPsYZ5SOoN9Vk2eeLU" />
+    <meta name="description" content="Track your APSPDCL electricity bills, dues, payment history, and consumption trends. AP Vidyuth - your personal utility dashboard." />
+    <meta name="author" content="Akbar" />
+    <meta name="keywords" content="APSPDCL, electricity bill, bill tracker, Andhra Pradesh, AP Vidyuth, utility dashboard" />
+
+    <!-- Theme -->
+    <meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="AP Vidyuth" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="AP Vidyuth — Electricity Bill Tracker" />
+    <meta property="og:description" content="Track your APSPDCL electricity bills, dues, and payment history." />
+    <meta property="og:image" content="/logo.svg" />
+
+    <!-- Security: prevent MIME sniffing -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://my-dashboard-mobile.vercel.app/" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "AP Vidyuth",
+      "operatingSystem": "Android, Web",
+      "applicationCategory": "Utility",
+      "description": "Track your APSPDCL electricity bills, dues, and payment history with consumption trends.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "INR"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "Akbar"
+      }
+    }
+    </script>
+
+    <!-- Fonts: Preconnect and Preload critical font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p style="font-family:sans-serif;text-align:center;padding:40px">
+        AP Vidyuth requires JavaScript. Please enable it in your browser settings.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,62 @@
+{
+  "name": "AP Vidyuth",
+  "short_name": "AP Vidyuth",
+  "description": "AP Vidyuth — track your APSPDCL electricity bills, dues, payments, and usage trends.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f1117",
+  "theme_color": "#6366f1",
+  "categories": [
+    "utilities",
+    "finance",
+    "productivity"
+  ],
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "/icons/icon-48.webp",
+      "sizes": "48x48",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-72.webp",
+      "sizes": "72x72",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-96.webp",
+      "sizes": "96x96",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-128.webp",
+      "sizes": "128x128",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192.webp",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-256.webp",
+      "sizes": "256x256",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

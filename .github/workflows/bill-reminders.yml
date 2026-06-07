@@ -1,0 +1,14 @@
+name: Bill Reminders Scheduler
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # Every day at 4:00 AM UTC (9:30 AM IST)
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-bills:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Bill Check
+        run: |
+          curl -X GET "${{ secrets.API_URL }}/api/notifications/check?secret=${{ secrets.INTERNAL_SECRET }}"
