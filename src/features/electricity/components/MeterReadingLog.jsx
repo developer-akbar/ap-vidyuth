@@ -75,6 +75,11 @@ export function MeterReadingLog({ service }) {
 
     // Logic to calculate projected bill for this single reading (compatibility with BillPredictor)
     const startReading = parseFloat(String(service.closingRdg || 0).replace(/[^0-9.]/g, ''));
+    if (val < startReading) {
+      toast.error(t('rdg_less_than_last', { last: startReading }));
+      return;
+    }
+
     const unitsSoFar = val - startReading;
     
     const billDateStr = service.lastBillDate || service.billDate;
@@ -164,11 +169,23 @@ export function MeterReadingLog({ service }) {
       {recentReadings.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px' }}>
           {[...recentReadings].sort((a, b) => new Date(b.date) - new Date(a.date)).map((r, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
-              <span style={{ color: 'var(--text-3)', fontSize: '10px' }}>{fmtDate(r.date)}</span>
-              <span style={{ fontWeight: 700, color: 'var(--text-1)' }}>{r.reading.toLocaleString('en-IN')} u</span>
-              <button className="icon-btn-micro" onClick={() => removeReading(r)} style={{ color: 'var(--text-3)' }}>
-                <FiTrash2 size={11} />
+            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)' }}>
+              <span style={{ color: 'var(--text-3)', fontSize: '10px', flexShrink: 0 }}>{fmtDate(r.date)}</span>
+              
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-1)', fontSize: '12px' }}>{r.reading.toLocaleString('en-IN')}u</span>
+                <span style={{ fontSize: '10px', color: 'var(--text-3)' }}>{r.unitsSoFar ? `(+${r.unitsSoFar.toFixed(0)})` : ''}</span>
+              </div>
+
+              {r.predictedBill != null && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-3)' }}>Est.</span>
+                  <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '12px' }}>{formatInr(r.predictedBill)}</span>
+                </div>
+              )}
+
+              <button className="icon-btn-micro" onClick={() => removeReading(r)} style={{ color: 'var(--text-3)', flexShrink: 0, marginLeft: '4px' }}>
+                <FiTrash2 size={13} />
               </button>
             </div>
           ))}

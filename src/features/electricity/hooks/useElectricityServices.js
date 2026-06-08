@@ -117,13 +117,21 @@ export function useElectricityServices() {
         await reload();
       }
     })();
+
+    // DB events from background jobs (like BackupRestore)
+    const handleDbUpdate = () => reload();
+    window.addEventListener('db-updated', handleDbUpdate);
+
+    return () => {
+      window.removeEventListener('db-updated', handleDbUpdate);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── actions.add ─────────────────────────────────────────────────────────────
   // POST /services
   // Validates + fetches in one shot (2 APSPDCL calls total), then reloads.
   const add = useCallback(async (params) => {
-    const { isBulk, entries, serviceNumber, label } = params;
+    const { isBulk, entries, serviceNumber, label, pinned } = params;
     const snForSession = isBulk ? entries[0].number : serviceNumber;
     
     const session = await getValidSession(snForSession);
@@ -131,9 +139,11 @@ export function useElectricityServices() {
     
     let result;
     if (isBulk) {
-      result = await createBulkServices(entries, session);
+      result = await createBulkServices(entries, session, async () => {
+        await reload();
+      });
     } else {
-      result = await createService({ serviceNumber, label }, session);
+      result = await createService({ serviceNumber, label, pinned }, session);
     }
     
     await reload();

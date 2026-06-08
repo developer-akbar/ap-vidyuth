@@ -1,25 +1,50 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiDownload, FiUpload } from 'react-icons/fi';
+import { FiDownload, FiUpload, FiTrash2 } from 'react-icons/fi';
 import { SettingsItem } from './SettingsItem.jsx';
 import { useElectricityServices } from '../../electricity/hooks/useElectricityServices.js';
+import { db } from '../../../shared/db/storage.js';
 import toast from 'react-hot-toast';
 import { usePostHog } from '@posthog/react';
+import { importBackupData } from '../../../shared/utils/backupRestore.js';
+import { ConfirmDialog } from '../../../shared/components/ConfirmDialog.jsx';
 
 export function BackupRestore() {
   const { t } = useTranslation();
-  const { services, trash, actions } = useElectricityServices();
+  const context = useElectricityServices();
+  const { services, trash, actions } = context;
   const fileInputRef = useRef(null);
   const ph = usePostHog();
   const [isImporting, setIsImporting] = useState(false);
+  const [confirmState, setConfirmState] = useState({ open: false, title: '', description: '', isDanger: false, onConfirm: () => {} });
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const activeServices = services.filter(s => !s.isDeleted);
-    const data = activeServices.map(s => ({
-      label: s.label,
-      serviceNumber: s.serviceNumber,
-      pinned: s.pinned
+    
+    const servicesData = await Promise.all(activeServices.map(async s => {
+      const readings = await db.getSetting(`readings_${s.serviceNumber}`) || [];
+      return {
+        serviceNumber: s.serviceNumber,
+        label: s.label,
+        customerName: s.customerName,
+        pinned: s.pinned,
+        billTime: s.billTime,
+        meterReadings: readings
+      };
     }));
+
+    // Generate backward-compatible array format
+    // Old app will ignore the metadata object because it lacks a 13-digit serviceNumber
+    const data = [
+      {
+        _meta: true,
+        version: 2,
+        theme: localStorage.getItem('theme') || 'light',
+        language: localStorage.getItem('i18nextLng') || 'en',
+        appliances: await db.getSetting('saved_appliances') || []
+      },
+      ...servicesData
+    ];
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -34,66 +59,53 @@ export function BackupRestore() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
-    if (ph) ph.capture('data_exported', { count: data.length });
-    toast.success(`${data.length} services exported successfully`);
+    if (ph) ph.capture('data_exported', { count: activeServices.length });
+    toast.success(`${activeServices.length} services exported successfully`);
   };
 
-  const handleImport = (e) => {
+  const handleImport = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        setIsImporting(true);
-        const data = JSON.parse(event.target.result);
-        if (!Array.isArray(data)) throw new Error('Invalid backup format');
-        
-        const entries = data.map(item => ({
-          label: item.label || '',
-          number: item.serviceNumber,
-          pinned: !!item.pinned
-        })).filter(e => e.number && e.number.length === 13);
+    setIsImporting(true);
+    try {
+      await importBackupData(file, context, t, ph, () => {
+        window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'electricity' } }));
+      });
+    } finally {
+      setIsImporting(false);
+      e.target.value = '';
+    }
+  };
 
-        if (entries.length === 0) {
-          toast.error(t('no_valid_services_in_backup', 'No valid service numbers found in backup'));
-          return;
-        }
-
-        const toastId = toast.loading(`Importing ${entries.length} services...`);
-        let successCount = 0;
-        let skipCount = 0;
-
-        for (const entry of entries) {
-          const sn = entry.number;
-          const inActive = services.find(s => s.serviceNumber === sn);
-          const inTrash = trash.find(t => t.serviceNumber === sn);
+  const handleWipeData = () => {
+    setConfirmState({
+      open: true,
+      title: 'Wipe all data?',
+      description: 'This will completely erase all your saved services, history, and settings from this device. We highly recommend backing up your data first.\n\nAre you absolutely sure?',
+      isDanger: true,
+      onConfirm: async () => {
+        const toastId = toast.loading('Wiping data...');
+        try {
+          const allServices = await db.getAll();
+          const allTrash = await db.getTrash();
+          const allIds = [...allServices, ...allTrash].map(s => s.id);
           
-          if (inActive || inTrash) { 
-            skipCount++; 
-            continue; 
-          }
-
-          try {
-            await actions.add({ isBulk: false, serviceNumber: sn, label: entry.label, pinned: !!entry.pinned });
-            successCount++;
-          } catch (err) {
-            if (err?.message !== 'CANCELLED') {
-              console.error('Failed to import', sn, err);
-            }
-          }
+          await actions.bulkPurge(allIds);
+          
+          // Clear some specific settings
+          await db.setSetting('saved_appliances', []);
+          await db.setSetting('notification_history', []);
+          
+          toast.success('All data wiped successfully', { id: toastId });
+          if (ph) ph.capture('data_wiped');
+          
+          window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'electricity' } }));
+        } catch (e) {
+          toast.error('Failed to wipe data', { id: toastId });
         }
-
-        toast.success(`Imported ${successCount} new services. ${skipCount > 0 ? `Skipped ${skipCount} existing.` : ''}`, { id: toastId });
-        if (ph) ph.capture('data_imported', { count: successCount });
-      } catch (err) {
-        toast.error(t('import_failed', 'Failed to read backup file'));
-      } finally {
-        setIsImporting(false);
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
+    });
   };
 
   return (
@@ -101,14 +113,14 @@ export function BackupRestore() {
       <SettingsItem 
         icon={FiDownload} 
         label={t('backup', 'Backup Data')} 
-        description="Save your services to a file"
+        description="Save your services and settings to a file"
         onClick={handleExport}
         color="var(--blue)"
       />
       <SettingsItem 
         icon={FiUpload} 
         label={t('restore', 'Restore Data')} 
-        description="Load services from a backup"
+        description="Load services and settings from a backup"
         onClick={() => {
           if (!isImporting && fileInputRef.current) {
             fileInputRef.current.click();
@@ -116,12 +128,27 @@ export function BackupRestore() {
         }}
         color="var(--green)"
       />
+      <SettingsItem 
+        icon={FiTrash2} 
+        label="Wipe Data" 
+        description="Delete all services, history, and settings permanently"
+        onClick={handleWipeData}
+        color="var(--red)"
+      />
       <input 
         type="file" 
         ref={fileInputRef} 
         style={{ display: 'none' }} 
         accept=".json" 
         onChange={handleImport} 
+      />
+      <ConfirmDialog 
+        open={confirmState.open} 
+        title={confirmState.title} 
+        description={confirmState.description} 
+        isDanger={confirmState.isDanger} 
+        onClose={() => setConfirmState(prev => ({ ...prev, open: false }))} 
+        onConfirm={confirmState.onConfirm} 
       />
     </>
   );
