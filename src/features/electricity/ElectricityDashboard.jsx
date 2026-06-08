@@ -23,21 +23,23 @@ import { HelpFooter } from './components/CalculationSettings.jsx';
 
 import { NotificationInbox, saveNotificationToHistory } from './components/NotificationInbox.jsx';
 import { db } from '../../shared/db/storage.js';
+import { importBackupData } from '../../shared/utils/backupRestore.js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { Share } from '@capacitor/share';
 
 export function ElectricityDashboard() {
   const isWeb = Capacitor.getPlatform() === 'web';
-  const { services, trash, loading, refreshingIds, actions } = useElectricityServices();
+  const electricityContext = useElectricityServices();
+  const { services, trash, loading, refreshingIds, actions } = electricityContext;
   const [filters, setFilters] = useState({ query: '', status: '', sort: 'amount' });
   const [cardStyle, setCardStyle] = useState(localStorage.getItem('appearance_card_style') || 'classic'); 
   const [activeView, setActiveView] = useState('active');
   const [dialog, setDialog] = useState({ open: false, service: null });
+  const fileInputRef = useRef(null);
 
   const [inboxOpen, setInboxOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isScrolled, setIsScrolled] = useState(false);
   const pendingDeepLink = useRef(null);
 
   useEffect(() => {
@@ -45,10 +47,14 @@ export function ElectricityDashboard() {
     if (!mainContainer) return;
 
     const handleScroll = () => {
-      setIsScrolled(mainContainer.scrollTop > 50);
+      if (mainContainer.scrollTop > 50) {
+        mainContainer.classList.add('page--scrolled');
+      } else {
+        mainContainer.classList.remove('page--scrolled');
+      }
     };
 
-    mainContainer.addEventListener('scroll', handleScroll);
+    mainContainer.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainContainer.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -334,6 +340,19 @@ export function ElectricityDashboard() {
   const handleViewChange = (view) => {
     setActiveView(view);
     clearSelection();
+  };
+
+  const handleImportFromEmptyState = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setProcessingOverlay('Restoring Data...');
+    try {
+      await importBackupData(file, electricityContext, t, ph, () => {});
+    } finally {
+      setProcessingOverlay(null);
+      e.target.value = '';
+    }
   };
 
   const flashCard = (id) => {
@@ -818,7 +837,7 @@ export function ElectricityDashboard() {
   }
 
   return (
-    <div className={`page ${isScrolled ? 'page--scrolled' : ''}`}>
+    <div className="page">
       <div className={`ptr ${pullDistance > 0 || isRefreshing ? 'ptr--visible' : ''} ${isRefreshing ? 'ptr--refreshing' : ''} ${pullDistance >= pullThreshold ? 'ptr--ready' : ''}`} style={{ transform: `translateY(${pullDistance - 70}px)` }}>
         <div className="ptr__icon" style={{ transform: `rotate(${pullDistance * 3}deg)` }}><Loader size={18} /></div>
         <span className="ptr__label">{isRefreshing ? 'Refreshing...' : (pullDistance >= pullThreshold ? 'Release to refresh' : 'Pull down to refresh')}</span>
@@ -850,20 +869,18 @@ export function ElectricityDashboard() {
         <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p className="page__eyebrow"><FiZap size={12} /> APSPDCL</p>
-            {!isScrolled && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h1 className="page__title" style={{ margin: 0 }}>{t('electricity')}</h1>
-              </div>
-            )}
+            <div className="page__title-wrap" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1 className="page__title" style={{ margin: 0 }}>AP Vidyuth</h1>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: isScrolled ? '12px' : '16px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             {!isWeb && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+              <div className="header-alert-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                 <button className="icon-btn" onClick={() => setInboxOpen(true)} title="Notifications" style={{ width: '40px', height: '40px', position: 'relative' }}>
                   <FiBell size={20} style={{ color: unreadCount > 0 ? 'var(--primary)' : 'var(--text-3)' }} />
                   {unreadCount > 0 && <span className="header-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                 </button>
-                {!isScrolled && <span style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: '600', textTransform: 'uppercase' }}>Alerts</span>}
+                <span className="header-alert-label" style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: '600', textTransform: 'uppercase' }}>Alerts</span>
               </div>
             )}
           </div>
@@ -882,7 +899,7 @@ export function ElectricityDashboard() {
       <NotificationInbox open={inboxOpen} onClose={() => setInboxOpen(false)} onAction={handleNotificationAction} />
 
       {activeView === 'active' && (
-        <>{loading ? <div className="state-box"><Loader size={22} /><p>{t('loading_services')}</p></div> : visible.length === 0 ? <div className="state-box"><FiZap size={28} /><h3>{t('no_services_found')}</h3><p>{services.length === 0 ? t('add_first_service') : t('no_results_filter')}</p>{services.length === 0 && <button className="btn btn--primary" onClick={() => setDialog({ open: true, service: null })}>{t('add_service')}</button>}</div> : <div className="grid">
+        <>{loading ? <div className="state-box"><Loader size={22} /><p>{t('loading_services')}</p></div> : visible.length === 0 ? <div className="state-box"><FiZap size={28} /><h3>{t('no_services_found')}</h3><p>{services.length === 0 ? t('add_first_service') : t('no_results_filter')}</p>{services.length === 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}><button className="btn btn--primary" onClick={() => setDialog({ open: true, service: null })}>{t('add_service')}</button><div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}><span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Have a backup file?</span><input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".json" onChange={handleImportFromEmptyState} /><button className="btn btn--ghost btn--sm" onClick={() => fileInputRef.current?.click()}><FiUpload size={14} /> Restore Data</button></div></div>}</div> : <div className="grid">
           {visible.map(s => (
             <ServiceCard key={s.id} id={`service-${s.id}`} service={s} useAccordion={useAccordion} cardStyle={cardStyle} refreshing={refreshingIds.has(s.id)} isFlashing={flashingId === s.id} selected={selectedIds.has(s.id)} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRefresh={async () => { setProcessingOverlay('Refreshing bill...'); try { const updated = await actions.refresh(s.id); toast.success('Refreshed'); if (updated) await trackBill(s, updated); } catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Refresh failed`); } finally { setProcessingOverlay(null); } }} onEdit={() => setDialog({ open: true, service: s })} onAbout={() => setAboutDialog({ open: true, service: s })} onDelete={() => { setConfirmState({ open: true, title: 'Move to Trash?', description: 'This service will be moved to the Trash.', isDanger: true, onConfirm: async () => { const tst = toast.loading('Moving to trash…'); try { await actions.remove(s.id); toast.success('Moved to trash', { id: tst }); clearSelection(); } catch (e) { toast.error(`Failed to move`, { id: tst }); } } }); }} onTogglePin={() => actions.update(s.id, { pinned: !s.pinned })} onCalculateBill={(svc) => handleCalculateBill(svc)} onShowQR={(svc) => setQrDialog({ open: true, service: svc })} onPay={() => handlePay(s)} onShare={() => handleShare(s)} onShareReport={() => handleShareMonthlyReport(s)} />
           ))}</div>}</>

@@ -67,10 +67,23 @@ function AppContent() {
   const handleNavClick = (id) => {
     if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
     setActivePage(id);
+    const mainEl = document.querySelector('.main');
+    if (mainEl) mainEl.scrollTop = 0;
   };
 
   useEffect(() => {
     setupPushNotifications();
+
+    const handleNavigate = (e) => {
+      const page = e.detail?.page;
+      if (page) {
+         setActivePage(page);
+         const mainEl = document.querySelector('.main');
+         if (mainEl) mainEl.scrollTop = 0;
+      }
+    };
+    window.addEventListener('app-navigate', handleNavigate);
+    return () => window.removeEventListener('app-navigate', handleNavigate);
   }, []);
 
   useEffect(() => {

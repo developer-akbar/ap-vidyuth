@@ -206,9 +206,9 @@ export async function createService({ serviceNumber, label }, billdeskSession) {
  * @param {Array<{number: string, label: string}>} entries 
  * @param {object} billdeskSession 
  */
-export async function createBulkServices(entries, billdeskSession) {
+export async function createBulkServices(entries, billdeskSession, onProgress) {
   const results = [];
-  
+
   for (const entry of entries) {
     try {
       const existing = await db.getByNumber(entry.number);
@@ -217,22 +217,36 @@ export async function createBulkServices(entries, billdeskSession) {
         continue;
       }
 
-      const { snapshot } = await apiPost('/services/validate', { serviceNumber: entry.number, billdeskSession });
-      
-      // FINAL GUARD: If both BillDesk and APSPDCL return nothing, reject it.
-      if (!snapshot || snapshot.billDeskSource === 'UNKNOWN') {
-        results.push({ number: entry.number, _error: 'Invalid APSPDCL service number' });
-        continue;
-      }
+      // Create skeleton first so UI can show it as loading
+      const service = await db.create({ serviceNumber: entry.number, label: entry.label, pinned: !!entry.pinned });
+      if (onProgress) await onProgress();
 
-      const service = await db.create({ serviceNumber: entry.number, label: entry.label });
-      const updated = await db.update(service.id, { ...snapshotToPatch(snapshot, service), lastError: null });
-      results.push(updated);
+      try {
+        const { snapshot } = await apiPost('/services/validate', { serviceNumber: entry.number, billdeskSession });
+
+        // FINAL GUARD: If both BillDesk and APSPDCL return nothing, reject it.
+        if (!snapshot || snapshot.billDeskSource === 'UNKNOWN') {
+          await db.delete(service.id, true); // Cleanup skeleton
+          results.push({ serviceNumber: entry.number, _error: 'Invalid APSPDCL service number' });
+          if (onProgress) await onProgress();
+          continue;
+        }
+
+        const updated = await db.update(service.id, { ...snapshotToPatch(snapshot, service), lastError: null });
+        results.push(updated);
+        window.dispatchEvent(new Event('db-updated'));
+        if (onProgress) await onProgress();
+      } catch (err) {
+        await db.update(service.id, { lastError: err.message || 'Failed to add', lastStatus: 'ERROR' });
+        results.push({ serviceNumber: entry.number, id: service.id, _error: err.message || 'Failed to add' });
+        window.dispatchEvent(new Event('db-updated'));
+        if (onProgress) await onProgress();
+      }
     } catch (err) {
-      results.push({ number: entry.number, _error: err.message || 'Failed to add' });
+      results.push({ serviceNumber: entry.number, _error: err.message || 'Failed to add' });
     }
   }
-  
+
   return results;
 }
 
