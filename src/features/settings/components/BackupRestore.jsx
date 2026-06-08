@@ -9,6 +9,7 @@ import { usePostHog } from '@posthog/react';
 import { importBackupData } from '../../../shared/utils/backupRestore.js';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog.jsx';
 import { RestoreDialog } from './RestoreDialog.jsx';
+import { ExportDialog } from './ExportDialog.jsx';
 
 export function BackupRestore() {
   const { t } = useTranslation();
@@ -19,8 +20,9 @@ export function BackupRestore() {
   const [isImporting, setIsImporting] = useState(false);
   const [confirmState, setConfirmState] = useState({ open: false, title: '', description: '', isDanger: false, onConfirm: () => {} });
   const [restoreState, setRestoreState] = useState({ open: false, file: null });
+  const [exportState, setExportState] = useState({ open: false, blob: null, filename: '', activeCount: 0 });
 
-  const handleExport = async () => {
+  const prepareExport = async () => {
     const activeServices = services.filter(s => !s.isDeleted);
     
     const servicesData = await Promise.all(activeServices.map(async s => {
@@ -35,8 +37,6 @@ export function BackupRestore() {
       };
     }));
 
-    // Generate backward-compatible array format
-    // Old app will ignore the metadata object because it lacks a 13-digit serviceNumber
     const data = [
       {
         _meta: true,
@@ -49,20 +49,53 @@ export function BackupRestore() {
     ];
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    
     const timestamp = new Date().getTime();
+    const filename = `ap_vidyuth_apspdcl_bills_backup_${timestamp}.json`;
+    
+    setExportState({ open: true, blob, filename, activeCount: activeServices.length });
+  };
+
+  const handleSaveToDevice = () => {
+    if (!exportState.blob) return;
+    const url = URL.createObjectURL(exportState.blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `ap_vidyuth_apspdcl_bills_backup_${timestamp}.json`;
-    
+    link.download = exportState.filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
-    if (ph) ph.capture('data_exported', { count: activeServices.length });
-    toast.success(`${activeServices.length} services exported successfully`);
+    if (ph) ph.capture('data_exported', { count: exportState.activeCount, method: 'save' });
+    toast.success(`${exportState.activeCount} services exported successfully`);
+  };
+
+  const handleShareFile = async () => {
+    if (!exportState.blob) return;
+    
+    // Web Share API on mobile (like Android Chrome) strictly blocks application/json.
+    // Use text/plain with a .txt extension to ensure the share dialog opens successfully.
+    const safeFilename = exportState.filename.replace('.json', '.txt');
+    const file = new File([exportState.blob], safeFilename, { type: 'text/plain' });
+    
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'AP Vidyuth Backup',
+          text: 'Here is my backup data for AP Vidyuth.',
+        });
+        if (ph) ph.capture('data_exported', { count: exportState.activeCount, method: 'share' });
+        toast.success('Backup shared successfully');
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Share failed', err);
+          toast.error('Sharing failed. Try Saving to Device instead.');
+        }
+      }
+    } else {
+      toast.error('File sharing is not supported on this device/browser. Please save to device instead.');
+    }
   };
 
   const executeRestore = async (file, wipeFirst) => {
@@ -126,7 +159,7 @@ export function BackupRestore() {
         icon={FiDownload} 
         label={t('backup', 'Backup Data')} 
         description="Save your services and settings to a file"
-        onClick={handleExport}
+        onClick={prepareExport}
         color="var(--blue)"
       />
       <SettingsItem 
@@ -151,7 +184,7 @@ export function BackupRestore() {
         type="file" 
         ref={fileInputRef} 
         style={{ display: 'none' }} 
-        accept=".json" 
+        accept=".json,.txt" 
         onChange={handleImport} 
       />
       <ConfirmDialog 
@@ -168,6 +201,12 @@ export function BackupRestore() {
         onConfirm={() => {
           if (restoreState.file) executeRestore(restoreState.file, true);
         }}
+      />
+      <ExportDialog
+        open={exportState.open}
+        onClose={() => setExportState(prev => ({ ...prev, open: false }))}
+        onSave={handleSaveToDevice}
+        onShare={handleShareFile}
       />
     </>
   );
