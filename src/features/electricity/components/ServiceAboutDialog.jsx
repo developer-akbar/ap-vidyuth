@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FiX, FiInfo } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 
@@ -26,7 +27,7 @@ export function ServiceAboutDialog({ open, service, onClose }) {
     { label: t('current_load'), value: service.ctrLoad },
   ];
 
-  return (
+  return createPortal(
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true">
         <div className="sheet__handle" />
@@ -61,6 +62,7 @@ export function ServiceAboutDialog({ open, service, onClose }) {
           <button type="button" className="btn btn--primary" style={{ width: '100%', height: '40px', justifyContent: 'center' }} onClick={onClose}>{t('close')}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

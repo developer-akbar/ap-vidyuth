@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FiX, FiZap, FiChevronDown } from 'react-icons/fi';
 import { isValidServiceNumber } from '../../../shared/utils/index.js';
 import { useTranslation } from 'react-i18next';
@@ -142,7 +143,7 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
     }
   }
 
-  return (
+  return createPortal(
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true">
         <div className="sheet__handle" />
@@ -271,6 +272,7 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

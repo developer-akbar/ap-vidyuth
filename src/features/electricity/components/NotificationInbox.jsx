@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FiBell, FiTrash2, FiCheck, FiX, FiInfo, FiAlertCircle, FiChevronRight, FiCreditCard } from 'react-icons/fi';
 import { db } from '../../../shared/db/storage';
 import { formatInr, fromNow } from '../../../shared/utils';
@@ -71,7 +72,7 @@ export function NotificationInbox({ open, onClose, onAction }) {
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="overlay overlay--center" onClick={onClose} style={{ zIndex: 1000 }}>
       <div className="dialog inbox-dialog" onClick={e => e.stopPropagation()}>
         <header className="dialog__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -134,7 +135,8 @@ export function NotificationInbox({ open, onClose, onAction }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

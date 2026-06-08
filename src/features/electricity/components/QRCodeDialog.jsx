@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FiX, FiExternalLink, FiClock, FiCheck, FiInfo, FiCopy, FiAlertCircle } from 'react-icons/fi';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
@@ -88,7 +89,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="overlay overlay--center" onClick={onClose}>
       <div className="dialog" onClick={e => e.stopPropagation()} style={{ width: '85%', maxWidth: '340px', position: 'relative' }}>
         <div className="sheet__header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border)', display: 'block', position: 'relative' }}>
@@ -267,7 +268,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
             style={{ position: 'absolute', zIndex: 100, borderRadius: 'inherit' }}
             onClick={() => setShowInfo(false)}
           >
-            <div className="dialog" onClick={e => e.stopPropagation()} style={{ width: '90%', margin: '0 20px' }}>
+            <div className="dialog" onClick={e => e.stopPropagation()}>
               <div className="sheet__header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid var(--border)' }}>
                 <h3 className="sheet__title" style={{ fontSize: '15px' }}>Internal Segments</h3>
                 <button className="icon-btn" onClick={() => setShowInfo(false)} style={{ background: 'none', border: 'none' }}><FiX size={16} /></button>
@@ -297,6 +298,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

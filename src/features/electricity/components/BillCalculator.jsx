@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { FiX, FiZap, FiInfo, FiTrendingUp, FiTrendingDown, FiClock, FiAlertCircle, FiPlus, FiMinus, FiChevronDown, FiActivity, FiAward, FiCheckCircle, FiTrash2 } from 'react-icons/fi';
 import { LuCalculator } from 'react-icons/lu';
 import { useTranslation } from 'react-i18next';
@@ -149,7 +150,7 @@ export function BillCalculator({ open, service, onClose }) {
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="overlay overlay--center" onClick={onClose} style={{ zIndex: 1000 }}>
       <div className="dialog" onClick={e => e.stopPropagation()} style={{ width: '500px', maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <header className="dialog__header" style={{ position: 'relative', paddingBottom: '16px', flexShrink: 0 }}>
@@ -363,8 +364,9 @@ export function BillCalculator({ open, service, onClose }) {
             </button>
           )}
           <button className="btn btn--primary" style={{ flex: 1 }} onClick={onClose}>{t('close')}</button>
-          </div>
-          </div>
-          </div>
-          );
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
           }

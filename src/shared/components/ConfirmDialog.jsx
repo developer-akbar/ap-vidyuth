@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export function ConfirmDialog({ open, title, description, confirmText = 'Confirm', cancelText = 'Cancel', onConfirm, onClose, isDanger = false }) {
   // Prevent scrolling when open
@@ -11,7 +12,7 @@ export function ConfirmDialog({ open, title, description, confirmText = 'Confirm
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="overlay overlay--center" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="dialog" role="dialog" aria-modal="true">
         <h2 className="dialog__title">{title}</h2>
@@ -23,6 +24,7 @@ export function ConfirmDialog({ open, title, description, confirmText = 'Confirm
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
