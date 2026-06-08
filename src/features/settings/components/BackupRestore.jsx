@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { usePostHog } from '@posthog/react';
 import { importBackupData } from '../../../shared/utils/backupRestore.js';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog.jsx';
+import { RestoreDialog } from './RestoreDialog.jsx';
 
 export function BackupRestore() {
   const { t } = useTranslation();
@@ -17,6 +18,7 @@ export function BackupRestore() {
   const ph = usePostHog();
   const [isImporting, setIsImporting] = useState(false);
   const [confirmState, setConfirmState] = useState({ open: false, title: '', description: '', isDanger: false, onConfirm: () => {} });
+  const [restoreState, setRestoreState] = useState({ open: false, file: null });
 
   const handleExport = async () => {
     const activeServices = services.filter(s => !s.isDeleted);
@@ -63,18 +65,28 @@ export function BackupRestore() {
     toast.success(`${activeServices.length} services exported successfully`);
   };
 
-  const handleImport = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
+  const executeRestore = async (file, wipeFirst) => {
     setIsImporting(true);
     try {
       await importBackupData(file, context, t, ph, () => {
         window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'electricity' } }));
-      });
+      }, { wipeFirst });
     } finally {
       setIsImporting(false);
-      e.target.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const hasData = services.length > 0 || trash.length > 0;
+    
+    if (hasData) {
+      setRestoreState({ open: true, file });
+    } else {
+      executeRestore(file, false);
     }
   };
 
@@ -149,6 +161,13 @@ export function BackupRestore() {
         isDanger={confirmState.isDanger} 
         onClose={() => setConfirmState(prev => ({ ...prev, open: false }))} 
         onConfirm={confirmState.onConfirm} 
+      />
+      <RestoreDialog
+        open={restoreState.open}
+        onClose={() => setRestoreState({ open: false, file: null })}
+        onConfirm={() => {
+          if (restoreState.file) executeRestore(restoreState.file, true);
+        }}
       />
     </>
   );

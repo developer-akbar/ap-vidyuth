@@ -1,7 +1,8 @@
 import { db } from '../db/storage.js';
 import toast from 'react-hot-toast';
 
-export async function importBackupData(file, { services, trash, actions }, t, ph, onComplete) {
+export async function importBackupData(file, { services, trash, actions }, t, ph, onComplete, options = {}) {
+  const { wipeFirst = false } = options;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -26,6 +27,22 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
            // Support importing the non-array V2 format we temporarily made
            meta = rawData;
            entries = rawData.services || [];
+        }
+
+        if (wipeFirst) {
+          const allServices = await db.getAll();
+          const allTrash = await db.getTrash();
+          const allIds = [...allServices, ...allTrash].map(s => s.id);
+          if (allIds.length > 0) {
+            await actions.bulkPurge(allIds);
+          }
+          // Clear settings as well
+          await db.setSetting('saved_appliances', []);
+          await db.setSetting('notification_history', []);
+          
+          // Use empty arrays for local matching
+          services = [];
+          trash = [];
         }
 
         if (meta) {
