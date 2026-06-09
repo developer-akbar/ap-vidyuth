@@ -73,6 +73,44 @@ export function BackupRestore() {
     toast.success(`${exportState.activeCount} services exported successfully`);
   };
 
+  const handleExportCsv = async () => {
+    const activeServices = services.filter(s => !s.isDeleted);
+    
+    // Define CSV Headers
+    const headers = ['Service Number', 'Label', 'Customer Name', 'Category', 'Section Name', 'Last Amount Due', 'Last Billed Units', 'Status'];
+    
+    // Format rows
+    const rows = activeServices.map(s => {
+      return [
+        s.serviceNumber,
+        s.label || '',
+        s.customerName || '',
+        s.category || '',
+        s.sectionName || '',
+        s.lastAmountDue || '',
+        s.lastBilledUnits || '',
+        s.lastStatus || ''
+      ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(','); // Escape quotes and wrap in quotes
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().getTime();
+    link.href = url;
+    link.download = `ap_vidyuth_services_${timestamp}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    if (ph) ph.capture('data_exported_csv', { count: activeServices.length });
+    toast.success(`${activeServices.length} services exported as CSV`);
+  };
+
   const handleShareFile = async () => {
     if (!exportState.blob) return;
     
@@ -243,6 +281,7 @@ export function BackupRestore() {
         onClose={() => setExportState(prev => ({ ...prev, open: false }))}
         onSave={handleSaveToDevice}
         onShare={handleShareFile}
+        onExportCsv={handleExportCsv}
       />
     </>
   );

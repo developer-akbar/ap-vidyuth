@@ -324,6 +324,18 @@ export function ElectricityDashboard() {
 
   const [bulkResult, setBulkResult] = useState(null);
   const [processingOverlay, setProcessingOverlay] = useState(null);
+  const [autoBackupPrompt, setAutoBackupPrompt] = useState(false);
+
+  useEffect(() => {
+    if (!loading && services.length >= 5) {
+      db.getSetting('has_seen_auto_backup_prompt').then(seen => {
+        if (!seen) {
+          setAutoBackupPrompt(true);
+        }
+      });
+    }
+  }, [loading, services.length]);
+
   const trackBill = async (service, snapshot) => {
     if (!ph || !snapshot || !snapshot.billDate) return;
     
@@ -967,6 +979,24 @@ export function ElectricityDashboard() {
       )}
 
       <ConfirmDialog open={confirmState.open} title={confirmState.title} description={confirmState.description} isDanger={confirmState.isDanger} onClose={() => setConfirmState(prev => ({ ...prev, open: false }))} onConfirm={confirmState.onConfirm} />
+      
+      <ConfirmDialog 
+        open={autoBackupPrompt} 
+        title="Backup Recommended" 
+        description="You have saved a lot of services! We recommend taking a backup of your data so you don't lose it if you change devices. Would you like to go to Data Management now?" 
+        isDanger={false} 
+        confirmText="Go to Backup"
+        cancelText="Not Now"
+        onClose={() => {
+          setAutoBackupPrompt(false);
+          db.setSetting('has_seen_auto_backup_prompt', true);
+        }} 
+        onConfirm={() => {
+          setAutoBackupPrompt(false);
+          db.setSetting('has_seen_auto_backup_prompt', true);
+          window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'settings' } }));
+        }} 
+      />
     </div>
   );
 }

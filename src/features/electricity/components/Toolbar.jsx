@@ -3,10 +3,21 @@ import { useTranslation } from 'react-i18next';
 import { Loader } from '../../../shared/components/Loader.jsx';
 import { SessionIndicator } from './SessionIndicator.jsx';
 import toast from 'react-hot-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refreshingAll, activeView, onViewChange, trashCount, hasServices, services, cardStyle, onToggleCardStyle }) {
   const { t, i18n } = useTranslation();
+  const [localQuery, setLocalQuery] = useState(filters.query || '');
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (filters.query !== localQuery) {
+        onFiltersChange({ ...filters, query: localQuery });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localQuery, filters, onFiltersChange]);
 
   const currentLang = i18n.resolvedLanguage || i18n.language || 'en';
   const isTelugu = currentLang.startsWith('te');
@@ -38,8 +49,8 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
         <div className="search-box">
           <FiSearch size={14} />
           <input
-            value={filters.query}
-            onChange={e => onFiltersChange({ ...filters, query: e.target.value })}
+            value={localQuery}
+            onChange={e => setLocalQuery(e.target.value)}
             placeholder={t('search_services')}
           />
         </div>
