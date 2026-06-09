@@ -328,9 +328,15 @@ export function ElectricityDashboard() {
 
   useEffect(() => {
     if (!loading && services.length >= 5) {
-      db.getSetting('has_seen_auto_backup_prompt').then(seen => {
+      Promise.all([
+        db.getSetting('has_seen_auto_backup_prompt'),
+        db.getSetting('auto_backup_prompt_snoozed_until')
+      ]).then(([seen, snoozedUntil]) => {
         if (!seen) {
-          setAutoBackupPrompt(true);
+          const now = Date.now();
+          if (!snoozedUntil || now > snoozedUntil) {
+            setAutoBackupPrompt(true);
+          }
         }
       });
     }
@@ -989,7 +995,8 @@ export function ElectricityDashboard() {
         cancelText="Not Now"
         onClose={() => {
           setAutoBackupPrompt(false);
-          db.setSetting('has_seen_auto_backup_prompt', true);
+          // Snooze for 7 days
+          db.setSetting('auto_backup_prompt_snoozed_until', Date.now() + 7 * 24 * 60 * 60 * 1000);
         }} 
         onConfirm={() => {
           setAutoBackupPrompt(false);

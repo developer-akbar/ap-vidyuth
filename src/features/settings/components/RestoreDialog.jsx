@@ -5,11 +5,32 @@ import { FiAlertTriangle, FiX } from 'react-icons/fi';
 export function RestoreDialog({ open, onClose, onConfirm }) {
   // Prevent scrolling when open
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [open]);
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+
+    const handleBack = (e) => {
+      if (e.type === 'app-back-button' && e.detail) {
+        e.detail.handled = true;
+      }
+      onClose();
+    };
+
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+
+    window.addEventListener('app-back-button', handleBack);
+    window.addEventListener('keydown', handleEsc);
+
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('app-back-button', handleBack);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 

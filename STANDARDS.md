@@ -10,12 +10,11 @@ unless a specific screen explicitly overrides one.
 
 **Android hardware/gesture back button**
 - Every screen that is not the root tab must handle the Android back button
-- Use Capacitor's App.addListener('backButton') in a useEffect
-- Sub-pages (opened from a nav tab) → go back to their parent tab
-- Dialogs/modals/bottom sheets → close the dialog first, then handle back again
+- Use Capacitor's App.addListener('backButton') at the root app level, which broadcasts a custom `app-back-button` event.
+- Sub-pages (opened from a nav tab) → go back to their parent tab (e.g. Privacy goes back to Settings).
+- Dialogs/modals/bottom sheets MUST listen for the `app-back-button` event and `Escape` key to close themselves, and set `e.detail.handled = true` to prevent the root listener from navigating away.
 - If already on a root tab with nothing open → show an "Exit app?" confirm toast,
   second back press within 2s exits the app via App.exitApp()
-- Clean up the listener in the useEffect return
 
 **Escape key (desktop / keyboard)**
 - Every modal, dialog, drawer, bottom sheet, and sub-page must close/go back on Esc
