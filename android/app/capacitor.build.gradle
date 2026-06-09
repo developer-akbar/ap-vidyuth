@@ -13,9 +13,11 @@ dependencies {
     implementation project(':capacitor-app')
     implementation project(':capacitor-device')
     implementation project(':capacitor-filesystem')
+    implementation project(':capacitor-haptics')
     implementation project(':capacitor-local-notifications')
     implementation project(':capacitor-push-notifications')
     implementation project(':capacitor-share')
+    implementation project(':capacitor-splash-screen')
     implementation project(':capawesome-capacitor-badge')
 
 }

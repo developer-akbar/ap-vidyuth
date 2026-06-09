@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import { FiZap, FiGrid, FiSettings, FiMonitor } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,8 @@ import { PrefixMigration } from '../features/settings/components/PrefixMigration
 import { SettingsItem } from '../features/settings/components/SettingsItem.jsx';
 import { BackupRestore } from '../features/settings/components/BackupRestore.jsx';
 import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Loader } from '../shared/components/Loader.jsx';
 import { FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail } from 'react-icons/fi';
 
@@ -64,27 +66,127 @@ function AppContent() {
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
 
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const scrollPositions = useRef({});
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Global Back Button & Escape Handler
+  useEffect(() => {
+    // Escape key
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        const dialogs = document.querySelectorAll('.dialog, .sheet');
+        if (dialogs.length > 0) {
+          // Dialog components should handle their own Esc via onClose, but if they don't, 
+          // we can't reliably trigger their internal state from here without context.
+          // This global hook is primarily for hardware back navigation context.
+        } else if (activePage !== 'electricity') {
+          handleNavClick('electricity');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Android Hardware Back
+    let lastBackPress = 0;
+    const handleBackButton = () => {
+      // 1. Check if a dialog/modal/sheet is open (they should be closed by their own components or overlays)
+      const openDialogs = document.querySelectorAll('.overlay');
+      if (openDialogs.length > 0) {
+        // If an overlay exists, we simulate a click on the last one to close it.
+        // It's expected that overlays have an onClick handler to close.
+        const lastOverlay = openDialogs[openDialogs.length - 1];
+        lastOverlay.click();
+        return;
+      }
+
+      // 2. Sub-pages should return to root tab
+      if (['privacy', 'prefix-migration', 'calculation-settings'].includes(activePage)) {
+        handleNavClick('settings');
+        return;
+      }
+
+      // 3. Tab pages return to the primary tab ('electricity')
+      if (activePage !== 'electricity') {
+        handleNavClick('electricity');
+        return;
+      }
+
+      // 4. On root tab, confirm exit
+      const now = Date.now();
+      if (now - lastBackPress < 2000) {
+        CapApp.exitApp();
+      } else {
+        lastBackPress = now;
+        toast('Press back again to exit', { icon: '👋', duration: 2000 });
+      }
+    };
+
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener('backButton', handleBackButton);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (Capacitor.isNativePlatform()) {
+        CapApp.removeAllListeners('backButton');
+      }
+    };
+  }, [activePage]);
+
   const handleNavClick = (id) => {
+    const mainEl = document.querySelector('.main');
+    if (mainEl) scrollPositions.current[activePage] = mainEl.scrollTop;
+
     if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
     setActivePage(id);
-    const mainEl = document.querySelector('.main');
-    if (mainEl) mainEl.scrollTop = 0;
+
+    // Give React a tick to mount the new component, then restore scroll
+    setTimeout(() => {
+      const newMainEl = document.querySelector('.main');
+      if (newMainEl) {
+        newMainEl.scrollTop = scrollPositions.current[id] || 0;
+      }
+    }, 0);
+
+    if (Capacitor.isNativePlatform()) {
+      Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+    }
   };
 
   useEffect(() => {
+    if (Capacitor.getPlatform() !== 'web') {
+      SplashScreen.hide();
+    }
     setupPushNotifications();
 
     const handleNavigate = (e) => {
       const page = e.detail?.page;
       if (page) {
-         setActivePage(page);
          const mainEl = document.querySelector('.main');
-         if (mainEl) mainEl.scrollTop = 0;
+         if (mainEl) scrollPositions.current[activePage] = mainEl.scrollTop;
+         
+         setActivePage(page);
+         
+         setTimeout(() => {
+           const newMainEl = document.querySelector('.main');
+           if (newMainEl) newMainEl.scrollTop = scrollPositions.current[page] || 0;
+         }, 0);
       }
     };
     window.addEventListener('app-navigate', handleNavigate);
     return () => window.removeEventListener('app-navigate', handleNavigate);
-  }, []);
+  }, [activePage]);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
@@ -225,6 +327,12 @@ function AppContent() {
 
   return (
     <div className="shell">
+      {isOffline && (
+        <div style={{ background: 'var(--amber)', color: '#000', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+          <FiWifiOff size={16} />
+          You're offline — showing cached data
+        </div>
+      )}
       {showInstallBanner && (
         <div className="install-banner">
           <span className="install-banner__text">Add AP Vidyuth to your home screen for quick access?</span>
