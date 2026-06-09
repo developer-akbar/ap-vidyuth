@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "patch-package",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:ui\"",
     "dev:ui": "vite --host 0.0.0.0 --port 5173",
     "dev:server": "nodemon --watch server --exec \"npx kill-port 4201 && cross-env API_PORT=4201 node server/index.js\"",
@@ -21,6 +22,7 @@
     "@capacitor/app": "^5.0.7",
     "@capacitor/core": "^5.7.8",
     "@capacitor/device": "^5.0.8",
+    "@capacitor/filesystem": "^5.2.2",
     "@capacitor/local-notifications": "^5.0.8",
     "@capacitor/push-notifications": "^5.1.2",
     "@capacitor/share": "5.0.8",
@@ -57,6 +59,7 @@
     "cross-env": "^7.0.3",
     "kill-port": "^2.0.1",
     "nodemon": "^3.1.14",
+    "patch-package": "^8.0.1",
     "typescript": "^6.0.3",
     "vite": "^5.4.19"
   },

@@ -10,6 +10,9 @@ import { importBackupData } from '../../../shared/utils/backupRestore.js';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog.jsx';
 import { RestoreDialog } from './RestoreDialog.jsx';
 import { ExportDialog } from './ExportDialog.jsx';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 export function BackupRestore() {
   const { t } = useTranslation();
@@ -73,28 +76,61 @@ export function BackupRestore() {
   const handleShareFile = async () => {
     if (!exportState.blob) return;
     
-    // Web Share API on mobile (like Android Chrome) strictly blocks application/json.
-    // Use text/plain with a .txt extension to ensure the share dialog opens successfully.
     const safeFilename = exportState.filename.replace('.json', '.txt');
-    const file = new File([exportState.blob], safeFilename, { type: 'text/plain' });
-    
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+
+    if (Capacitor.getPlatform() !== 'web') {
       try {
-        await navigator.share({
-          files: [file],
+        // Convert Blob to Base64
+        const base64data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(exportState.blob);
+        });
+
+        // Write file to Cache directory
+        const savedFile = await Filesystem.writeFile({
+          path: safeFilename,
+          data: base64data,
+          directory: Directory.Cache
+        });
+
+        // Share the file URL using Capacitor Share
+        await Share.share({
           title: 'AP Vidyuth Backup',
           text: 'Here is my backup data for AP Vidyuth.',
+          url: savedFile.uri,
+          dialogTitle: 'Share Backup'
         });
-        if (ph) ph.capture('data_exported', { count: exportState.activeCount, method: 'share' });
+
+        if (ph) ph.capture('data_exported', { count: exportState.activeCount, method: 'share_native' });
         toast.success('Backup shared successfully');
       } catch (err) {
-        if (err.name !== 'AbortError') {
-          console.error('Share failed', err);
-          toast.error('Sharing failed. Try Saving to Device instead.');
-        }
+        console.error('Native share failed', err);
+        toast.error('Sharing failed. Try Saving to Device instead.');
       }
     } else {
-      toast.error('File sharing is not supported on this device/browser. Please save to device instead.');
+      // Web Share API fallback
+      const file = new File([exportState.blob], safeFilename, { type: 'text/plain' });
+      
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'AP Vidyuth Backup',
+            text: 'Here is my backup data for AP Vidyuth.',
+          });
+          if (ph) ph.capture('data_exported', { count: exportState.activeCount, method: 'share_web' });
+          toast.success('Backup shared successfully');
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            console.error('Share failed', err);
+            toast.error('Sharing failed. Try Saving to Device instead.');
+          }
+        }
+      } else {
+        toast.error('File sharing is not supported on this device/browser. Please save to device instead.');
+      }
     }
   };
 
