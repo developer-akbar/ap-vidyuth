@@ -27,6 +27,7 @@ import { importBackupData } from '../../shared/utils/backupRestore.js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { Share } from '@capacitor/share';
+import { SplashScreen } from '@capacitor/splash-screen';
 
 import { useNetwork } from '../../shared/hooks/useNetwork.js';
 import { Virtuoso } from 'react-virtuoso';
@@ -44,6 +45,16 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   const [inboxOpen, setInboxOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const pendingDeepLink = useRef(null);
+  const hasHiddenSplash = useRef(false);
+
+  useEffect(() => {
+    if (!loading && !hasHiddenSplash.current) {
+      hasHiddenSplash.current = true;
+      if (Capacitor.isNativePlatform()) {
+        SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {});
+      }
+    }
+  }, [loading]);
 
   useEffect(() => {
     const mainContainer = document.querySelector('.main');

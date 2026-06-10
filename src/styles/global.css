@@ -5,6 +5,12 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
+  /* TODO: Migrate all px font-size values to rem for system font scaling
+     support (Android accessibility). Base: 16px = 1rem.
+     Common mappings: 11px→0.6875rem, 12px→0.75rem, 13px→0.8125rem,
+     14px→0.875rem, 15px→0.9375rem, 16px→1rem, 18px→1.125rem, 20px→1.25rem
+     Do this in a dedicated pass — search for font-size:.*px and replace. */
+
   /* ── Core palette (LIGHT THEME - DEFAULT) ──────────────── */
   --bg:         #f8fafc;
   --bg-2:       #ffffff;
@@ -205,6 +211,7 @@ h1,h2,h3,h4 { font-weight: 700; line-height: 1.2; color: var(--text-1); letter-s
   overflow-x: hidden;
   background: var(--bg);
   padding-right: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
@@ -1593,7 +1600,7 @@ input[type="number"] {
   .btn--xs { height: 34px; padding: 0 12px; }
   
   .icon-btn { width: 44px; height: 44px; }
-  .icon-btn-ghost { width: 36px; height: 36px; }
+  .icon-btn-ghost { width: 44px; height: 44px; }
   
   .sidebar     { display: none; }
   .bottom-nav  { display: flex; }
@@ -1682,7 +1689,20 @@ input[type="number"] {
 .scard__num-row { display: flex; align-items: center; gap: 6px; }
 .scard__num { font-size: 12px; color: var(--text-3); font-weight: 500; font-family: var(--mono); margin: 0; }
 
-.icon-btn-micro { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--text-3); transition: background 0.15s, color 0.15s; background: transparent; border: none; cursor: pointer; }
+.icon-btn-micro {
+  width: 24px;
+  height: 24px;
+  padding: 10px;
+  margin: -10px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--text-3);
+  transition: background 0.15s, color 0.15s;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
 .icon-btn-micro:hover { background: var(--surface-3); color: var(--text-1); }
 
 .scard__header-right { display: flex; align-items: center; gap: 8px; }
