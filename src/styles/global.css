@@ -579,9 +579,13 @@ input[type="checkbox"] {
   color: var(--text-2);
   font-size: 12px;
   font-weight: 500;
-  outline: none;
+  outline: none; /* suppressed — replaced by focus-visible below */
   appearance: none;
   cursor: pointer;
+}
+.select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 .select-icon { position: absolute; right: 6px; pointer-events: none; color: var(--text-3); }
 

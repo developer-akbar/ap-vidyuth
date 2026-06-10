@@ -15,7 +15,6 @@ import { PrefixMigration } from '../features/settings/components/PrefixMigration
 import { SettingsItem } from '../features/settings/components/SettingsItem.jsx';
 import { BackupRestore } from '../features/settings/components/BackupRestore.jsx';
 import { Capacitor } from '@capacitor/core';
-import { SplashScreen } from '@capacitor/splash-screen';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Loader } from '../shared/components/Loader.jsx';
@@ -132,15 +131,43 @@ function AppContent() {
   useEffect(() => {
     const handleUrlOpen = (event) => {
       const url = event.url;
+
+      // Existing shortcut deep links (apvidyuth:// scheme)
       if (url.includes('apvidyuth://action/refresh')) {
         window.dispatchEvent(new CustomEvent('shortcut-refresh-all'));
         if (activePage !== 'electricity') setActivePage('electricity');
-      } else if (url.includes('apvidyuth://action/add')) {
+        return;
+      }
+      if (url.includes('apvidyuth://action/add')) {
         window.dispatchEvent(new CustomEvent('shortcut-add-service'));
         if (activePage !== 'electricity') setActivePage('electricity');
-      } else if (url.includes('apvidyuth://action/pay')) {
+        return;
+      }
+      if (url.includes('apvidyuth://action/pay')) {
         window.dispatchEvent(new CustomEvent('shortcut-pay-home'));
         if (activePage !== 'electricity') setActivePage('electricity');
+        return;
+      }
+
+      // HTTPS deep links — shared bill URLs
+      // Pattern: https://ap-vidyuth.vercel.app/{13-digit-service-number}
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname === 'ap-vidyuth.vercel.app') {
+          const sn = parsed.pathname.replace(/\//g, '').replace(/[^0-9]/g, '');
+          if (sn.length === 13) {
+            // Navigate to electricity tab and expand that service card
+            setActivePage('electricity');
+            window.dispatchEvent(
+              new CustomEvent('deep-link-service', { detail: { serviceNumber: sn } })
+            );
+          } else {
+            // URL is a general app link (e.g. /privacy) — just open the app
+            setActivePage('electricity');
+          }
+        }
+      } catch {
+        // Not a valid URL — ignore
       }
     };
     
@@ -252,18 +279,33 @@ function AppContent() {
     setDeferredPrompt(null);
 
     if (choiceResult.outcome === 'accepted') {
+      localStorage.setItem('pwa_installed', 'true');
       toast.success('App installed successfully');
     } else {
+      const twoDays = 2 * 24 * 60 * 60 * 1000;
+      localStorage.setItem('pwa_install_snoozed_until', (Date.now() + twoDays).toString());
       toast('Maybe later');
     }
   };
 
   const handleDismissBanner = () => {
     setShowInstallBanner(false);
+    const twoDays = 2 * 24 * 60 * 60 * 1000;
+    localStorage.setItem('pwa_install_snoozed_until', (Date.now() + twoDays).toString());
   };
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event) => {
+      // Don't show if already in standalone mode
+      if (window.matchMedia('(display-mode: standalone)').matches) return;
+      
+      // Don't show if user already installed
+      if (localStorage.getItem('pwa_installed') === 'true') return;
+
+      // Check snooze
+      const snoozedUntil = localStorage.getItem('pwa_install_snoozed_until');
+      if (snoozedUntil && Date.now() < parseInt(snoozedUntil)) return;
+
       event.preventDefault();
       setDeferredPrompt(event);
       setShowInstallBanner(true);

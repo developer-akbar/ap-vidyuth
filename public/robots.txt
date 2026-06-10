@@ -3,4 +3,4 @@ Allow: /
 Disallow: /api/
 
 # Sitemap URL
-Sitemap: https://my-dashboard-mobile.vercel.app/sitemap.xml
+Sitemap: https://ap-vidyuth.vercel.app/sitemap.xml

@@ -6,6 +6,9 @@
 
 import { openDB } from 'idb';
 
+// NOTE: DB_NAME is intentionally kept as 'my-dashboard' for backward compatibility.
+// Changing it would orphan all existing user data in IndexedDB on web/PWA builds.
+// Do NOT rename this, even though the app is now called AP Vidyuth.
 const DB_NAME = 'my-dashboard';
 const DB_VERSION = 5;  // bumped: adds billTime
 const STORE = 'electricity_services';
