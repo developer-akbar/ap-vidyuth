@@ -13,7 +13,6 @@ import { SummaryBar } from './components/SummaryBar.jsx';
 import { DailyTip } from './components/DailyTip.jsx';
 import { Toolbar } from './components/Toolbar.jsx';
 import { TrashView } from './components/TrashView.jsx';
-import { useElectricityServices } from './hooks/useElectricityServices.js';
 import { filterServices } from './utils/filters.js';
 import { formatInr, generateShareTable } from '../../shared/utils/index.js';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog.jsx';
@@ -30,11 +29,11 @@ import { App as CapApp } from '@capacitor/app';
 import { Share } from '@capacitor/share';
 
 import { useNetwork } from '../../shared/hooks/useNetwork.js';
+import { Virtuoso } from 'react-virtuoso';
 
-export function ElectricityDashboard({ onOpenCalcSettings }) {
+export function ElectricityDashboard({ onOpenCalcSettings, electricityContext }) {
   const isWeb = Capacitor.getPlatform() === 'web';
   const { isOffline } = useNetwork();
-  const electricityContext = useElectricityServices();
   const { services, trash, loading, refreshingIds, actions } = electricityContext;
   const [filters, setFilters] = useState({ query: '', status: '', sort: 'amount' });
   const [cardStyle, setCardStyle] = useState(localStorage.getItem('appearance_card_style') || 'classic'); 
@@ -328,6 +327,7 @@ export function ElectricityDashboard({ onOpenCalcSettings }) {
   const [bulkResult, setBulkResult] = useState(null);
   const [processingOverlay, setProcessingOverlay] = useState(null);
   const [autoBackupPrompt, setAutoBackupPrompt] = useState(false);
+  const [notificationPrompt, setNotificationPrompt] = useState(false);
 
   useEffect(() => {
     if (!loading && services.length >= 5) {
@@ -340,6 +340,20 @@ export function ElectricityDashboard({ onOpenCalcSettings }) {
           if (!snoozedUntil || now > snoozedUntil) {
             setAutoBackupPrompt(true);
           }
+        }
+      });
+    }
+
+    if (!loading && services.length >= 1) {
+      db.getSetting('has_seen_notification_prompt').then(seen => {
+        if (!seen && Capacitor.getPlatform() !== 'web') {
+          import('@capacitor/push-notifications').then(({ PushNotifications }) => {
+             PushNotifications.checkPermissions().then(status => {
+                if (status.receive !== 'granted') {
+                   setNotificationPrompt(true);
+                }
+             });
+          });
         }
       });
     }
@@ -370,7 +384,9 @@ export function ElectricityDashboard({ onOpenCalcSettings }) {
 
     setProcessingOverlay('Restoring Data...');
     try {
-      await importBackupData(file, electricityContext, t, ph, () => {});
+      await importBackupData(file, electricityContext, t, ph, () => {}, {
+        onProgress: (msg) => setProcessingOverlay(msg)
+      });
     } finally {
       setProcessingOverlay(null);
       e.target.value = '';
@@ -921,10 +937,25 @@ export function ElectricityDashboard({ onOpenCalcSettings }) {
       <NotificationInbox open={inboxOpen} onClose={() => setInboxOpen(false)} onAction={handleNotificationAction} />
 
       {activeView === 'active' && (
-        <>{loading ? <div className="state-box"><Loader size={22} /><p>{t('loading_services')}</p></div> : visible.length === 0 ? <div className="state-box"><FiZap size={28} /><h3>{t('no_services_found')}</h3><p>{services.length === 0 ? t('add_first_service') : t('no_results_filter')}</p>{services.length === 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}><button className="btn btn--primary" onClick={() => setDialog({ open: true, service: null })}>{t('add_service')}</button><div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}><span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Have a backup file?</span><input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".json" onChange={handleImportFromEmptyState} /><button className="btn btn--ghost btn--sm" onClick={() => fileInputRef.current?.click()}><FiUpload size={14} /> Restore Data</button></div></div>}</div> : <div className="grid">
-          {visible.map(s => (
-            <ServiceCard key={s.id} id={`service-${s.id}`} service={s} useAccordion={useAccordion} cardStyle={cardStyle} refreshing={refreshingIds.has(s.id)} isFlashing={flashingId === s.id} selected={selectedIds.has(s.id)} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRefresh={async () => { setProcessingOverlay('Refreshing bill...'); try { const updated = await actions.refresh(s.id); toast.success('Refreshed'); if (updated) await trackBill(s, updated); } catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Refresh failed`); } finally { setProcessingOverlay(null); } }} onEdit={() => setDialog({ open: true, service: s })} onAbout={() => setAboutDialog({ open: true, service: s })} onDelete={() => { setConfirmState({ open: true, title: 'Move to Trash?', description: 'This service will be moved to the Trash.', isDanger: true, onConfirm: async () => { const tst = toast.loading('Moving to trash…'); try { await actions.remove(s.id); toast.success('Moved to trash', { id: tst }); clearSelection(); } catch (e) { toast.error(`Failed to move`, { id: tst }); } } }); }} onTogglePin={() => actions.update(s.id, { pinned: !s.pinned })} onCalculateBill={(svc) => handleCalculateBill(svc)} onShowQR={(svc) => setQrDialog({ open: true, service: svc })} onPay={() => handlePay(s)} onShare={() => handleShare(s)} onShareReport={() => handleShareMonthlyReport(s)} />
-          ))}</div>}</>
+        <>{loading ? <div className="state-box"><Loader size={22} /><p>{t('loading_services')}</p></div> : visible.length === 0 ? <div className="state-box"><FiZap size={28} /><h3>{t('no_services_found')}</h3><p>{services.length === 0 ? t('add_first_service') : t('no_results_filter')}</p>{services.length === 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}><button className="btn btn--primary" onClick={() => setDialog({ open: true, service: null })}>{t('add_service')}</button><div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}><span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Have a backup file?</span><input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".json" onChange={handleImportFromEmptyState} /><button className="btn btn--ghost btn--sm" onClick={() => fileInputRef.current?.click()}><FiUpload size={14} /> Restore Data</button></div></div>}</div> : 
+        visible.length > 50 ? (
+          <Virtuoso
+            useWindowScroll
+            data={visible}
+            itemContent={(index, s) => (
+              <div style={{ paddingBottom: '16px' }}>
+                <ServiceCard key={s.id} id={`service-${s.id}`} service={s} useAccordion={useAccordion} cardStyle={cardStyle} refreshing={refreshingIds.has(s.id)} isFlashing={flashingId === s.id} selected={selectedIds.has(s.id)} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRefresh={async () => { setProcessingOverlay('Refreshing bill...'); try { const updated = await actions.refresh(s.id); toast.success('Refreshed'); if (updated) await trackBill(s, updated); } catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Refresh failed`); } finally { setProcessingOverlay(null); } }} onEdit={() => setDialog({ open: true, service: s })} onAbout={() => setAboutDialog({ open: true, service: s })} onDelete={() => { setConfirmState({ open: true, title: 'Move to Trash?', description: 'This service will be moved to the Trash.', isDanger: true, onConfirm: async () => { const tst = toast.loading('Moving to trash…'); try { await actions.remove(s.id); toast.success('Moved to trash', { id: tst }); clearSelection(); } catch (e) { toast.error(`Failed to move`, { id: tst }); } } }); }} onTogglePin={() => actions.update(s.id, { pinned: !s.pinned })} onCalculateBill={(svc) => handleCalculateBill(svc)} onShowQR={(svc) => setQrDialog({ open: true, service: svc })} onPay={() => handlePay(s)} onShare={() => handleShare(s)} onShareReport={() => handleShareMonthlyReport(s)} />
+              </div>
+            )}
+          />
+        ) : (
+          <div className="grid">
+            {visible.map(s => (
+              <ServiceCard key={s.id} id={`service-${s.id}`} service={s} useAccordion={useAccordion} cardStyle={cardStyle} refreshing={refreshingIds.has(s.id)} isFlashing={flashingId === s.id} selected={selectedIds.has(s.id)} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRefresh={async () => { setProcessingOverlay('Refreshing bill...'); try { const updated = await actions.refresh(s.id); toast.success('Refreshed'); if (updated) await trackBill(s, updated); } catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Refresh failed`); } finally { setProcessingOverlay(null); } }} onEdit={() => setDialog({ open: true, service: s })} onAbout={() => setAboutDialog({ open: true, service: s })} onDelete={() => { setConfirmState({ open: true, title: 'Move to Trash?', description: 'This service will be moved to the Trash.', isDanger: true, onConfirm: async () => { const tst = toast.loading('Moving to trash…'); try { await actions.remove(s.id); toast.success('Moved to trash', { id: tst }); clearSelection(); } catch (e) { toast.error(`Failed to move`, { id: tst }); } } }); }} onTogglePin={() => actions.update(s.id, { pinned: !s.pinned })} onCalculateBill={(svc) => handleCalculateBill(svc)} onShowQR={(svc) => setQrDialog({ open: true, service: svc })} onPay={() => handlePay(s)} onShare={() => handleShare(s)} onShareReport={() => handleShareMonthlyReport(s)} />
+            ))}
+          </div>
+        )
+        }</>
       )}
 
       {activeView === 'trash' && <TrashView services={trash} selectedIds={selectedIds} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRestore={id => { setConfirmState({ open: true, title: 'Restore service?', description: 'This service will be restored.', isDanger: false, onConfirm: async () => { const tst = toast.loading('Restoring…'); try { await actions.restore(id); toast.success('Restored', { id: tst }); clearSelection(); handleViewChange('active'); flashCard(id); } catch (e) { toast.error(`Restore failed`, { id: tst }); } } }); }} onDeletePermanent={id => { setConfirmState({ open: true, title: 'Delete permanently?', description: 'This action cannot be undone.', isDanger: true, onConfirm: () => toast.promise(actions.purge(id), { loading: 'Deleting…', success: () => { clearSelection(); return 'Deleted permanently'; }, error: 'Delete failed' }) }); }} />}
@@ -1005,6 +1036,24 @@ export function ElectricityDashboard({ onOpenCalcSettings }) {
           setAutoBackupPrompt(false);
           db.setSetting('has_seen_auto_backup_prompt', true);
           window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'settings' } }));
+        }} 
+      />
+
+      <ConfirmDialog 
+        open={notificationPrompt} 
+        title="Get Bill Alerts" 
+        description="We'll notify you when a new bill is generated or if a due date is approaching. Turn on notifications?" 
+        isDanger={false} 
+        confirmText="Enable Alerts"
+        cancelText="Maybe Later"
+        onClose={() => {
+          setNotificationPrompt(false);
+          db.setSetting('has_seen_notification_prompt', true);
+        }} 
+        onConfirm={() => {
+          setNotificationPrompt(false);
+          db.setSetting('has_seen_notification_prompt', true);
+          import('./utils/notifications.js').then(m => m.setupPushNotifications(true));
         }} 
       />
     </div>

@@ -8,6 +8,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import posthog from 'posthog-js';
 import { PostHogProvider, usePostHog } from '@posthog/react';
 import { ElectricityDashboard } from '../features/electricity/ElectricityDashboard.jsx';
+import { useElectricityServices } from '../features/electricity/hooks/useElectricityServices.js';
 import { setupPushNotifications, syncPushTokenWithServer } from '../features/electricity/utils/notifications.js';
 import { PrivacyPolicy } from '../features/settings/PrivacyPolicy.jsx';
 import { PrefixMigration } from '../features/settings/components/PrefixMigration.jsx';
@@ -72,6 +73,14 @@ function AppContent() {
 
   const { isOffline } = useNetwork();
   const scrollPositions = useRef({});
+  const [globalProgress, setGlobalProgress] = useState(null);
+  const electricityContext = useElectricityServices();
+
+  useEffect(() => {
+    const handleProgress = (e) => setGlobalProgress(e.detail);
+    window.addEventListener('global-progress', handleProgress);
+    return () => window.removeEventListener('global-progress', handleProgress);
+  }, []);
 
   // Theme Sync (Standard #12)
   useEffect(() => {
@@ -274,6 +283,12 @@ function AppContent() {
           You're offline — showing cached data
         </div>
       )}
+      {globalProgress && (
+        <div style={{ background: 'var(--blue-dim)', borderBottom: '1px solid var(--blue)', color: 'var(--blue)', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+          <Loader size={16} />
+          {globalProgress}
+        </div>
+      )}
       {showInstallBanner && (
         <div className="install-banner">
           <span className="install-banner__text">Add AP Vidyuth to your home screen for quick access?</span>
@@ -306,11 +321,11 @@ function AppContent() {
 
       <main className="main">
         <Suspense fallback={<PageLoader />}>
-          {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} />}
+          {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} electricityContext={electricityContext} />}
           {activePage === 'calculation-settings' && <CalculationSettings onBack={() => setActivePage('settings')} />}
           {activePage === 'prefix-migration' && <PrefixMigration onBack={() => setActivePage('settings')} />}
           {activePage === 'appliances' && <ApplianceCalculator onBack={() => setActivePage('electricity')} />}
-          {activePage === 'home' && <OverviewTab />}
+          {activePage === 'home' && <OverviewTab electricityContext={electricityContext} />}
           {activePage === 'privacy' && (
             <PrivacyPolicy onBack={() => setActivePage('settings')} />
           )}
@@ -397,7 +412,7 @@ function AppContent() {
                     Data Management
                   </h3>
                   <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                    <BackupRestore />
+                    <BackupRestore electricityContext={electricityContext} />
                   </div>
                 </div>
 

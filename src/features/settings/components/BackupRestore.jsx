@@ -2,7 +2,6 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiDownload, FiUpload, FiTrash2 } from 'react-icons/fi';
 import { SettingsItem } from './SettingsItem.jsx';
-import { useElectricityServices } from '../../electricity/hooks/useElectricityServices.js';
 import { db } from '../../../shared/db/storage.js';
 import toast from 'react-hot-toast';
 import { usePostHog } from '@posthog/react';
@@ -14,9 +13,9 @@ import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
-export function BackupRestore() {
+export function BackupRestore({ electricityContext }) {
   const { t } = useTranslation();
-  const context = useElectricityServices();
+  const context = electricityContext;
   const { services, trash, actions } = context;
   const fileInputRef = useRef(null);
   const ph = usePostHog();
@@ -188,13 +187,36 @@ export function BackupRestore() {
     const file = e.target.files[0];
     if (!file) return;
 
-    const hasData = services.length > 0 || trash.length > 0;
-    
-    if (hasData) {
-      setRestoreState({ open: true, file });
-    } else {
-      executeRestore(file, false);
-    }
+    // Read file for preview
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const rawData = JSON.parse(event.target.result);
+        let entries = [];
+        if (Array.isArray(rawData)) {
+           entries = rawData.filter(item => !item._meta).map(item => ({
+             ...item,
+             serviceNumber: item.serviceNumber || item.number
+           }));
+        } else if (rawData.version === 2 || rawData.services) {
+           entries = rawData.services || [];
+        } else if (rawData['ap-vidyuth-services'] || rawData['my-dashboard-services']) {
+           entries = rawData['ap-vidyuth-services'] || rawData['my-dashboard-services'] || [];
+        } else {
+           const anyArrayKey = Object.keys(rawData).find(k => Array.isArray(rawData[k]) && rawData[k].length > 0 && (rawData[k][0].serviceNumber || rawData[k][0].number));
+           if (anyArrayKey) entries = rawData[anyArrayKey];
+        }
+        
+        const validEntries = entries.filter(e => e.serviceNumber && e.serviceNumber.length === 13);
+        const hasData = services.length > 0 || trash.length > 0;
+        
+        setRestoreState({ open: true, file, previewCount: validEntries.length, hasData });
+      } catch (err) {
+        toast.error('Invalid backup file');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleWipeData = () => {

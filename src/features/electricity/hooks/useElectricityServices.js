@@ -131,7 +131,7 @@ export function useElectricityServices() {
   // POST /services
   // Validates + fetches in one shot (2 APSPDCL calls total), then reloads.
   const add = useCallback(async (params) => {
-    const { isBulk, entries, serviceNumber, label, pinned } = params;
+    const { isBulk, entries, serviceNumber, label, pinned, onProgress } = params;
     const snForSession = isBulk ? entries[0].number : serviceNumber;
     
     const session = await getValidSession(snForSession);
@@ -139,7 +139,8 @@ export function useElectricityServices() {
     
     let result;
     if (isBulk) {
-      result = await createBulkServices(entries, session, async () => {
+      result = await createBulkServices(entries, session, async (done, total) => {
+        if (onProgress) onProgress(done, total);
         await reload();
       });
     } else {
