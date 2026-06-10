@@ -96,6 +96,7 @@ async function getSqlite() {
     try { await db.execute("ALTER TABLE electricity_services ADD COLUMN historyFetchedAt TEXT;"); } catch (e) {}
     try { await db.execute("ALTER TABLE electricity_services ADD COLUMN lastReportedBillDate TEXT;"); } catch (e) {}
     try { await db.execute("ALTER TABLE electricity_services ADD COLUMN billTime TEXT;"); } catch (e) {}
+    try { await db.execute("ALTER TABLE electricity_services ADD COLUMN billNoPrefix TEXT;"); } catch (e) {}
     try { await db.execute("ALTER TABLE electricity_services ADD COLUMN category TEXT;"); } catch (e) {}
     try { await db.execute("ALTER TABLE electricity_services ADD COLUMN closingRdg REAL;"); } catch (e) {}
     try { await db.execute("ALTER TABLE electricity_services ADD COLUMN ctrLoad REAL;"); } catch (e) {}
@@ -121,6 +122,7 @@ async function getSqlite() {
         historyFetchedAt TEXT,
         lastReportedBillDate TEXT,
         billTime TEXT,
+        billNoPrefix TEXT,
         lastRefreshedDate TEXT,
         lastError TEXT,
         isPaid INTEGER DEFAULT 0,
@@ -314,6 +316,7 @@ async function createService(data) {
     historyFetchedAt: null,
     lastReportedBillDate: null,
     billTime: null,
+    billNoPrefix: null,
     lastRefreshedDate: null,
     lastError: null,
     isPaid: false,
@@ -342,73 +345,73 @@ async function createService(data) {
   };
 
   if (platform === 'android') {
-    const db = await getSqlite();
-    const ser = serializeRecord(record);
-    await db.run(
-      `INSERT INTO electricity_services
-        (id, serviceNumber, label, customerName, lastBillDate, lastDueDate,
-         lastAmountDue, lastBilledUnits, lastThreeAmounts, lastStatus, lastFetchedAt,
-         historyFetchedAt, lastReportedBillDate, billTime, lastRefreshedDate, lastError, isPaid, paidDate, receiptNumber, paidAmount,
-         billBreakup, billHistory, paymentHistory, trendData, insights,
-         category, closingRdg, ctrLoad,
-         divisionCode, divisionName, circleName, sectionName, uniqueServiceNumber,
-         pinned, pinnedAt, isDeleted, deletedAt, createdAt, updatedAt)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        ser.id, ser.serviceNumber, ser.label, ser.customerName,
-        ser.lastBillDate, ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits,
-        ser.lastThreeAmounts, ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.lastRefreshedDate,
-        ser.lastError, ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
-        ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
-        ser.category, ser.closingRdg, ser.ctrLoad,
-        ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
-        ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.createdAt, ser.updatedAt
-      ]
-    );
-    await sqliteSave();
+  const db = await getSqlite();
+  const ser = serializeRecord(record);
+  await db.run(
+    `INSERT INTO electricity_services
+      (id, serviceNumber, label, customerName, lastBillDate, lastDueDate,
+       lastAmountDue, lastBilledUnits, lastThreeAmounts, lastStatus, lastFetchedAt,
+       historyFetchedAt, lastReportedBillDate, billTime, billNoPrefix, lastRefreshedDate, lastError, isPaid, paidDate, receiptNumber, paidAmount,
+       billBreakup, billHistory, paymentHistory, trendData, insights,
+       category, closingRdg, ctrLoad,
+       divisionCode, divisionName, circleName, sectionName, uniqueServiceNumber,
+       pinned, pinnedAt, isDeleted, deletedAt, createdAt, updatedAt)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      ser.id, ser.serviceNumber, ser.label, ser.customerName,
+      ser.lastBillDate, ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits,
+      ser.lastThreeAmounts, ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.billNoPrefix, ser.lastRefreshedDate,
+      ser.lastError, ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
+      ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
+      ser.category, ser.closingRdg, ser.ctrLoad,
+      ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
+      ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.createdAt, ser.updatedAt
+    ]
+  );
+  await sqliteSave();
   } else {
-    const db = await getIdb();
-    await db.add(STORE, record);
+  const db = await getIdb();
+  await db.add(STORE, record);
   }
   return record;
-}
+  }
 
-/**
- * Updates an existing service record with a partial patch.
- */
-async function updateService(id, patch) {
+  /**
+  * Updates an existing service record with a partial patch.
+  */
+  async function updateService(id, patch) {
   const platform = await getPlatform();
   const now = new Date().toISOString();
 
   if (platform === 'android') {
-    const existing = await getServiceById(id);
-    if (!existing) throw new Error('Service not found');
-    const updated = { ...existing, ...patch, updatedAt: now };
-    const ser = serializeRecord(updated);
-    await (await getSqlite()).run(
-      `UPDATE electricity_services SET
-        serviceNumber=?, label=?, customerName=?, lastBillDate=?, lastDueDate=?,
-        lastAmountDue=?, lastBilledUnits=?, lastThreeAmounts=?, lastStatus=?,
-        lastFetchedAt=?, historyFetchedAt=?, lastReportedBillDate=?, billTime=?, lastRefreshedDate=?, lastError=?, isPaid=?, paidDate=?,
-        receiptNumber=?, paidAmount=?, billBreakup=?, billHistory=?,
-        paymentHistory=?, trendData=?, insights=?,
-        category=?, closingRdg=?, ctrLoad=?,
-        divisionCode=?, divisionName=?, circleName=?, sectionName=?, uniqueServiceNumber=?,
-        pinned=?, pinnedAt=?, isDeleted=?, deletedAt=?, updatedAt=?
-       WHERE id=?`,
-      [
-        ser.serviceNumber, ser.label, ser.customerName, ser.lastBillDate,
-        ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits, ser.lastThreeAmounts,
-        ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.lastRefreshedDate, ser.lastError,
-        ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
-        ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
-        ser.category, ser.closingRdg, ser.ctrLoad,
-        ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
-        ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.updatedAt, ser.id
-      ]
-    );
-    await sqliteSave();
-    return updated;
+  const existing = await getServiceById(id);
+  if (!existing) throw new Error('Service not found');
+  const updated = { ...existing, ...patch, updatedAt: now };
+  const ser = serializeRecord(updated);
+  await (await getSqlite()).run(
+    `UPDATE electricity_services SET
+      serviceNumber=?, label=?, customerName=?, lastBillDate=?, lastDueDate=?,
+      lastAmountDue=?, lastBilledUnits=?, lastThreeAmounts=?, lastStatus=?,
+      lastFetchedAt=?, historyFetchedAt=?, lastReportedBillDate=?, billTime=?, billNoPrefix=?, lastRefreshedDate=?, lastError=?, isPaid=?, paidDate=?,
+      receiptNumber=?, paidAmount=?, billBreakup=?, billHistory=?,
+      paymentHistory=?, trendData=?, insights=?,
+      category=?, closingRdg=?, ctrLoad=?,
+      divisionCode=?, divisionName=?, circleName=?, sectionName=?, uniqueServiceNumber=?,
+      pinned=?, pinnedAt=?, isDeleted=?, deletedAt=?, updatedAt=?
+     WHERE id=?`,
+    [
+      ser.serviceNumber, ser.label, ser.customerName, ser.lastBillDate,
+      ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits, ser.lastThreeAmounts,
+      ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.billNoPrefix, ser.lastRefreshedDate, ser.lastError,
+      ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
+      ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
+      ser.category, ser.closingRdg, ser.ctrLoad,
+      ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
+      ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.updatedAt, ser.id
+    ]
+  );
+  await sqliteSave();
+  return updated;
   } else {
     const db = await getIdb();
     const existing = await db.get(STORE, id);
