@@ -1,15 +1,36 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FiDownload, FiShare2, FiFileText, FiX } from 'react-icons/fi';
+import { FiDownload, FiShare2, FiFileText, FiX, FiList } from 'react-icons/fi';
 
-export function ExportDialog({ open, onClose, onSave, onShare }) {
+export function ExportDialog({ open, onClose, onSave, onShare, onExportCsv }) {
   // Prevent scrolling when open
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [open]);
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+
+    const handleBack = (e) => {
+      if (e.type === 'app-back-button' && e.detail) {
+        e.detail.handled = true;
+      }
+      onClose();
+    };
+
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+
+    window.addEventListener('app-back-button', handleBack);
+    window.addEventListener('keydown', handleEsc);
+
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('app-back-button', handleBack);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -28,7 +49,7 @@ export function ExportDialog({ open, onClose, onSave, onShare }) {
           Your services and settings have been packed into a secure backup file. How would you like to export it?
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px', maxHeight: '50vh', overflowY: 'auto' }}>
           <button 
             className="btn btn--ghost" 
             style={{ justifyContent: 'flex-start', padding: '16px', height: 'auto', textAlign: 'left', border: '1px solid var(--border-hi)', whiteSpace: 'normal', width: '100%' }}
@@ -38,8 +59,8 @@ export function ExportDialog({ open, onClose, onSave, onShare }) {
               <FiDownload size={18} />
             </div>
             <div style={{ flex: 1 }}>
-              <b style={{ display: 'block', fontSize: '14px', marginBottom: '2px' }}>Save to Device</b>
-              <span style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: '400' }}>Download as a .json file directly to your downloads folder.</span>
+              <b style={{ display: 'block', fontSize: '14px', marginBottom: '2px' }}>Save to Device (JSON)</b>
+              <span style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: '400' }}>Download as a .json file directly to your downloads folder. Best for restoring later.</span>
             </div>
           </button>
 
@@ -54,6 +75,20 @@ export function ExportDialog({ open, onClose, onSave, onShare }) {
             <div style={{ flex: 1 }}>
               <b style={{ display: 'block', fontSize: '14px', marginBottom: '2px' }}>Share File</b>
               <span style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: '400' }}>Send via WhatsApp or Email. (Shared as .txt for compatibility, perfectly safe to restore).</span>
+            </div>
+          </button>
+
+          <button 
+            className="btn btn--ghost" 
+            style={{ justifyContent: 'flex-start', padding: '16px', height: 'auto', textAlign: 'left', border: '1px solid var(--border-hi)', whiteSpace: 'normal', width: '100%' }}
+            onClick={() => { onExportCsv(); onClose(); }}
+          >
+            <div style={{ background: 'var(--orange-dim)', color: 'var(--orange)', width: '32px', height: '32px', borderRadius: '8px', display: 'grid', placeItems: 'center', marginRight: '12px', flexShrink: 0 }}>
+              <FiList size={18} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <b style={{ display: 'block', fontSize: '14px', marginBottom: '2px' }}>Export as CSV</b>
+              <span style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: '400' }}>Download your active services as a spreadsheet for easy reading. (Cannot be used to restore).</span>
             </div>
           </button>
         </div>

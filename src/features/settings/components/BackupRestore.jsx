@@ -2,7 +2,6 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiDownload, FiUpload, FiTrash2 } from 'react-icons/fi';
 import { SettingsItem } from './SettingsItem.jsx';
-import { useElectricityServices } from '../../electricity/hooks/useElectricityServices.js';
 import { db } from '../../../shared/db/storage.js';
 import toast from 'react-hot-toast';
 import { usePostHog } from '@posthog/react';
@@ -14,9 +13,9 @@ import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
-export function BackupRestore() {
+export function BackupRestore({ electricityContext }) {
   const { t } = useTranslation();
-  const context = useElectricityServices();
+  const context = electricityContext;
   const { services, trash, actions } = context;
   const fileInputRef = useRef(null);
   const ph = usePostHog();
@@ -71,6 +70,44 @@ export function BackupRestore() {
     
     if (ph) ph.capture('data_exported', { count: exportState.activeCount, method: 'save' });
     toast.success(`${exportState.activeCount} services exported successfully`);
+  };
+
+  const handleExportCsv = async () => {
+    const activeServices = services.filter(s => !s.isDeleted);
+    
+    // Define CSV Headers
+    const headers = ['Service Number', 'Label', 'Customer Name', 'Category', 'Section Name', 'Last Amount Due', 'Last Billed Units', 'Status'];
+    
+    // Format rows
+    const rows = activeServices.map(s => {
+      return [
+        s.serviceNumber,
+        s.label || '',
+        s.customerName || '',
+        s.category || '',
+        s.sectionName || '',
+        s.lastAmountDue || '',
+        s.lastBilledUnits || '',
+        s.lastStatus || ''
+      ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(','); // Escape quotes and wrap in quotes
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().getTime();
+    link.href = url;
+    link.download = `ap_vidyuth_services_${timestamp}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    if (ph) ph.capture('data_exported_csv', { count: activeServices.length });
+    toast.success(`${activeServices.length} services exported as CSV`);
   };
 
   const handleShareFile = async () => {
@@ -150,13 +187,36 @@ export function BackupRestore() {
     const file = e.target.files[0];
     if (!file) return;
 
-    const hasData = services.length > 0 || trash.length > 0;
-    
-    if (hasData) {
-      setRestoreState({ open: true, file });
-    } else {
-      executeRestore(file, false);
-    }
+    // Read file for preview
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const rawData = JSON.parse(event.target.result);
+        let entries = [];
+        if (Array.isArray(rawData)) {
+           entries = rawData.filter(item => !item._meta).map(item => ({
+             ...item,
+             serviceNumber: item.serviceNumber || item.number
+           }));
+        } else if (rawData.version === 2 || rawData.services) {
+           entries = rawData.services || [];
+        } else if (rawData['ap-vidyuth-services'] || rawData['my-dashboard-services']) {
+           entries = rawData['ap-vidyuth-services'] || rawData['my-dashboard-services'] || [];
+        } else {
+           const anyArrayKey = Object.keys(rawData).find(k => Array.isArray(rawData[k]) && rawData[k].length > 0 && (rawData[k][0].serviceNumber || rawData[k][0].number));
+           if (anyArrayKey) entries = rawData[anyArrayKey];
+        }
+        
+        const validEntries = entries.filter(e => e.serviceNumber && e.serviceNumber.length === 13);
+        const hasData = services.length > 0 || trash.length > 0;
+        
+        setRestoreState({ open: true, file, previewCount: validEntries.length, hasData });
+      } catch (err) {
+        toast.error('Invalid backup file');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleWipeData = () => {
@@ -243,6 +303,7 @@ export function BackupRestore() {
         onClose={() => setExportState(prev => ({ ...prev, open: false }))}
         onSave={handleSaveToDevice}
         onShare={handleShareFile}
+        onExportCsv={handleExportCsv}
       />
     </>
   );

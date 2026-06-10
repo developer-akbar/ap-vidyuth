@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import { FiZap, FiGrid, FiSettings, FiMonitor } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
@@ -8,14 +8,20 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import posthog from 'posthog-js';
 import { PostHogProvider, usePostHog } from '@posthog/react';
 import { ElectricityDashboard } from '../features/electricity/ElectricityDashboard.jsx';
+import { useElectricityServices } from '../features/electricity/hooks/useElectricityServices.js';
 import { setupPushNotifications, syncPushTokenWithServer } from '../features/electricity/utils/notifications.js';
 import { PrivacyPolicy } from '../features/settings/PrivacyPolicy.jsx';
 import { PrefixMigration } from '../features/settings/components/PrefixMigration.jsx';
 import { SettingsItem } from '../features/settings/components/SettingsItem.jsx';
 import { BackupRestore } from '../features/settings/components/BackupRestore.jsx';
 import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import { Loader } from '../shared/components/Loader.jsx';
-import { FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail } from 'react-icons/fi';
+import { FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail, FiWifiOff } from 'react-icons/fi';
+
+import { useNetwork } from '../shared/hooks/useNetwork.js';
 
 // ── Lazy Loaded Components ──────────────────────────────────────────────────
 const CalculationSettings = lazy(() => import('../features/electricity/components/CalculationSettings.jsx').then(m => ({ default: m.CalculationSettings })));
@@ -57,92 +63,78 @@ function AppContent() {
     }
     return 'electricity';
   });
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system');
+  const [density, setDensity] = useState(() => localStorage.getItem('density') || 'comfortable');
   const { t, i18n } = useTranslation();
   const ph = usePostHog();
 
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
 
-  const handleNavClick = (id) => {
-    if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
-    setActivePage(id);
-    const mainEl = document.querySelector('.main');
-    if (mainEl) mainEl.scrollTop = 0;
-  };
+  const { isOffline } = useNetwork();
+  const scrollPositions = useRef({});
+  const [globalProgress, setGlobalProgress] = useState(null);
+  const electricityContext = useElectricityServices();
 
   useEffect(() => {
-    setupPushNotifications();
-
-    const handleNavigate = (e) => {
-      const page = e.detail?.page;
-      if (page) {
-         setActivePage(page);
-         const mainEl = document.querySelector('.main');
-         if (mainEl) mainEl.scrollTop = 0;
-      }
-    };
-    window.addEventListener('app-navigate', handleNavigate);
-    return () => window.removeEventListener('app-navigate', handleNavigate);
+    const handleProgress = (e) => setGlobalProgress(e.detail);
+    window.addEventListener('global-progress', handleProgress);
+    return () => window.removeEventListener('global-progress', handleProgress);
   }, []);
 
+  // Theme Sync (Standard #12)
   useEffect(() => {
-    const handleBeforeInstallPrompt = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    const timer = setTimeout(() => {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-      const isCapacitor = window.Capacitor?.getPlatform() !== 'web';
-      
-      const dismissalTime = localStorage.getItem('pwa_banner_dismissed_at');
-      const isInstalled = localStorage.getItem('pwa_installed') === 'true';
-      
-      let isDismissed = false;
-      if (dismissalTime) {
-        const hoursPassed = (Date.now() - parseInt(dismissalTime, 10)) / (1000 * 60 * 60 * 24);
-        if (hoursPassed < 24) isDismissed = true;
+    const applyTheme = (t) => {
+      let activeTheme = t;
+      if (t === 'system') {
+        activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }
-
-      if (!isStandalone && !isCapacitor && !isDismissed && !isInstalled) {
-        setShowInstallBanner(true);
+      document.documentElement.setAttribute('data-theme', activeTheme);
+      
+      if (Capacitor.isNativePlatform()) {
+        const isDark = activeTheme === 'dark';
+        StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
+        StatusBar.setBackgroundColor({ color: isDark ? '#0f172a' : '#ffffff' });
       }
-    }, 60000);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      clearTimeout(timer);
     };
-  }, []);
 
-  const handleInstallClick = async () => {
-    setShowInstallBanner(false);
-    localStorage.setItem('pwa_installed', 'true');
-
-    if (!deferredPrompt) {
-      toast.success('To add to home screen, use your browser\'s Share > Add to Home Screen menu.');
-      return;
-    }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      if (ph) ph.capture('pwa_installed');
-    }
-    setDeferredPrompt(null);
-  };
-
-  const handleDismissBanner = () => {
-    setShowInstallBanner(false);
-    localStorage.setItem('pwa_banner_dismissed_at', Date.now().toString());
-    if (ph) ph.capture('pwa_banner_dismissed');
-  };
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    applyTheme(theme);
     localStorage.setItem('theme', theme);
+
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = () => applyTheme('system');
+      mediaQuery.addEventListener('change', listener);
+      return () => mediaQuery.removeEventListener('change', listener);
+    }
   }, [theme]);
+
+  // Density Sync (Standard #12)
+  useEffect(() => {
+    localStorage.setItem('density', density);
+  }, [density]);
+
+  useEffect(() => {
+    const hideSplash = async () => {
+      if (!Capacitor.isNativePlatform()) return;
+      try {
+        await SplashScreen.hide();
+      } catch (error) {
+        console.warn('Failed to hide splash screen', error);
+      }
+    };
+
+    hideSplash();
+  }, []);
+
+  const triggerHaptic = async (style = ImpactStyle.Light) => {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+      await Haptics.impact({ style });
+    } catch {
+      // ignore haptic failures on unsupported platforms
+    }
+  };
 
   useEffect(() => {
     if (ph) {
@@ -176,6 +168,7 @@ function AppContent() {
     };
     window.addEventListener('keydown', handleEsc);
     
+    const lastBackPress = { current: 0 };
     const onBack = async () => {
       const backEvent = new CustomEvent('app-back-button', { detail: { handled: false }, cancelable: true });
       window.dispatchEvent(backEvent);
@@ -192,7 +185,13 @@ function AppContent() {
         return;
       }
 
-      CapApp.exitApp();
+      const now = Date.now();
+      if (now - lastBackPress.current < 2000) {
+        CapApp.exitApp();
+      } else {
+        lastBackPress.current = now;
+        toast('Press back again to exit', { icon: '👋', duration: 2000 });
+      }
     };
 
     const capHandler = CapApp.addListener('backButton', onBack);
@@ -223,8 +222,80 @@ function AppContent() {
     if (ph) ph.capture('language_changed', { language: lng });
   };
 
+  const handleNavClick = async (id) => {
+    await triggerHaptic();
+
+    if (activePage === id) {
+      // If clicking the currently active tab, smooth scroll to top
+      const mainEl = document.querySelector('.main');
+      if (mainEl) {
+        mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return;
+    }
+
+    // When switching to a new tab, instantly jump to top to avoid visual "scrolling"
+    const mainEl = document.querySelector('.main');
+    if (mainEl) {
+      // Temporarily disable scroll behavior if it was set via CSS, though usually we just jump
+      mainEl.scrollTo({ top: 0, behavior: 'instant' }); 
+    }
+
+    if (id === 'settings') {
+      setActivePage('settings');
+      return;
+    }
+
+    setActivePage(id);
+  };
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      setShowInstallBanner(false);
+      return;
+    }
+
+    deferredPrompt.prompt();
+    const choiceResult = await deferredPrompt.userChoice;
+    setShowInstallBanner(false);
+    setDeferredPrompt(null);
+
+    if (choiceResult.outcome === 'accepted') {
+      toast.success('App installed successfully');
+    } else {
+      toast('Maybe later');
+    }
+  };
+
+  const handleDismissBanner = () => {
+    setShowInstallBanner(false);
+  };
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setDeferredPrompt(event);
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
   return (
-    <div className="shell">
+    <div className={`shell ${density === 'compact' ? 'shell--compact' : ''}`}>
+      {isOffline && (
+        <div style={{ background: 'var(--amber)', color: '#000', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+          <FiWifiOff size={16} />
+          You're offline — showing cached data
+        </div>
+      )}
+      {globalProgress && (
+        <div style={{ background: 'var(--blue-dim)', borderBottom: '1px solid var(--blue)', color: 'var(--blue)', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+          <Loader size={16} />
+          {globalProgress}
+        </div>
+      )}
       {showInstallBanner && (
         <div className="install-banner">
           <span className="install-banner__text">Add AP Vidyuth to your home screen for quick access?</span>
@@ -257,16 +328,16 @@ function AppContent() {
 
       <main className="main">
         <Suspense fallback={<PageLoader />}>
-          {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} />}
+          {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} electricityContext={electricityContext} />}
           {activePage === 'calculation-settings' && <CalculationSettings onBack={() => setActivePage('settings')} />}
           {activePage === 'prefix-migration' && <PrefixMigration onBack={() => setActivePage('settings')} />}
           {activePage === 'appliances' && <ApplianceCalculator onBack={() => setActivePage('electricity')} />}
-          {activePage === 'home' && <OverviewTab />}
+          {activePage === 'home' && <OverviewTab electricityContext={electricityContext} />}
           {activePage === 'privacy' && (
             <PrivacyPolicy onBack={() => setActivePage('settings')} />
           )}
           {activePage === 'settings' && (
-            <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg-1)' }}>
+            <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
               <div className="page__header page__header--sticky">
                 <div>
                   <h2 className="page__title">{t('settings')}</h2>
@@ -309,8 +380,22 @@ function AppContent() {
                         <span style={{ fontSize: '15px', fontWeight: '600' }}>{t('theme')}</span>
                       </div>
                       <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
+                        <button className={`seg__btn ${theme === 'system' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('system')}>Auto</button>
                         <button className={`seg__btn ${theme === 'dark' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('dark')}>{t('dark')}</button>
                         <button className={`seg__btn ${theme === 'light' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('light')}>{t('light')}</button>
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="settings-item__icon" style={{ color: 'var(--violet)' }}>
+                          <FiLayers size={18} />
+                        </div>
+                        <span style={{ fontSize: '15px', fontWeight: '600' }}>Display Density</span>
+                      </div>
+                      <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
+                        <button className={`seg__btn ${density === 'comfortable' ? 'seg__btn--active' : ''}`} onClick={() => setDensity('comfortable')}>Default</button>
+                        <button className={`seg__btn ${density === 'compact' ? 'seg__btn--active' : ''}`} onClick={() => setDensity('compact')}>Compact</button>
                       </div>
                     </div>
 
@@ -334,7 +419,7 @@ function AppContent() {
                     Data Management
                   </h3>
                   <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                    <BackupRestore />
+                    <BackupRestore electricityContext={electricityContext} />
                   </div>
                 </div>
 

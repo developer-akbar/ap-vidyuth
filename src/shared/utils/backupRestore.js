@@ -2,31 +2,38 @@ import { db } from '../db/storage.js';
 import toast from 'react-hot-toast';
 
 export async function importBackupData(file, { services, trash, actions }, t, ph, onComplete, options = {}) {
-  const { wipeFirst = false } = options;
+  const { wipeFirst = false, onProgress } = options;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         const rawData = JSON.parse(event.target.result);
         
-        if (!Array.isArray(rawData) && !rawData.version) {
-           throw new Error('Invalid backup format');
-        }
-
         let entries = [];
         let meta = null;
 
-        // Extract meta and entries
+        // Extract meta and entries robustly
         if (Array.isArray(rawData)) {
            meta = rawData.find(item => item._meta);
            entries = rawData.filter(item => !item._meta).map(item => ({
              ...item,
-             serviceNumber: item.serviceNumber || item.number
+             serviceNumber: item.serviceNumber || item.number || Object.keys(item).find(k => k.length === 13 && !isNaN(k))
            }));
-        } else if (rawData.version === 2) {
-           // Support importing the non-array V2 format we temporarily made
-           meta = rawData;
+        } else if (rawData.version === 2 || rawData.services) {
+           // Support V2 format and generic services objects
+           meta = rawData._meta || rawData;
            entries = rawData.services || [];
+        } else if (rawData['ap-vidyuth-services'] || rawData['my-dashboard-services']) {
+           // Legacy formats
+           entries = rawData['ap-vidyuth-services'] || rawData['my-dashboard-services'] || [];
+        } else {
+           // Maybe it's just an object mapping keys to objects? Let's check for an array anywhere
+           const anyArrayKey = Object.keys(rawData).find(k => Array.isArray(rawData[k]) && rawData[k].length > 0 && (rawData[k][0].serviceNumber || rawData[k][0].number));
+           if (anyArrayKey) {
+              entries = rawData[anyArrayKey];
+           } else {
+              throw new Error('Invalid backup format');
+           }
         }
 
         if (wipeFirst) {
@@ -34,6 +41,8 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
           const allTrash = await db.getTrash();
           const allIds = [...allServices, ...allTrash].map(s => s.id);
           if (allIds.length > 0) {
+            if (onProgress) onProgress('Wiping old data...');
+            window.dispatchEvent(new CustomEvent('global-progress', { detail: 'Wiping old data...' }));
             await actions.bulkPurge(allIds);
           }
           // Clear settings as well
@@ -64,11 +73,13 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
 
         if (validEntries.length === 0) {
           toast.error(t('no_valid_services_in_backup', 'No valid service numbers found in backup'));
+          window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
           resolve(false);
           return;
         }
 
-        const toastId = toast.loading(`Importing ${validEntries.length} services...`);
+        if (onProgress) onProgress(`Restoring ${validEntries.length} services...`);
+        window.dispatchEvent(new CustomEvent('global-progress', { detail: `Restoring ${validEntries.length} services...` }));
         let skipCount = 0;
         const toAdd = [];
 
@@ -102,8 +113,18 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
 
         if (toAdd.length > 0) {
           try {
-            const results = await actions.add({ isBulk: true, entries: toAdd });
-            // Results is an array of { id, serviceNumber, _error, ... }
+            // We can track progress of the API requests inside importBackupData 
+            // by passing a callback to actions.add
+            const results = await actions.add({ 
+              isBulk: true, 
+              entries: toAdd,
+              onProgress: (done, total) => {
+                const msg = `Validating ${done}/${total} new services...`;
+                if (onProgress) onProgress(msg);
+                window.dispatchEvent(new CustomEvent('global-progress', { detail: msg }));
+              }
+            });
+
             if (Array.isArray(results)) {
                for (const result of results) {
                  if (result._error) {
@@ -123,6 +144,11 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
             if (err?.message !== 'CANCELLED') {
               console.error('Failed bulk import', err);
               failCount = toAdd.length;
+            } else {
+              // User cancelled captcha, stop import process
+              window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
+              resolve(false);
+              return;
             }
           }
         }
@@ -131,18 +157,23 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
         if (skipCount > 0) msg += ` Updated ${skipCount} existing.`;
         if (failCount > 0) msg += ` Failed ${failCount}.`;
         
-        toast.success(msg, { id: toastId });
+        toast.success(msg);
         if (ph) ph.capture('data_imported', { count: successCount });
 
+        window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
         if (onComplete) onComplete();
         resolve(true);
         
       } catch (err) {
         toast.error(t('import_failed', 'Failed to read backup file: ' + err.message));
+        window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
         resolve(false);
       }
     };
-    reader.onerror = (e) => reject(e);
+    reader.onerror = (e) => {
+      window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
+      reject(e);
+    };
     reader.readAsText(file);
   });
 }

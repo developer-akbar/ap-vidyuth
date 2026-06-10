@@ -13,12 +13,13 @@ const getApiBase = () => {
 
 let listenersRegistered = false;
 
-export async function setupPushNotifications() {
+export async function setupPushNotifications(requestIfNeeded = false) {
   if (Capacitor.getPlatform() === 'web') return;
 
   try {
     const permStatus = await PushNotifications.checkPermissions();
     if (permStatus.receive !== 'granted') {
+      if (!requestIfNeeded) return; // Do not auto-prompt on boot (Standard #10)
       const requestStatus = await PushNotifications.requestPermissions();
       if (requestStatus.receive !== 'granted') return;
     }

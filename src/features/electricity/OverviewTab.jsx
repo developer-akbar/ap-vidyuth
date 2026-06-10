@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react';
 import { FiGrid, FiZap, FiBarChart2, FiAward, FiShare2, FiCalendar, FiTrendingUp, FiStar } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
-import { useElectricityServices } from './hooks/useElectricityServices.js';
 import { formatInr, generateShareTable } from '../../shared/utils/index.js';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 import toast from 'react-hot-toast';
 import { Loader } from '../../shared/components/Loader.jsx';
 
-export function OverviewTab() {
+export function OverviewTab({ electricityContext }) {
   const { t } = useTranslation();
-  const { services, loading } = useElectricityServices();
+  const { services, loading } = electricityContext;
   const [showYearReview, setShowYearReview] = useState(false);
 
   const activeServices = useMemo(() => services.filter(s => !s.isDeleted), [services]);

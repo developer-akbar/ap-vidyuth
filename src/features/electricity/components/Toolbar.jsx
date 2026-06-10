@@ -1,12 +1,25 @@
-import { FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiChevronDown, FiGlobe, FiZap, FiCopy, FiLayout, FiEye, FiArrowUp, FiArrowDown } from 'react-icons/fi';
+import { FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiChevronDown, FiGlobe, FiZap, FiCopy, FiLayout, FiEye, FiArrowUp, FiArrowDown, FiWifiOff } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import { Loader } from '../../../shared/components/Loader.jsx';
 import { SessionIndicator } from './SessionIndicator.jsx';
 import toast from 'react-hot-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNetwork } from '../../../shared/hooks/useNetwork.js';
 
 export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refreshingAll, activeView, onViewChange, trashCount, hasServices, services, cardStyle, onToggleCardStyle }) {
   const { t, i18n } = useTranslation();
+  const [localQuery, setLocalQuery] = useState(filters.query || '');
+  const { isOffline } = useNetwork();
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (filters.query !== localQuery) {
+        onFiltersChange({ ...filters, query: localQuery });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localQuery, filters, onFiltersChange]);
 
   const currentLang = i18n.resolvedLanguage || i18n.language || 'en';
   const isTelugu = currentLang.startsWith('te');
@@ -38,8 +51,8 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
         <div className="search-box">
           <FiSearch size={14} />
           <input
-            value={filters.query}
-            onChange={e => onFiltersChange({ ...filters, query: e.target.value })}
+            value={localQuery}
+            onChange={e => setLocalQuery(e.target.value)}
             placeholder={t('search_services')}
           />
         </div>
@@ -147,12 +160,19 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
         <div className="toolbar__group toolbar__group--refresh" style={{ background: 'var(--surface-2)', padding: '2px 4px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
           <button 
             className="btn btn--ghost btn--sm" 
-            onClick={onRefreshAll} 
-            disabled={refreshingAll || !hasServices} 
+            onClick={(e) => {
+              if (isOffline) {
+                toast('You are offline. Reconnect to refresh.', { icon: <FiWifiOff color="var(--amber)" /> });
+                return;
+              }
+              onRefreshAll(e);
+            }} 
+            disabled={refreshingAll || !hasServices || isOffline} 
             aria-label={t('refresh_all', 'Refresh all services')}
-            style={{ border: 'none', background: 'transparent', padding: '0 6px' }}
+            style={{ border: 'none', background: 'transparent', padding: '0 6px', opacity: isOffline ? 0.5 : 1, cursor: isOffline ? 'not-allowed' : 'pointer' }}
+            title={isOffline ? 'Offline' : ''}
           >
-            {refreshingAll ? <Loader size={13} /> : <FiRefreshCw size={13} />}
+            {refreshingAll ? <Loader size={13} /> : (isOffline ? <FiWifiOff size={13} /> : <FiRefreshCw size={13} />)}
             <span className="hide-xs" style={{ marginLeft: '4px' }}>{t('refresh')}</span>
           </button>
           <SessionIndicator />

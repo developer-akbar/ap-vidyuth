@@ -50,6 +50,34 @@ export function BillCalculator({ open, service, onClose }) {
 
   const config = type === 'commercial' ? DEFAULT_COMMERCIAL_CONFIG : DEFAULT_DOMESTIC_CONFIG;
 
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+
+    const handleBack = (e) => {
+      if (e.type === 'app-back-button' && e.detail) {
+        e.detail.handled = true;
+      }
+      onClose();
+    };
+
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+
+    window.addEventListener('app-back-button', handleBack);
+    window.addEventListener('keydown', handleEsc);
+
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('app-back-button', handleBack);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [open, onClose]);
+
   const progressResult = useMemo(() => {
     const billDateStr = service?.lastBillDate || service?.billDate;
     if (mode !== 'progress' || !currentReading || !billDateStr) return null;
@@ -200,14 +228,14 @@ export function BillCalculator({ open, service, onClose }) {
           {mode === 'simple' ? (
             <div className="field">
               <label className="field__label">{t('total_units_calculate')}</label>
-              <input type="text" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder="e.g. 250" autoFocus value={units} onChange={e => setUnits(e.target.value.replace(/\D/g, ''))} />
+              <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder="e.g. 250" autoFocus value={units} onChange={e => setUnits(e.target.value.replace(/\D/g, ''))} />
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {(!service?.closingRdg && !manualLastReading) && (
                 <div className="field">
                   <label className="field__label">{t('last_month_final_reading')}</label>
-                  <input type="text" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder="Enter last reading from bill" value={manualLastReading} onChange={e => setManualLastReading(e.target.value.replace(/\D/g, ''))} />
+                  <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder="Enter last reading from bill" value={manualLastReading} onChange={e => setManualLastReading(e.target.value.replace(/\D/g, ''))} />
                 </div>
               )}
               <div className="field">
@@ -220,7 +248,7 @@ export function BillCalculator({ open, service, onClose }) {
                     </div>
                   )}
                 </div>
-                <input type="text" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder={t('enter_current_reading')} autoFocus value={currentReading} onChange={e => setCurrentReading(e.target.value.replace(/\D/g, ''))} />
+                <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder={t('enter_current_reading')} autoFocus value={currentReading} onChange={e => setCurrentReading(e.target.value.replace(/\D/g, ''))} />
               </div>
             </div>
           )}

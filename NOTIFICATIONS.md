@@ -20,7 +20,7 @@ The following variables must be set in your Vercel project:
 
 In your GitHub repository, add the following secrets:
 
-- `API_URL`: Your deployed API base URL (e.g., `https://my-dashboard.vercel.app`).
+- `API_URL`: Your deployed API base URL (e.g., `https://ap-vidyuth.vercel.app`).
 - `INTERNAL_SECRET`: The same secret used in Vercel env.
 
 ## Android Setup

@@ -405,7 +405,7 @@ input[type="checkbox"] {
   z-index: 30;
   margin: -24px -24px 20px -24px;   /* bleed out to page edges */
   padding: 14px 24px;
-  background: var(--bg-1);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -420,7 +420,7 @@ input[type="checkbox"] {
   z-index: 20;
   margin: 0 -24px;
   padding: 0 24px 14px;
-  background: var(--bg-1);
+  background: var(--bg);
 }
 
 /* Full-page appliance layout — no internal scroll wrapper needed */
@@ -1166,6 +1166,12 @@ input[type="number"] {
   background: rgba(0,0,0,0.6);
   backdrop-filter: blur(4px);
   padding: 0;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .overlay--center {
@@ -1181,7 +1187,7 @@ input[type="number"] {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 16px;
-  animation: scaleUp 0.2s cubic-bezier(0.16,1,0.3,1);
+  animation: scaleUp 0.15s cubic-bezier(0.16,1,0.3,1);
 }
 
 @keyframes scaleUp {
@@ -1203,7 +1209,7 @@ input[type="number"] {
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: var(--shadow-lg);
   padding-bottom: env(safe-area-inset-bottom);
-  animation: slideUp 0.28s cubic-bezier(0.16,1,0.3,1);
+  animation: slideUp 0.2s cubic-bezier(0.16,1,0.3,1);
 }
 
 @keyframes slideUp {
@@ -1556,6 +1562,15 @@ input[type="number"] {
 }
 .flash { animation: flash 1s ease-out 3; z-index: 10; }
 
+/* ── Data Density (Standard #12) ── */
+.shell--compact .scard__header { padding: 10px 14px 8px; }
+.shell--compact .scard__hero-main { padding: 4px 14px 8px; }
+.shell--compact .scard__hero-amount { font-size: 22px; }
+.shell--compact .scard__quick-metrics { padding: 8px 14px; gap: 12px; }
+.shell--compact .scard__action-bar { padding: 8px 14px; }
+.shell--compact .stat { padding: 10px 12px; }
+.shell--compact .stat__value { font-size: 16px; }
+
 /* ═══════════════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════════════ */
@@ -1572,8 +1587,14 @@ input[type="number"] {
   .toolbar__group { flex-wrap: wrap; }
 }
 
-/* Mobile */
 @media (max-width: 700px) {
+  .btn { height: 44px; padding: 0 20px; }
+  .btn--sm { height: 38px; padding: 0 16px; }
+  .btn--xs { height: 34px; padding: 0 12px; }
+  
+  .icon-btn { width: 44px; height: 44px; }
+  .icon-btn-ghost { width: 36px; height: 36px; }
+  
   .sidebar     { display: none; }
   .bottom-nav  { display: flex; }
 
@@ -1586,7 +1607,7 @@ input[type="number"] {
 
   /* Sticky header bleed adjusts for mobile padding */
   .page__header--sticky {
-    margin: -16px -12px 16px -12px;
+    margin: -16px -12px 20px -12px;
     padding: 12px 16px;
   }
   .appliance-summary-sticky {
@@ -1601,7 +1622,7 @@ input[type="number"] {
 
   .grid { grid-template-columns: 1fr; gap: 10px; }
 
-  .toolbar { padding: 10px; top: 0; border-radius: 0; border-left: none; border-right: none; margin-bottom: 12px; gap: 8px; }
+  .toolbar { padding: 10px; border-radius: 0; border-left: none; border-right: none; margin-bottom: 12px; gap: 8px; }
   .toolbar__row--bottom { flex-wrap: wrap; gap: 8px; }
   .toolbar__group { min-width: fit-content; }
   .toolbar__filters { gap: 4px; }
@@ -1751,7 +1772,7 @@ input[type="number"] {
 /* ── PWA Install Banner ───────────────────────────────────────────────────── */
 .install-banner {
   position: fixed;
-  bottom: calc(56px + env(safe-area-inset-bottom) + 8px);
+  /* bottom: calc(56px + env(safe-area-inset-bottom) + 8px); */
   left: 12px; right: 12px;
   z-index: 300;
   background: var(--primary);
@@ -1766,7 +1787,7 @@ input[type="number"] {
   animation: slideUp 0.3s cubic-bezier(0.16,1,0.3,1);
 }
 @media (min-width: 701px) {
-  .install-banner { bottom: 16px; max-width: 440px; left: 50%; right: auto; transform: translateX(-50%); }
+  .install-banner { max-width: 440px; left: 50%; right: auto; transform: translateX(-50%); }
 }
 .install-banner__text { font-size: 13px; font-weight: 500; flex: 1; line-height: 1.4; }
 .install-banner__actions { display: flex; gap: 8px; flex-shrink: 0; }
