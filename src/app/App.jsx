@@ -279,18 +279,33 @@ function AppContent() {
     setDeferredPrompt(null);
 
     if (choiceResult.outcome === 'accepted') {
+      localStorage.setItem('pwa_installed', 'true');
       toast.success('App installed successfully');
     } else {
+      const twoDays = 2 * 24 * 60 * 60 * 1000;
+      localStorage.setItem('pwa_install_snoozed_until', (Date.now() + twoDays).toString());
       toast('Maybe later');
     }
   };
 
   const handleDismissBanner = () => {
     setShowInstallBanner(false);
+    const twoDays = 2 * 24 * 60 * 60 * 1000;
+    localStorage.setItem('pwa_install_snoozed_until', (Date.now() + twoDays).toString());
   };
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event) => {
+      // Don't show if already in standalone mode
+      if (window.matchMedia('(display-mode: standalone)').matches) return;
+      
+      // Don't show if user already installed
+      if (localStorage.getItem('pwa_installed') === 'true') return;
+
+      // Check snooze
+      const snoozedUntil = localStorage.getItem('pwa_install_snoozed_until');
+      if (snoozedUntil && Date.now() < parseInt(snoozedUntil)) return;
+
       event.preventDefault();
       setDeferredPrompt(event);
       setShowInstallBanner(true);
