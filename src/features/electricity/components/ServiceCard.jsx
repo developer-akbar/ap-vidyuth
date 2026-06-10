@@ -16,6 +16,8 @@ import { BudgetGoal } from './BudgetGoal.jsx';
 import { MeterReadingLog } from './MeterReadingLog.jsx';
 import { CostSplitTracker } from './CostSplitTracker.jsx';
 
+import { useNetwork } from '../../../shared/hooks/useNetwork.js';
+
 // ── Lazy Components ──────────────────────────────────────────────────────────
 const TrendChart = lazy(() => import('./TrendChart.jsx').then(m => ({ default: m.TrendChart })));
 
@@ -198,6 +200,26 @@ export function ServiceCard({
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+  };
+
+  const { isOffline } = useNetwork();
+
+  const handleRefreshClick = (e) => {
+    e.stopPropagation();
+    if (isOffline) {
+      toast('You are offline. Reconnect to refresh.', { icon: <FiWifiOff color="var(--amber)" /> });
+      return;
+    }
+    onRefresh();
+  };
+
+  const handlePayClick = (e) => {
+    e.stopPropagation();
+    if (isOffline) {
+      toast('You are offline. Reconnect to pay bill.', { icon: <FiWifiOff color="var(--amber)" /> });
+      return;
+    }
+    onPay();
   };
 
   const isHistoryError = service.lastError?.includes('APSPDCL history unavailable');
@@ -414,11 +436,13 @@ export function ServiceCard({
         <div className="scard__action-left">
           <button 
             className="btn-ghost-sm" 
-            onClick={onRefresh} 
-            disabled={refreshing}
+            onClick={handleRefreshClick} 
+            disabled={refreshing || isOffline}
             aria-label={t('refresh')}
+            style={isOffline ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+            title={isOffline ? 'Offline' : ''}
           >
-            {refreshing ? <Loader size={14} /> : <FiClock size={14} />} {t('refresh')}
+            {refreshing ? <Loader size={14} /> : (isOffline ? <FiWifiOff size={14} /> : <FiClock size={14} />)} {t('refresh')}
           </button>
         </div>
         <div className="scard__action-right">
@@ -432,7 +456,13 @@ export function ServiceCard({
               >
                 <LuCalculator size={14} />
               </button>
-              <button className="btn btn--pay btn--sm" onClick={onPay} aria-label={t('pay_now')}>
+              <button 
+                className="btn btn--pay btn--sm" 
+                onClick={handlePayClick} 
+                aria-label={t('pay_now')}
+                disabled={isOffline}
+                style={isOffline ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+              >
                 {t('pay_now')}
               </button>
             </>

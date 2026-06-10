@@ -40,6 +40,34 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
   }, [prefixes, serviceNumber]);
 
   useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+
+    const handleBack = (e) => {
+      if (e.type === 'app-back-button' && e.detail) {
+        e.detail.handled = true;
+      }
+      onClose();
+    };
+
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+
+    window.addEventListener('app-back-button', handleBack);
+    window.addEventListener('keydown', handleEsc);
+
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('app-back-button', handleBack);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [open, onClose]);
+
+  useEffect(() => {
     if (open) { 
       setLabel(service?.label || ''); 
       setServiceNumber(service?.serviceNumber || initialServiceNumber || ''); 
@@ -61,13 +89,7 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
       }, 300);
       return () => clearTimeout(timer);
     }
-    
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && open) onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [service, open, onClose]);
+  }, [service, open]);
 
   // Handle clicking outside prefix dropdown
   useEffect(() => {
@@ -202,6 +224,7 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
                     ref={numRef}
                     className={`field__input field__input--mono ${numError ? 'field__input--error' : ''}`}
                     value={serviceNumber}
+                    type="tel"
                     inputMode="numeric"
                     maxLength={13}
                     onChange={e => {

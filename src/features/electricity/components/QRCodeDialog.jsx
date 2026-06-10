@@ -35,6 +35,12 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
     }
   }, [open, service]);
 
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
   // Handle Esc and Back button
   useEffect(() => {
     const handleKeyDown = (e) => { 

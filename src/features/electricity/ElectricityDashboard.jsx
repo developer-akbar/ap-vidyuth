@@ -29,8 +29,11 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { Share } from '@capacitor/share';
 
-export function ElectricityDashboard() {
+import { useNetwork } from '../../shared/hooks/useNetwork.js';
+
+export function ElectricityDashboard({ onOpenCalcSettings }) {
   const isWeb = Capacitor.getPlatform() === 'web';
+  const { isOffline } = useNetwork();
   const electricityContext = useElectricityServices();
   const { services, trash, loading, refreshingIds, actions } = electricityContext;
   const [filters, setFilters] = useState({ query: '', status: '', sort: 'amount' });
