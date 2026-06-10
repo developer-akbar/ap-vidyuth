@@ -817,7 +817,6 @@ function PaymentsPanel({ service, t }) {
             <FiCheckCircle size={11} style={{ color: 'var(--green)' }} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: '11px' }}>{formatDate(p.date)}</span>
-              <span style={{ fontSize: '9px', color: 'var(--text-3)', fontWeight: 500 }}>{p.label}</span>
             </div>
           </div>
           <span className="mono-sm pymt__ref" title={p.receiptNo || '—'}>{p.receiptNo || '—'}</span>
