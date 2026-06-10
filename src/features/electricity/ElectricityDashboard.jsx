@@ -988,7 +988,19 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       <Suspense fallback={null}>
         <BillCalculator open={calculator.open} service={calculator.service} onClose={() => setCalculator({ open: false, service: null })} />
       </Suspense>
-      <QRCodeDialog open={qrDialog.open} service={qrDialog.service} onClose={() => setQrDialog({ open: false, service: null })} onUpdateTime={(id, time) => { actions.update(id, { billTime: time }); setQrDialog(prev => ({ ...prev, service: { ...prev.service, billTime: time } })); }} />
+      <QRCodeDialog 
+        open={qrDialog.open} 
+        service={qrDialog.service} 
+        onClose={() => setQrDialog({ open: false, service: null })} 
+        onUpdateTime={(id, time) => { 
+          actions.update(id, { billTime: time }); 
+          setQrDialog(prev => ({ ...prev, service: { ...prev.service, billTime: time } })); 
+        }} 
+        onUpdatePrefix={(id, prefix) => {
+          actions.update(id, { billNoPrefix: prefix });
+          setQrDialog(prev => ({ ...prev, service: { ...prev.service, billNoPrefix: prefix } }));
+        }}
+      />
       {bulkResult && createPortal(
         <div className="overlay overlay--center" onClick={() => setBulkResult(null)}>
           <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw' }}>
