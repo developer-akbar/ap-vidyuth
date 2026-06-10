@@ -405,7 +405,7 @@ input[type="checkbox"] {
   z-index: 30;
   margin: -24px -24px 20px -24px;   /* bleed out to page edges */
   padding: 14px 24px;
-  background: var(--bg-1);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -420,7 +420,7 @@ input[type="checkbox"] {
   z-index: 20;
   margin: 0 -24px;
   padding: 0 24px 14px;
-  background: var(--bg-1);
+  background: var(--bg);
 }
 
 /* Full-page appliance layout — no internal scroll wrapper needed */

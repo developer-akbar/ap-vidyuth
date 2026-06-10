@@ -168,6 +168,7 @@ function AppContent() {
     };
     window.addEventListener('keydown', handleEsc);
     
+    const lastBackPress = { current: 0 };
     const onBack = async () => {
       const backEvent = new CustomEvent('app-back-button', { detail: { handled: false }, cancelable: true });
       window.dispatchEvent(backEvent);
@@ -184,7 +185,13 @@ function AppContent() {
         return;
       }
 
-      CapApp.exitApp();
+      const now = Date.now();
+      if (now - lastBackPress.current < 2000) {
+        CapApp.exitApp();
+      } else {
+        lastBackPress.current = now;
+        toast('Press back again to exit', { icon: '👋', duration: 2000 });
+      }
     };
 
     const capHandler = CapApp.addListener('backButton', onBack);
@@ -330,7 +337,7 @@ function AppContent() {
             <PrivacyPolicy onBack={() => setActivePage('settings')} />
           )}
           {activePage === 'settings' && (
-            <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg-1)' }}>
+            <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
               <div className="page__header page__header--sticky">
                 <div>
                   <h2 className="page__title">{t('settings')}</h2>

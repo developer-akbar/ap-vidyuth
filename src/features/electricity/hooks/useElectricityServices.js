@@ -122,8 +122,21 @@ export function useElectricityServices() {
     const handleDbUpdate = () => reload();
     window.addEventListener('db-updated', handleDbUpdate);
 
+    // Standard #9: Retry failed network requests once automatically when the device comes back online
+    const handleOnline = async () => {
+      const services = await reload();
+      const failed = services.filter(s => s.lastError || shouldAutoRefresh(s));
+      if (failed.length > 0) {
+        console.log(`[useElectricityServices] Back online. Auto-retrying ${failed.length} services...`);
+        // Use a quiet refreshAll to avoid interrupting the user with too many toasts
+        refreshAll(() => {}).catch(() => {});
+      }
+    };
+    window.addEventListener('online', handleOnline);
+
     return () => {
       window.removeEventListener('db-updated', handleDbUpdate);
+      window.removeEventListener('online', handleOnline);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
