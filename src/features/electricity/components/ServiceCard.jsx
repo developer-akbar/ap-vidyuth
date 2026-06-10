@@ -143,9 +143,9 @@ export function ServiceCard({
     };
   }, [service.billHistory]);
 
-  const hasPaymentHistory = service.paymentHistory && service.paymentHistory.length > 0;
+  const hasAnyPaymentData = (service.paymentHistory && service.paymentHistory.length > 0) || (service.billHistory && service.billHistory.some(b => b.isPaid));
   const streak = useMemo(() => {
-    if (!hasPaymentHistory) return 0;
+    if (!hasAnyPaymentData) return 0;
     const bh = service.billHistory || [];
     if (bh.length === 0) return 0;
     const sorted = [...bh].sort((a, b) => new Date(b.billDate) - new Date(a.billDate));
@@ -156,9 +156,9 @@ export function ServiceCard({
       else break;
     }
     return s;
-  }, [service.billHistory, hasPaymentHistory]);
+  }, [service.billHistory, hasAnyPaymentData]);
 
-  const streakEmoji = hasPaymentHistory ? (streak >= 3 ? '🔥 ' : streak >= 1 ? '✅ ' : '📊 ') : '';
+  const streakEmoji = hasAnyPaymentData ? (streak >= 3 ? '🔥 ' : streak >= 1 ? '✅ ' : '📊 ') : '';
 
   async function copyNum() {
     try {
@@ -572,18 +572,19 @@ export function ServiceCard({
 
           <Section
             title={<span style={{ display: 'flex', alignItems: 'center' }}>{streakEmoji}{t('payment_history')}</span>}
-            badge={(isHistoryError || !hasPaymentHistory) ? <span style={{display:'flex', alignItems:'center', gap: '4px'}}><FiAlertTriangle size={12}/> Sync Error</span> : `${service.billHistory?.length ? Math.min(service.billHistory.length, 12) : 0}`}
+            badge={isHistoryError ? <span style={{display:'flex', alignItems:'center', gap: '4px'}}><FiAlertTriangle size={12}/> Sync Error</span> : `${(service.paymentHistory?.length > 0 ? service.paymentHistory.length : (service.billHistory?.filter(b => b.isPaid).length || 0))}`}
             isExpanded={isExpanded}
           >
-            {(isHistoryError || !hasPaymentHistory) ? (
+            {isHistoryError ? (
               <div className="scard__error" style={{ margin: '8px 10px' }}>
                 <FiAlertTriangle size={12} />
                 {t('history_unavailable')}
               </div>
-            ) : service.billHistory?.length > 0 ? (
+            ) : (service.paymentHistory?.length > 0 || service.billHistory?.some(b => b.isPaid)) ? (
               <PaymentsPanel service={service} t={t} />
             ) : (
               <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
+                <FiInfo size={14} style={{ marginBottom: '4px', display: 'block', margin: '0 auto 4px' }} />
                 {t('no_records_found')}
               </div>
             )}
@@ -778,58 +779,52 @@ function TrendPanel({ data, insights, t }) {
 
 function PaymentsPanel({ service, t }) {
   const history = useMemo(() => {
-    const bh = service.billHistory || [];
-    // Only show if we actually have history data to avoid false 'Unpaid' entries
-    if (bh.length === 0) return [];
-    return [...bh].sort((a, b) => new Date(b.billDate) - new Date(a.billDate)).slice(0, 12);
-  }, [service.billHistory]);
+    // Priority 1: Explicit payment history from APSPDCL (contains receipt numbers, etc.)
+    if (service.paymentHistory && service.paymentHistory.length > 0) {
+      return service.paymentHistory.map(p => ({
+        date: p.date,
+        amount: p.amount,
+        receiptNo: p.receiptNo,
+        counter: p.counter,
+        status: 'paid',
+        label: p.counter
+      })).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 12);
+    }
+    
+    // Priority 2: Successful items from bill history
+    const bh = (service.billHistory || []).filter(b => b.isPaid);
+    if (bh.length > 0) {
+      return bh.map(b => ({
+        date: b.paidDate || b.billDate,
+        amount: b.billAmount,
+        receiptNo: b.receiptNumber || '—',
+        counter: 'APSPDCL',
+        status: 'paid',
+        label: b.billDate ? new Date(b.billDate).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) : '—'
+      })).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 12);
+    }
+
+    return [];
+  }, [service.paymentHistory, service.billHistory]);
 
   if (history.length === 0) return null;
 
-  const getStatus = (b) => {
-    if (!b.isPaid) return 'unpaid';
-    if (!b.paidDate || !b.dueDate) return 'paid';
-    return new Date(b.paidDate) <= new Date(b.dueDate) ? 'ontime' : 'late';
-  };
-
-  const getStatusIcon = (status) => {
-    if (status === 'ontime') return <FiCheckCircle size={11} style={{ color: 'var(--green)' }} />;
-    if (status === 'late') return <FiClock size={11} style={{ color: 'var(--amber)' }} />;
-    if (status === 'unpaid') return <FiXCircle size={11} style={{ color: 'var(--red)' }} />;
-    return <FiCheckCircle size={11} style={{ color: 'var(--primary)' }} />;
-  };
-
-  const getPaymentDetails = (b) => {
-    if (!b.isPaid || !b.paidDate || !service.paymentHistory) return { receiptNo: '—', counter: '—' };
-    const p = service.paymentHistory.find(ph => 
-      new Date(ph.date).getTime() === new Date(b.paidDate).getTime() ||
-      (ph.amount === b.billAmount && Math.abs(new Date(ph.date) - new Date(b.paidDate)) < 86400000)
-    );
-    return p ? { receiptNo: p.receiptNo, counter: p.counter } : { receiptNo: '—', counter: '—' };
-  };
-
   return (
     <div className="pymt">
-      {history.map((b, i) => {
-        const status = getStatus(b);
-        const { receiptNo, counter } = getPaymentDetails(b);
-        const monthLabel = b.billDate ? new Date(b.billDate).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) : '—';
-        
-        return (
-          <div key={i} className="pymt__row">
-            <div className="pymt__left">
-              {getStatusIcon(status)}
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '11px' }}>{b.isPaid ? formatDate(b.paidDate) : t('status_unpaid')}</span>
-                <span style={{ fontSize: '9px', color: 'var(--text-3)', fontWeight: 500 }}>{monthLabel}</span>
-              </div>
+      {history.map((p, i) => (
+        <div key={i} className="pymt__row">
+          <div className="pymt__left">
+            <FiCheckCircle size={11} style={{ color: 'var(--green)' }} />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '11px' }}>{formatDate(p.date)}</span>
+              <span style={{ fontSize: '9px', color: 'var(--text-3)', fontWeight: 500 }}>{p.label}</span>
             </div>
-            <span className="mono-sm pymt__ref" title={receiptNo || '—'}>{receiptNo || '—'}</span>
-            <span className="mono-sm pymt__counter">{counter || '—'}</span>
-            <b>{formatInr(b.billAmount)}</b>
           </div>
-        );
-      })}
+          <span className="mono-sm pymt__ref" title={p.receiptNo || '—'}>{p.receiptNo || '—'}</span>
+          <span className="mono-sm pymt__counter">{p.counter || '—'}</span>
+          <b>{formatInr(p.amount)}</b>
+        </div>
+      ))}
     </div>
   );
 }
