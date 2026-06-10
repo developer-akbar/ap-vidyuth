@@ -6,13 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { generateAPSPDCLUpiString } from '../utils/qrcode.js';
 import toast from 'react-hot-toast';
 
-export function QRCodeDialog({ open, service, onClose, onUpdateTime, onUpdatePrefix }) {
+export function QRCodeDialog({ open, service, onClose, onSave }) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [timeInput, setTimeInput] = useState('');
   const [prefixInput, setPrefixInput] = useState('');
   const [showInfo, setShowInfo] = useState(false);
   const [isTimeInfoHighlighted, setIsTimeInfoHighlighted] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const currentCleanTime = timeInput.replace(/\D/g, '');
   const currentCleanPrefix = prefixInput.replace(/\D/g, '');
@@ -100,10 +101,21 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime, onUpdatePre
     billNoPrefix: currentCleanPrefix.length === 3 ? currentCleanPrefix : null
   });
 
-  const handleSaveData = () => {
-    if (currentCleanTime.length === 6) onUpdateTime(service.id, currentCleanTime);
-    if (currentCleanPrefix.length === 3) onUpdatePrefix(service.id, currentCleanPrefix);
-    setIsEditing(false);
+  const handleSaveData = async () => {
+    if (currentCleanTime.length !== 6 || currentCleanPrefix.length !== 3) return;
+    
+    setIsSaving(true);
+    try {
+      await onSave(service.id, {
+        billTime: currentCleanTime,
+        billNoPrefix: currentCleanPrefix
+      });
+      setIsEditing(false);
+    } catch (e) {
+      toast.error('Failed to save data');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const copyUpiString = async () => {

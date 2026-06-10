@@ -992,13 +992,9 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
         open={qrDialog.open} 
         service={qrDialog.service} 
         onClose={() => setQrDialog({ open: false, service: null })} 
-        onUpdateTime={(id, time) => { 
-          actions.update(id, { billTime: time }); 
-          setQrDialog(prev => ({ ...prev, service: { ...prev.service, billTime: time } })); 
-        }} 
-        onUpdatePrefix={(id, prefix) => {
-          actions.update(id, { billNoPrefix: prefix });
-          setQrDialog(prev => ({ ...prev, service: { ...prev.service, billNoPrefix: prefix } }));
+        onSave={async (id, patch) => {
+          await actions.update(id, patch);
+          setQrDialog(prev => ({ ...prev, service: { ...prev.service, ...patch } }));
         }}
       />
       {bulkResult && createPortal(
