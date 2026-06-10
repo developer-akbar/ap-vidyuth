@@ -114,19 +114,6 @@ function AppContent() {
     localStorage.setItem('density', density);
   }, [density]);
 
-  useEffect(() => {
-    const hideSplash = async () => {
-      if (!Capacitor.isNativePlatform()) return;
-      try {
-        await SplashScreen.hide();
-      } catch (error) {
-        console.warn('Failed to hide splash screen', error);
-      }
-    };
-
-    hideSplash();
-  }, []);
-
   const triggerHaptic = async (style = ImpactStyle.Light) => {
     if (!Capacitor.isNativePlatform()) return;
     try {
@@ -234,12 +221,9 @@ function AppContent() {
       return;
     }
 
-    // When switching to a new tab, instantly jump to top to avoid visual "scrolling"
+    // Save current scroll before switching
     const mainEl = document.querySelector('.main');
-    if (mainEl) {
-      // Temporarily disable scroll behavior if it was set via CSS, though usually we just jump
-      mainEl.scrollTo({ top: 0, behavior: 'instant' }); 
-    }
+    if (mainEl) scrollPositions.current[activePage] = mainEl.scrollTop;
 
     if (id === 'settings') {
       setActivePage('settings');
@@ -248,6 +232,13 @@ function AppContent() {
 
     setActivePage(id);
   };
+
+  useEffect(() => {
+    const mainEl = document.querySelector('.main');
+    if (!mainEl) return;
+    const saved = scrollPositions.current[activePage];
+    mainEl.scrollTop = saved || 0;
+  }, [activePage]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) {
@@ -323,7 +314,7 @@ function AppContent() {
             </button>
           ))}
         </nav>
-        <div className="sidebar__footer">v1.0.0</div>
+        <div className="sidebar__footer">{`v${__APP_VERSION__}`}</div>
       </aside>
 
       <main className="main">
@@ -468,7 +459,7 @@ function AppContent() {
 
               <footer className="dev-footer" style={{ marginTop: '20px', paddingBottom: '32px', textAlign: 'center' }}>
                 <p className="dev-footer__name">{t('developed_by')} Akbar</p>
-                <span className="dev-footer__tag">v1.0.0</span>
+                <span className="dev-footer__tag">{`v${__APP_VERSION__}`}</span>
               </footer>
             </div>
           )}

@@ -34,7 +34,11 @@ export function ConfirmDialog({ open, title, description, confirmText = 'Confirm
   if (!open) return null;
 
   return createPortal(
-    <div className="overlay overlay--center" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="overlay overlay--center" onClick={e => {
+      if (e.target !== e.currentTarget) return;
+      if (isDanger) return;
+      onClose();
+    }}>
       <div className="dialog" role="dialog" aria-modal="true">
         <h2 className="dialog__title">{title}</h2>
         <p className="dialog__desc">{description}</p>
