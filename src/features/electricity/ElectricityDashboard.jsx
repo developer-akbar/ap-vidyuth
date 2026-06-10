@@ -272,6 +272,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
 
     window.addEventListener('notification-received', handleNotif);
     window.addEventListener('notification-deep-link', handleDeepLinkSignal);
+    window.addEventListener('deep-link-service', handleHttpsDeepLink);
 
     // Android home-screen shortcut: "Pay Home"
     const handleShortcutPay = () => {
@@ -295,6 +296,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       appStateListener.then(h => h.remove());
       window.removeEventListener('notification-received', handleNotif);
       window.removeEventListener('notification-deep-link', handleDeepLinkSignal);
+      window.removeEventListener('deep-link-service', handleHttpsDeepLink);
       window.removeEventListener('shortcut-pay-home', handleShortcutPay);
     };
   }, [loading, services]);
@@ -473,7 +475,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
 
     const text = `*Electricity Bill for ${monthYear}*\n\n` +
                  tableText + `\n\n` +
-                 `Link: https://my-dashboard-mobile.vercel.app`;
+                 `Link: https://ap-vidyuth.vercel.app`;
 
     if (Capacitor.getPlatform() !== 'web') {
       try {
@@ -774,7 +776,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
     const sn = service.serviceNumber;
     const amount = isPaid ? (service.paidAmount || service.lastAmountDue || 0) : service.lastAmountDue;
     const date = isPaid ? service.paidDate : service.lastDueDate;
-    const url = `https://my-dashboard-mobile.vercel.app/${sn}`;
+    const url = `https://ap-vidyuth.vercel.app/${sn}`;
     
     let text = '';
     if (isPaid) {
@@ -839,7 +841,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
     const sn = service.serviceNumber;
     const trend = insights.vsLastMonth;
     const trendText = trend ? `(${trend.amountPct > 0 ? '📈 +' : '📉 '}${trend.amountPct}% vs last month)` : '';
-    const url = `https://my-dashboard-mobile.vercel.app/${sn}`;
+    const url = `https://ap-vidyuth.vercel.app/${sn}`;
 
     const text = `📊 *Electricity Usage Report — ${new Date().toLocaleString('default', { month: 'long' })}*\n\n` +
                  `*Service:* ${name} (${sn})\n` +
@@ -1065,6 +1067,12 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
           setNotificationPrompt(false);
           db.setSetting('has_seen_notification_prompt', true);
           import('./utils/notifications.js').then(m => m.setupPushNotifications(true));
+        }} 
+      />
+    </div>
+  );
+}
+hen(m => m.setupPushNotifications(true));
         }} 
       />
     </div>

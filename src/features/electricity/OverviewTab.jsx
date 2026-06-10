@@ -73,7 +73,7 @@ export function OverviewTab({ electricityContext }) {
     
     const text = `*Electricity Bill for ${monthYear}*\n\n` +
                  tableText + `\n\n` +
-                 `Link: https://my-dashboard-mobile.vercel.app`;
+                 `Link: https://ap-vidyuth.vercel.app`;
 
     if (Capacitor.getPlatform() !== 'web') {
       try {
