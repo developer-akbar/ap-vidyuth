@@ -208,6 +208,16 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       }
     };
 
+    const handleHttpsDeepLink = (e) => {
+      const sn = e.detail?.serviceNumber;
+      if (!sn) return;
+      if (!loading) {
+        processDeepLink(sn);
+      } else {
+        pendingDeepLink.current = sn;
+      }
+    };
+
     const checkBootAction = async () => {
       // Check web URL for service number
       const path = window.location.pathname;
@@ -1067,12 +1077,6 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
           setNotificationPrompt(false);
           db.setSetting('has_seen_notification_prompt', true);
           import('./utils/notifications.js').then(m => m.setupPushNotifications(true));
-        }} 
-      />
-    </div>
-  );
-}
-hen(m => m.setupPushNotifications(true));
         }} 
       />
     </div>
