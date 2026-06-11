@@ -90,31 +90,34 @@ export function useElectricityServices() {
     autoRefreshDone.current = true;
 
     (async () => {
-      // 1. Ensure DB is fully connected
       try {
+        // 1. Ensure DB is fully connected
         const { db } = await import('../../../shared/db/storage.js');
         await db.init();
+
+        // 2. Load initial data
+        const services = await reload();
+        
+        // 3. Optional auto-refresh logic
+        if (!navigator.onLine) return; // Don't even try if offline
+
+        const stale = services.filter(shouldAutoRefresh);
+        if (stale.length === 0) return;
+
+        const session = await getValidSession(stale[0].serviceNumber);
+        if (!session) return; 
+
+        stale.forEach(s => dispatch({ type: 'REFRESHING_ADD', id: s.id }));
+        try {
+          await refreshAllServices(undefined, session);
+        } finally {
+          stale.forEach(s => dispatch({ type: 'REFRESHING_REMOVE', id: s.id }));
+          await reload();
+        }
       } catch (e) {
-        console.error("[useElectricityServices] DB init failed:", e);
-      }
-
-      // 2. Load initial data
-      const services = await reload();
-      
-      // 3. Optional auto-refresh logic
-      const stale = services.filter(shouldAutoRefresh);
-      if (stale.length === 0) return;
-
-      const session = await getValidSession(stale[0].serviceNumber);
-      if (!session) return; // User cancelled captcha or failed
-
-      // Mark all stale as refreshing
-      stale.forEach(s => dispatch({ type: 'REFRESHING_ADD', id: s.id }));
-      try {
-        await refreshAllServices(undefined, session);
-      } finally {
-        stale.forEach(s => dispatch({ type: 'REFRESHING_REMOVE', id: s.id }));
-        await reload();
+        console.error("[useElectricityServices] Mount boot failed:", e);
+        // Ensure loading state is cleared
+        dispatch({ type: 'LOAD', services: [], trash: [], loading: false });
       }
     })();
 
