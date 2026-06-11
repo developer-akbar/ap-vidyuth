@@ -118,63 +118,69 @@ export function OverviewTab({ electricityContext }) {
   const maxAmount = Math.max(...comparisons.map(c => c.amount), 1);
 
   return (
-    <div className="page">
+    <div className="page overview-page--v2">
       <div className="page__header page__header--sticky">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div className="page__header-group">
           <div>
-            <h2 className="page__title">Overview</h2>
-            <p>Your electricity at a glance</p>
+            <h2 className="page__title">{t('overview', 'Overview')}</h2>
+            <p className="page__subtitle">{t('glance_desc', 'Your electricity at a glance')}</p>
           </div>
-          <button className="icon-btn-ghost" onClick={handleShareSummary} title="Share Summary">
+          <button className="icon-btn-ghost icon-btn-ghost--v2" onClick={handleShareSummary} title="Share Summary">
             <FiShare2 size={20} />
           </button>
         </div>
       </div>
 
-      <div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-          <div className="scard" style={{ padding: '16px', background: 'var(--primary-dim)', border: '1px solid var(--primary-glow)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--primary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 700 }}>Total Spent ({currentYear})</p>
-            <h2 style={{ fontSize: '24px', color: 'var(--text-1)' }}>{formatInr(totalSpentThisYear)}</h2>
+      <div className="overview-content--v2">
+        <div className="summary-grid--v2">
+          <div className="summary-card--v2 summary-card--primary">
+            <p className="summary-card__label">{t('total_spent', 'Total Spent')} ({currentYear})</p>
+            <h2 className="summary-card__value">{formatInr(totalSpentThisYear)}</h2>
           </div>
-          <div className="scard" style={{ padding: '16px', background: 'var(--surface-2)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--text-3)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 700 }}>Total Units ({currentYear})</p>
-            <h2 style={{ fontSize: '24px', color: 'var(--text-1)' }}>{totalUnitsThisYear.toLocaleString('en-IN')} <span style={{fontSize:'14px', fontWeight:400}}>u</span></h2>
+          <div className="summary-card--v2">
+            <p className="summary-card__label">{t('total_units', 'Total Units')} ({currentYear})</p>
+            <h2 className="summary-card__value">{totalUnitsThisYear.toLocaleString('en-IN')} <small>u</small></h2>
           </div>
         </div>
 
-        <h3 style={{ fontSize: '15px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <FiBarChart2 color="var(--primary)" /> Compare Services (This Month)
-        </h3>
+        <section className="compare-section--v2 mt-32">
+          <h3 className="section-title--v2 mb-16">
+            <FiBarChart2 className="section-title__icon" /> {t('compare_services', 'Compare Services')} <small>({t('this_month', 'This Month')})</small>
+          </h3>
 
-        <div className="scard" style={{ padding: '16px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {comparisons.map((c, i) => (
-              <div key={c.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'flex-end' }}>
-                  <div>
-                    <span style={{ fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {i === 0 && comparisons.length > 1 && <FiAward color="var(--amber)" size={14} title="Most Efficient" />}
-                      {c.name}
-                    </span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>{c.units} units • ₹{c.rate.toFixed(2)}/u</span>
+          <div className="compare-card--v2">
+            <div className="compare-list--v2">
+              {comparisons.map((c, i) => (
+                <div key={c.id} className="compare-item--v2">
+                  <div className="compare-item__header">
+                    <div className="compare-item__info">
+                      <span className="compare-item__name">
+                        {i === 0 && comparisons.length > 1 && <FiAward className="compare-item__award-icon" title="Most Efficient" />}
+                        {c.name}
+                      </span>
+                      <span className="compare-item__meta">{c.units} units • ₹{c.rate.toFixed(2)}/u</span>
+                    </div>
+                    <span className="compare-item__amount">{formatInr(c.amount)}</span>
                   </div>
-                  <span style={{ fontSize: '14px', fontWeight: 700 }}>{formatInr(c.amount)}</span>
+                  <div className="progress-bar--v2">
+                    <div 
+                      className={`progress-fill--v2 ${i === 0 ? 'progress-fill--success' : ''}`} 
+                      style={{ width: `${(c.amount / maxAmount) * 100}%` }} 
+                    />
+                  </div>
                 </div>
-                <div style={{ width: '100%', height: '8px', background: 'var(--surface-3)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${(c.amount / maxAmount) * 100}%`, height: '100%', background: i === 0 ? 'var(--green)' : 'var(--primary)', borderRadius: '4px' }} />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
 
         {/* ── Year-in-Review (Feature 11) ── */}
-        <YearInReview activeServices={activeServices} currentYear={currentYear} />
+        <YearInReview activeServices={activeServices} currentYear={currentYear} t={t} />
       </div>
     </div>
   );
 }
+
 
 const MO_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 

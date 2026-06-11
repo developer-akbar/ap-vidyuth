@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { FiInfo, FiZap, FiPlus, FiMinus, FiTrash2, FiArrowLeft } from 'react-icons/fi';
-import { calculateEstimatedBill, DEFAULT_DOMESTIC_CONFIG } from '../utils/billing';
-import { formatInr } from '../../../shared/utils';
-import { db } from '../../../shared/db/storage';
+import { useTranslation } from 'react-i18next';
+import { calculateEstimatedBill, DEFAULT_DOMESTIC_CONFIG } from '../utils/billing.js';
+import { formatInr } from '../../../shared/utils/index.js';
+import { db } from '../../../shared/db/storage.js';
 
 const COMMON_APPLIANCES = [
   { name: '1.5 Ton AC',       watts: 1500, icon: '❄️' },
@@ -21,6 +22,7 @@ const DEFAULT_SELECTION = [
 ];
 
 export function ApplianceCalculator({ onBack }) {
+  const { t } = useTranslation();
   const [selectedAppliances, setSelectedAppliances] = useState(DEFAULT_SELECTION);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -71,81 +73,71 @@ export function ApplianceCalculator({ onBack }) {
   }, [selectedAppliances]);
 
   return (
-    <div className="page appliance-page">
+    <div className="page appliance-page--v2">
 
       {/* ── Sticky page header ─────────────────────────────────────────── */}
       <header className="page__header page__header--sticky">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+        <div className="page__header-group">
+          <button className="icon-btn-ghost icon-btn-ghost--v2" onClick={onBack} aria-label={t('back')}>
+            <FiArrowLeft size={20} />
+          </button>
           <div>
-            <h2 className="page__title" style={{ fontSize: '20px' }}>Appliance Cost Estimator</h2>
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-3)' }}>
-              Estimate your monthly bill by usage
+            <h2 className="page__title">{t('appliance_cost_estimator', 'Appliance Estimator')}</h2>
+            <p className="page__subtitle">
+              {t('estimate_bill_desc', 'Estimate monthly bill by usage')}
             </p>
           </div>
         </div>
       </header>
 
       {/* ── Sticky summary card (below header) ────────────────────────── */}
-      <div className="appliance-summary-sticky">
-        <div
-          className="scard"
-          style={{
-            padding: '16px 20px',
-            background: 'var(--surface-2)',
-            border: '1px solid var(--primary-glow)',
-            boxShadow: 'var(--shadow-lg)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <p style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
-                Monthly Est. Bill
-              </p>
-              <h3 style={{ fontSize: '26px', color: 'var(--primary-hi)', margin: 0 }}>
+      <div className="appliance-summary-sticky--v2">
+        <div className="summary-card--v2">
+          <div className="summary-card__main">
+            <div className="summary-card__item">
+              <p className="summary-card__label">{t('monthly_est_bill', 'Monthly Est. Bill')}</p>
+              <h3 className="summary-card__value summary-card__value--primary">
                 {formatInr(totals.monthlyCost)}
               </h3>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
-                Consumption
-              </p>
-              <h3 style={{ fontSize: '22px', margin: 0 }}>
-                {totals.monthlyUnits}{' '}
-                <span style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text-3)' }}>Units</span>
+            <div className="summary-card__item right">
+              <p className="summary-card__label">{t('consumption', 'Consumption')}</p>
+              <h3 className="summary-card__value">
+                {totals.monthlyUnits} <small>Units</small>
               </h3>
             </div>
           </div>
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', gap: 16 }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-2)' }}>
-              <strong>Daily:</strong> {totals.dailyKwh} kWh
-            </span>
-            <span style={{ fontSize: '13px', color: 'var(--text-2)' }}>
-              <strong>Avg Rate:</strong>{' '}
-              {formatInr(Math.round((totals.monthlyCost / (totals.monthlyUnits || 1)) * 100) / 100)}/u
-            </span>
+          <div className="summary-card__footer">
+            <div className="summary-card__meta">
+              <span className="summary-card__meta-item">
+                <strong>Daily:</strong> {totals.dailyKwh} kWh
+              </span>
+              <span className="summary-card__meta-item">
+                <strong>Avg Rate:</strong> {formatInr(Math.round((totals.monthlyCost / (totals.monthlyUnits || 1)) * 100) / 100)}/u
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── Your appliances ────────────────────────────────────────────── */}
-      <section style={{ marginTop: 24 }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: 12, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Your Appliances
+      <section className="mt-24">
+        <h3 className="section-title--v2 mb-12">
+          {t('your_appliances', 'Your Appliances')}
         </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="appliance-list--v2">
           {selectedAppliances.map(app => (
-            <div key={app.id} className="scard" style={{ padding: 14, border: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 22 }}>{app.icon || '🔌'}</span>
+            <div key={app.id} className="appliance-item--v2">
+              <div className="appliance-item__header">
+                <div className="appliance-item__identity">
+                  <span className="appliance-item__icon">{app.icon || '🔌'}</span>
                   <div>
-                    <h4 style={{ fontSize: '14px', margin: 0, fontWeight: 600 }}>{app.name}</h4>
-                    <p style={{ fontSize: '11px', color: 'var(--text-3)', margin: 0 }}>{app.watts} W</p>
+                    <h4 className="appliance-item__name">{app.name}</h4>
+                    <p className="appliance-item__watts">{app.watts} W</p>
                   </div>
                 </div>
                 <button
-                  className="icon-btn-ghost"
-                  style={{ color: 'var(--red)' }}
+                  className="icon-btn-micro icon-btn-micro--danger"
                   onClick={() => removeAppliance(app.id)}
                   aria-label={`Remove ${app.name}`}
                 >
@@ -153,47 +145,42 @@ export function ApplianceCalculator({ onBack }) {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="appliance-item__controls">
                 {/* Qty */}
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Qty</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div className="appliance-item__qty">
+                  <label className="control-label">{t('qty', 'Qty')}</label>
+                  <div className="qty-picker--v2">
                     <button
-                      className="icon-btn-ghost icon-btn--sm"
+                      className="qty-btn"
                       onClick={() => updateAppliance(app.id, 'count', Math.max(1, app.count - 1))}
-                      aria-label="Decrease quantity"
                     >
-                      <FiMinus size={12} />
+                      <FiMinus size={14} />
                     </button>
-                    <span style={{ fontSize: '15px', fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{app.count}</span>
+                    <span className="qty-val">{app.count}</span>
                     <button
-                      className="icon-btn-ghost icon-btn--sm"
+                      className="qty-btn"
                       onClick={() => updateAppliance(app.id, 'count', app.count + 1)}
-                      aria-label="Increase quantity"
                     >
-                      <FiPlus size={12} />
+                      <FiPlus size={14} />
                     </button>
                   </div>
                 </div>
 
                 {/* Hours/Day */}
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-                    Hours / Day
-                  </label>
+                <div className="appliance-item__hours">
+                  <div className="control-header">
+                    <label className="control-label">{t('hours_day', 'Hours / Day')}</label>
+                    <span className="hours-badge">{app.hours}h</span>
+                  </div>
                   <input
                     type="range"
                     min="0.5" max="24" step="0.5"
+                    className="slider--v2"
                     value={app.hours}
                     onChange={e => updateAppliance(app.id, 'hours', parseFloat(e.target.value))}
-                    style={{ width: '100%', height: 4, accentColor: 'var(--primary)' }}
-                    aria-label={`${app.name} hours per day`}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>{app.hours}h</span>
-                    <span style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 600 }}>
-                      {((app.watts * app.hours * app.count) / 1000).toFixed(1)} u/day
-                    </span>
+                  <div className="appliance-item__daily-usage">
+                    {((app.watts * app.hours * app.count) / 1000).toFixed(1)} u/day
                   </div>
                 </div>
               </div>
@@ -201,52 +188,40 @@ export function ApplianceCalculator({ onBack }) {
           ))}
 
           {selectedAppliances.length === 0 && (
-            <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px', border: '1px dashed var(--border-md)', borderRadius: 'var(--radius-sm)' }}>
-              No appliances added yet. Pick some below.
+            <div className="empty-state--v2 bordered">
+              <FiZap size={32} className="empty-state__icon mb-12" />
+              <p>{t('no_appliances_yet', 'No appliances added yet. Pick some below.')}</p>
             </div>
           )}
         </div>
       </section>
 
       {/* ── Add appliance ──────────────────────────────────────────────── */}
-      <section style={{ marginTop: 28 }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: 12, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Add Appliance
+      <section className="mt-32">
+        <h3 className="section-title--v2 mb-12">
+          {t('add_appliance', 'Add Appliance')}
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+        <div className="appliance-grid--v2">
           {COMMON_APPLIANCES.map(app => (
             <button
               key={app.name}
-              className="btn btn--ghost"
-              style={{
-                justifyContent: 'flex-start', padding: '10px 12px',
-                fontSize: '12px', height: 'auto',
-                flexDirection: 'column', alignItems: 'flex-start',
-                gap: 4, border: '1px solid var(--border)',
-              }}
+              className="add-appliance-btn--v2"
               onClick={() => addAppliance(app)}
             >
-              <span style={{ fontSize: 18 }}>{app.icon}</span>
-              <span style={{ fontWeight: 500 }}>{app.name}</span>
-              <span style={{ fontSize: '10px', color: 'var(--text-3)' }}>{app.watts} W</span>
+              <span className="add-appliance-btn__icon">{app.icon}</span>
+              <span className="add-appliance-btn__name">{app.name}</span>
+              <span className="add-appliance-btn__watts">{app.watts} W</span>
             </button>
           ))}
         </div>
       </section>
 
       {/* ── Saving tip ─────────────────────────────────────────────────── */}
-      <div
-        style={{
-          marginTop: 32, marginBottom: 16,
-          background: 'var(--surface-3)', padding: 16,
-          borderRadius: 8, display: 'flex', gap: 10,
-          color: 'var(--primary)',
-        }}
-      >
-        <FiInfo size={18} style={{ marginTop: 2, flexShrink: 0 }} />
-        <div>
-          <h4 style={{ fontSize: '14px', marginBottom: 4, fontWeight: 700 }}>Saving Tip</h4>
-          <p style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6, margin: 0 }}>
+      <div className="alert-banner--v2 alert-banner--info mt-32 mb-32">
+        <FiInfo size={20} className="alert-banner__icon" />
+        <div className="alert-banner__content">
+          <h4 className="alert-banner__title">{t('saving_tip', 'Saving Tip')}</h4>
+          <p className="alert-banner__text">
             {totals.monthlyUnits > 200
               ? `You've crossed 200 units — you're now in a higher slab. Reducing AC usage by 1 hour daily could save ~₹150/month.`
               : `Keeping consumption below 125 units keeps you in the lower slab rate (₹4.50 vs ₹6.00 per unit).`}
@@ -255,5 +230,6 @@ export function ApplianceCalculator({ onBack }) {
       </div>
 
     </div>
+
   );
 }

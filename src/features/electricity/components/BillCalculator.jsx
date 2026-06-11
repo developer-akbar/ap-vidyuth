@@ -180,45 +180,46 @@ export function BillCalculator({ open, service, onClose }) {
 
   return createPortal(
     <div className="overlay overlay--center" onClick={onClose} style={{ zIndex: 1000 }}>
-      <div className="dialog" onClick={e => e.stopPropagation()} style={{ width: '500px', maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <header className="dialog__header" style={{ position: 'relative', paddingBottom: '16px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div className="sidebar__logo" style={{ width: '32px', height: '32px', background: 'var(--primary-dim)', color: 'var(--primary)' }}>
-              <LuCalculator size={18} />
+      <div className="dialog dialog--v2" onClick={e => e.stopPropagation()}>
+        <header className="dialog__header dialog__header--v2">
+          <div className="dialog__title-group">
+            <div className="dialog__icon-wrap">
+              <LuCalculator size={20} />
             </div>
-            <h2 className="dialog__title" style={{ margin: 0 }}>{t('bill_predictor')}</h2>
+            <div>
+              <h2 className="dialog__title">{t('bill_predictor')}</h2>
+              <p className="dialog__subtitle">{service?.label || service?.customerName || t('untitled')}</p>
+            </div>
           </div>
-          <button className="icon-btn-ghost" onClick={onClose} style={{ position: 'absolute', top: '0', right: '0' }} aria-label={t('close')}><FiX size={20} /></button>
+          <button className="icon-btn-ghost icon-btn-ghost--v2" onClick={onClose} aria-label={t('close')}><FiX size={20} /></button>
         </header>
 
-        <div className="dialog__body" style={{ overflowY: 'auto', flex: 1, paddingRight: '4px' }}>
+        <div className="dialog__body dialog__body--v2">
           {historyPrediction && (
-            <div className="scard" style={{ padding: '12px', background: 'var(--primary-dim)', border: '1px solid var(--primary-hi)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'center' }}>
-              <div style={{ background: 'var(--primary-hi)', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', display: 'grid', placeItems: 'center' }}>
-                <FiAward size={18} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: '11px', color: 'var(--primary-hi)', fontWeight: '800', textTransform: 'uppercase', margin: 0 }}>{t('final_avg_prediction')}</p>
-                <p style={{ fontSize: '12px', color: 'var(--text-1)', margin: 0 }}>
+            <div className="alert-card alert-card--info mb-24">
+              <div className="alert-card__icon"><FiAward size={20} /></div>
+              <div className="alert-card__content">
+                <p className="alert-card__label">{t('final_avg_prediction')}</p>
+                <p className="alert-card__text">
                   {t('based_on_logs', { count: historyPrediction.readingsCount })}: <b>{formatInr(historyPrediction.amount)}</b> ({historyPrediction.units}u)
                 </p>
               </div>
             </div>
           )}
 
-          <div className="seg" style={{ marginBottom: '24px' }}>
-            <button className={`seg__btn ${mode === 'progress' ? 'seg__btn--active' : ''}`} onClick={() => setMode('progress')}>{t('progress_check')}</button>
-            <button className={`seg__btn ${mode === 'simple' ? 'seg__btn--active' : ''}`} onClick={() => setMode('simple')}>{t('custom_units')}</button>
+          <div className="seg seg--v2 mb-24">
+            <button className={`seg__btn seg__btn--v2 ${mode === 'progress' ? 'seg__btn--active' : ''}`} onClick={() => setMode('progress')}>{t('progress_check')}</button>
+            <button className={`seg__btn seg__btn--v2 ${mode === 'simple' ? 'seg__btn--active' : ''}`} onClick={() => setMode('simple')}>{t('custom_units')}</button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+          <div className="form-group mb-24">
             <div className="field">
               <label className="field__label">{t('service_type')}</label>
-              <div className="radio-group">
-                <div className={`radio-item ${type === 'domestic' ? 'radio-item--active' : ''}`} onClick={() => setType('domestic')}>
+              <div className="radio-group radio-group--v2">
+                <div className={`radio-item radio-item--v2 ${type === 'domestic' ? 'radio-item--active' : ''}`} onClick={() => setType('domestic')}>
                   <div className="radio-circle" /><div className="radio-label">{t('domestic_slabs')}</div>
                 </div>
-                <div className={`radio-item ${type === 'commercial' ? 'radio-item--active' : ''}`} onClick={() => setType('commercial')}>
+                <div className={`radio-item radio-item--v2 ${type === 'commercial' ? 'radio-item--active' : ''}`} onClick={() => setType('commercial')}>
                   <div className="radio-circle" /><div className="radio-label">{t('commercial_slabs')}</div>
                 </div>
               </div>
@@ -228,47 +229,47 @@ export function BillCalculator({ open, service, onClose }) {
           {mode === 'simple' ? (
             <div className="field">
               <label className="field__label">{t('total_units_calculate')}</label>
-              <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder="e.g. 250" autoFocus value={units} onChange={e => setUnits(e.target.value.replace(/\D/g, ''))} />
+              <div className="input-with-unit">
+                <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input field__input--v2" placeholder="e.g. 250" autoFocus value={units} onChange={e => setUnits(e.target.value.replace(/\D/g, ''))} />
+                <span className="input-unit">Units</span>
+              </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="form-grid">
               {(!service?.closingRdg && !manualLastReading) && (
                 <div className="field">
                   <label className="field__label">{t('last_month_final_reading')}</label>
-                  <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder="Enter last reading from bill" value={manualLastReading} onChange={e => setManualLastReading(e.target.value.replace(/\D/g, ''))} />
+                  <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input field__input--v2" placeholder="Last reading" value={manualLastReading} onChange={e => setManualLastReading(e.target.value.replace(/\D/g, ''))} />
                 </div>
               )}
               <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <label className="field__label" style={{ marginBottom: 0 }}>{t('current_meter_reading')}</label>
+                <div className="field__header">
+                  <label className="field__label">{t('current_meter_reading')}</label>
                   {(service?.closingRdg || manualLastReading) && (
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-3)', display: 'block' }}>{t('last_reading')}</span>
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--primary-hi)' }}>{manualLastReading || service.closingRdg}</span>
-                    </div>
+                    <span className="field__hint-text">{t('last')}: <b>{manualLastReading || service.closingRdg}</b></span>
                   )}
                 </div>
-                <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input" placeholder={t('enter_current_reading')} autoFocus value={currentReading} onChange={e => setCurrentReading(e.target.value.replace(/\D/g, ''))} />
+                <input type="tel" inputMode="numeric" pattern="[0-9]*" className="field__input field__input--v2" placeholder={t('enter_current_reading')} autoFocus value={currentReading} onChange={e => setCurrentReading(e.target.value.replace(/\D/g, ''))} />
               </div>
             </div>
           )}
 
           {mode === 'simple' && simpleResult && (
-            <div style={{ marginTop: '24px' }}>
-              <div className="scard" style={{ padding: '20px', background: 'var(--surface-2)', textAlign: 'center' }}>
-                <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '4px' }}>Estimated Total Bill</p>
-                <h2 style={{ fontSize: '32px', color: 'var(--primary-hi)' }}>{formatInr(simpleResult.total)}</h2>
+            <div className="result-section--v2 mt-24">
+              <div className="hero-stat-card">
+                <p className="hero-stat-card__label">Estimated Total Bill</p>
+                <h2 className="hero-stat-card__value">{formatInr(simpleResult.total)}</h2>
               </div>
-              <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="receipt-box--v2 mt-16">
                 {[
                   { label: 'Energy Charges', val: simpleResult.ec },
                   { label: `Fixed Charges (${load}kW)`, val: simpleResult.fc },
                   { label: 'Electricity Duty (6%)', val: simpleResult.ed },
                   { label: 'Customer Charges', val: simpleResult.cc }
                 ].map(r => (
-                  <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-2)' }}>{r.label}</span>
-                    <span style={{ fontWeight: '600' }}>{formatInr(r.val)}</span>
+                  <div key={r.label} className="receipt-row--v2">
+                    <span>{r.label}</span>
+                    <b>{formatInr(r.val)}</b>
                   </div>
                 ))}
               </div>
@@ -276,94 +277,86 @@ export function BillCalculator({ open, service, onClose }) {
           )}
 
           {mode === 'progress' && progressResult && (
-            <div style={{ marginTop: '24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                <div className="scard" style={{ padding: '16px', background: 'var(--surface-2)', textAlign: 'center' }}>
-                  <p style={{ fontSize: '11px', color: 'var(--text-3)', marginBottom: '4px', textTransform: 'uppercase' }}>Bill So Far</p>
-                  <h2 style={{ fontSize: '20px', color: 'var(--text-1)' }}>{formatInr(progressResult.currentBill)}</h2>
+            <div className="result-section--v2 mt-24">
+              <div className="prediction-grid">
+                <div className="stat-card--v2">
+                  <p className="stat-card__label">Bill So Far</p>
+                  <h3 className="stat-card__value">{formatInr(progressResult.currentBill)}</h3>
                 </div>
-                <div className="scard" style={{ padding: '16px', background: 'var(--primary-dim)', textAlign: 'center', border: '1px solid var(--primary-hi)' }}>
-                  <p style={{ fontSize: '11px', color: 'var(--primary-hi)', marginBottom: '4px', textTransform: 'uppercase' }}>Est. 30 Days</p>
-                  <h2 style={{ fontSize: '20px', color: 'var(--primary-hi)' }}>{formatInr(progressResult.predictedBill)}</h2>
+                <div className="stat-card--v2 stat-card--primary">
+                  <p className="stat-card__label">Est. 30 Days</p>
+                  <h3 className="stat-card__value">{formatInr(progressResult.predictedBill)}</h3>
                 </div>
               </div>
 
-              <div className="scard" style={{ padding: '20px', background: 'var(--surface-2)', textAlign: 'center' }}>
-                <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '4px' }}>{t('monthly_units_prediction')}</p>
-                <h2 style={{ fontSize: '32px', color: 'var(--primary-hi)' }}>{progressResult.predictedUnits} <span style={{ fontSize: '16px', fontWeight: '400' }}>{t('units')}</span></h2>
-                <div style={{ display: 'inline-flex', justifyContent: 'center', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', marginTop: '8px', background: progressResult.isHigher ? 'var(--red-dim)' : 'var(--green-dim)', color: progressResult.isHigher ? 'var(--red)' : 'var(--green)' }}>
+              <div className="hero-stat-card mt-16">
+                <p className="hero-stat-card__label">{t('monthly_units_prediction')}</p>
+                <h2 className="hero-stat-card__value">{progressResult.predictedUnits} <small>Units</small></h2>
+                <div className={`trend-pill--v2 ${progressResult.isHigher ? 'trend-pill--danger' : 'trend-pill--success'}`}>
                   {progressResult.isHigher ? <FiTrendingUp size={14} /> : <FiTrendingDown size={14} />}
-                  <strong>{Math.abs(progressResult.diffPct)}% {progressResult.isHigher ? 'higher' : 'lower'}</strong> {t('vs_last_year')}
+                  <span><b>{Math.abs(progressResult.diffPct)}% {progressResult.isHigher ? 'higher' : 'lower'}</b> {t('vs_last_year')}</span>
                 </div>
               </div>
 
-              <div style={{ marginBlock: '20px', padding: '0 8px' }}>
-                <p style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: '800', marginBottom: '10px', textAlign: 'center', textDecoration: 'underline' }}>{t('predicted_bill_breakdown')}</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="breakdown-box mt-20">
+                <p className="breakdown-box__title">{t('predicted_bill_breakdown')}</p>
+                <div className="receipt-box--v2">
                   {[
                     { label: `Predicted ${t('energy_charges')}`, val: progressResult.predictedDetails.ec },
                     { label: `Predicted ${t('fixed_charges')}`, val: progressResult.predictedDetails.fc },
                     { label: `Predicted ${t('electricity_duty')} (6%)`, val: progressResult.predictedDetails.ed },
                     { label: t('customer_charges'), val: progressResult.predictedDetails.cc }
                   ].map(r => (
-                    <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                      <span style={{ color: 'var(--text-3)' }}>{r.label}</span>
-                      <span style={{ fontWeight: '600' }}>{formatInr(r.val)}</span>
+                    <div key={r.label} className="receipt-row--v2 small">
+                      <span>{r.label}</span>
+                      <b>{formatInr(r.val)}</b>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
-                <div className="scard" style={{ padding: '12px' }}>
-                  <p style={{ fontSize: '11px', color: 'var(--text-3)', marginBottom: '4px', textTransform: 'uppercase' }}>Used So Far</p>
-                  <p style={{ fontSize: '16px', fontWeight: '700' }}>{progressResult.unitsSoFar} <span style={{ fontSize: '12px', fontWeight: '400' }}>Units</span></p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-2)', marginTop: '4px' }}>
-                    <FiClock size={10} /> {progressResult.daysPassed} days
-                  </div>
+              <div className="info-grid mt-20">
+                <div className="info-card--v2">
+                  <span className="info-card__label">Used So Far</span>
+                  <p className="info-card__value">{progressResult.unitsSoFar} <small>u</small></p>
+                  <div className="info-card__footer"><FiClock size={12} /> {progressResult.daysPassed} days</div>
                 </div>
-                <div className="scard" style={{ padding: '12px' }}>
-                  <p style={{ fontSize: '11px', color: 'var(--text-3)', marginBottom: '4px', textTransform: 'uppercase' }}>Days Remaining</p>
-                  <p style={{ fontSize: '16px', fontWeight: '700' }}>{progressResult.remainingDays} <span style={{ fontSize: '12px', fontWeight: '400' }}>Days</span></p>
-                  <div style={{ fontSize: '11px', color: 'var(--text-2)', marginTop: '4px' }}>In cycle</div>
+                <div className="info-card--v2">
+                  <span className="info-card__label">Days Remaining</span>
+                  <p className="info-card__value">{progressResult.remainingDays} <small>d</small></p>
+                  <div className="info-card__footer">In cycle</div>
                 </div>
               </div>
 
-              <div style={{ marginTop: '20px', padding: '12px', background: 'var(--surface-3)', borderRadius: '8px', borderLeft: '3px solid var(--amber)' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <FiInfo size={16} color="var(--amber)" style={{ marginTop: '2px' }} />
-                  <p style={{ fontSize: '12px', color: 'var(--text-1)', margin: 0, lineHeight: '1.5' }}>
-                    {progressResult.isHigher
-                      ? `You are consuming units faster than last month. Target daily: ${Math.round((service?.lastBilledUnits || 100) / 30)}u.`
-                      : `Great! Saving ${formatInr(Math.abs((service?.billAmount || 0) - progressResult.predictedBill))} vs last month.`}
-                  </p>
-                </div>
+              <div className={`alert-banner--v2 mt-20 ${progressResult.isHigher ? 'alert-banner--warning' : 'alert-banner--success'}`}>
+                <FiInfo size={18} className="alert-banner__icon" />
+                <p className="alert-banner__text">
+                  {progressResult.isHigher
+                    ? `Consuming units faster than last month. Target daily: ${Math.round((service?.lastBilledUnits || 100) / 30)}u.`
+                    : `Great! Saving ${formatInr(Math.abs((service?.billAmount || 0) - progressResult.predictedBill))} vs last month.`}
+                </p>
               </div>
             </div>
           )}
 
           {readings.length > 0 && (
-            <div style={{ marginBlock: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h3 style={{ fontSize: '14px', margin: 0, color: 'var(--text-1)' }}>Reading History</h3>
-                {readings.length >= 3 && <span className="paid-tag" style={{ fontSize: '9px' }}>Trend Analysis Active</span>}
+            <div className="history-section mt-24">
+              <div className="section-header">
+                <h3 className="section-title">Reading History</h3>
+                {readings.length >= 3 && <span className="badge-pill--v2">Trend Analysis Active</span>}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div className="reading-grid mt-12">
                 {sortedReadings.map((r, idx) => (
-                  <div key={idx} className="scard" style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'center', position: 'relative', minWidth: '140px' }}>
-                    <button 
-                      className="icon-btn-micro" 
-                      onClick={() => handleDeleteReading(r)}
-                      style={{ position: 'absolute', top: '4px', right: '4px', color: 'var(--text-3)' }}
-                    >
-                      <FiTrash2 size={11} />
+                  <div key={idx} className="reading-card--v2">
+                    <button className="icon-btn-micro icon-btn-micro--danger" onClick={() => handleDeleteReading(r)}>
+                      <FiTrash2 size={12} />
                     </button>
-                    <div>
-                      <p style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 2px 0' }}>{r.reading} <span style={{ fontSize: '11px', fontWeight: 'normal', color: 'var(--text-3)' }}>({r.unitsSoFar ?? '—'}u)</span></p>
-                      <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: 0 }}>{new Date(r.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                    <div className="reading-card__main">
+                      <p className="reading-card__val">{r.reading} <small>({r.unitsSoFar ?? '—'}u)</small></p>
+                      <p className="reading-card__date">{new Date(r.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                     {r.predictedBill != null && (
-                      <p style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--primary-hi)', margin: 0 }}>{formatInr(r.predictedBill)}</p>
+                      <p className="reading-card__prediction">{formatInr(r.predictedBill)}</p>
                     )}
                   </div>
                 ))}
@@ -372,26 +365,25 @@ export function BillCalculator({ open, service, onClose }) {
           )}
 
           {mode === 'progress' && !progressResult && currentReading && (
-            <div className="state-box" style={{ padding: '20px', marginTop: '20px' }}>
-              <FiAlertCircle size={24} color="var(--red)" />
-              <p style={{ fontSize: '13px', color: 'var(--text-2)', marginTop: '8px' }}>
+            <div className="empty-state--v2 mt-24">
+              <FiAlertCircle size={32} className="empty-state__icon--error" />
+              <p className="empty-state__text">
                 {t('invalid_reading_error', { last: manualLastReading || service?.closingRdg || '—' })}
               </p>
             </div>
           )}
         </div>
 
-        <div className="dialog__footer" style={{ marginTop: '16px', flexShrink: 0, display: 'flex', gap: '10px' }}>
+        <div className="dialog__footer dialog__footer--v2">
           {mode === 'progress' && progressResult && (
             <button
-              className="btn btn--secondary"
-              style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: '8px', border: '1px solid var(--primary-hi)', color: 'var(--primary-hi)' }}
+              className="btn btn--secondary btn--v2 flex-1"
               onClick={handleSaveReading}
             >
-              <FiActivity size={16} /> {t('save_reading')}
+              <FiActivity size={18} /> {t('save_reading')}
             </button>
           )}
-          <button className="btn btn--primary" style={{ flex: 1 }} onClick={onClose}>{t('close')}</button>
+          <button className="btn btn--primary btn--v2 flex-1" onClick={onClose}>{t('close')}</button>
         </div>
       </div>
     </div>,

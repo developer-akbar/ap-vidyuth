@@ -389,19 +389,19 @@ function AppContent() {
               <PrivacyPolicy onBack={() => setActivePage('settings')} />
             )}
             {activePage === 'settings' && (
-              <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
+              <div className="page settings-page--v2">
                 <div className="page__header page__header--sticky">
                   <div>
                     <h2 className="page__title">{t('settings')}</h2>
                   </div>
                 </div>
 
-                <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div className="settings-container--v2">
+                  <div className="settings-group--v2">
+                    <h3 className="settings-group-title--v2">
                       Tools & Utilities
                     </h3>
-                    <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                    <div className="settings-card--v2">
                       <SettingsItem 
                         icon={FiShuffle} 
                         label={t('prefix_migration')} 
@@ -419,68 +419,68 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div className="settings-group--v2">
+                    <h3 className="settings-group-title--v2">
                       Preferences
                     </h3>
-                    <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div className="settings-item__icon" style={{ color: 'var(--primary)' }}>
+                    <div className="settings-card--v2">
+                      <div className="settings-row--v2">
+                        <div className="settings-row__label-group">
+                          <div className="settings-item__icon-wrap--v2" style={{ color: 'var(--primary)' }}>
                             <FiLayout size={18} />
                           </div>
-                          <span style={{ fontSize: '15px', fontWeight: '600' }}>{t('theme')}</span>
+                          <span className="settings-row__label">{t('theme')}</span>
                         </div>
-                        <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
-                          <button className={`seg__btn ${theme === 'system' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('system')}>Auto</button>
-                          <button className={`seg__btn ${theme === 'dark' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('dark')}>{t('dark')}</button>
-                          <button className={`seg__btn ${theme === 'light' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('light')}>{t('light')}</button>
+                        <div className="seg seg--v2">
+                          <button className={`seg__btn seg__btn--v2 ${theme === 'system' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('system')}>Auto</button>
+                          <button className={`seg__btn seg__btn--v2 ${theme === 'dark' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('dark')}>{t('dark')}</button>
+                          <button className={`seg__btn seg__btn--v2 ${theme === 'light' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('light')}>{t('light')}</button>
                         </div>
                       </div>
 
-                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div className="settings-item__icon" style={{ color: 'var(--violet)' }}>
+                      <div className="settings-row--v2">
+                        <div className="settings-row__label-group">
+                          <div className="settings-item__icon-wrap--v2" style={{ color: 'var(--violet)' }}>
                             <FiLayers size={18} />
                           </div>
-                          <span style={{ fontSize: '15px', fontWeight: '600' }}>Display Density</span>
+                          <span className="settings-row__label">Display Density</span>
                         </div>
-                        <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
-                          <button className={`seg__btn ${density === 'comfortable' ? 'seg__btn--active' : ''}`} onClick={() => setDensity('comfortable')}>Default</button>
-                          <button className={`seg__btn ${density === 'compact' ? 'seg__btn--active' : ''}`} onClick={() => setDensity('compact')}>Compact</button>
+                        <div className="seg seg--v2">
+                          <button className={`seg__btn seg__btn--v2 ${density === 'comfortable' ? 'seg__btn--active' : ''}`} onClick={() => setDensity('comfortable')}>Default</button>
+                          <button className={`seg__btn seg__btn--v2 ${density === 'compact' ? 'seg__btn--active' : ''}`} onClick={() => setDensity('compact')}>Compact</button>
                         </div>
                       </div>
 
-                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div className="settings-item__icon" style={{ color: 'var(--green)' }}>
+                      <div className="settings-row--v2">
+                        <div className="settings-row__label-group">
+                          <div className="settings-item__icon-wrap--v2" style={{ color: 'var(--green)' }}>
                             <FiGlobe size={18} />
                           </div>
-                          <span style={{ fontSize: '15px', fontWeight: '600' }}>{t('language')}</span>
+                          <span className="settings-row__label">{t('language')}</span>
                         </div>
-                        <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
-                          <button className={`seg__btn ${i18n.language === 'en' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('en')}>EN</button>
-                          <button className={`seg__btn ${i18n.language === 'te' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('te')}>తెలుగు</button>
+                        <div className="seg seg--v2">
+                          <button className={`seg__btn seg__btn--v2 ${i18n.language === 'en' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('en')}>EN</button>
+                          <button className={`seg__btn seg__btn--v2 ${i18n.language === 'te' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('te')}>తెలుగు</button>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div className="settings-group--v2">
+                    <h3 className="settings-group-title--v2">
                       Data Management
                     </h3>
-                    <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                    <div className="settings-card--v2">
                       <BackupRestore electricityContext={electricityContext} />
                     </div>
                   </div>
 
                   {Capacitor.getPlatform() !== 'web' && (
-                    <div style={{ marginBottom: '24px' }}>
-                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <div className="settings-group--v2">
+                      <h3 className="settings-group-title--v2">
                         System
                       </h3>
-                      <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                      <div className="settings-card--v2">
                         <SettingsItem 
                           icon={FiBell} 
                           label="Notifications" 
@@ -495,11 +495,11 @@ function AppContent() {
                     </div>
                   )}
 
-                  <div>
-                    <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div className="settings-group--v2">
+                    <h3 className="settings-group-title--v2">
                       Support & Legal
                     </h3>
-                    <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                    <div className="settings-card--v2">
                       <SettingsItem 
                         icon={FiMail} 
                         label={t('contact_developer')} 

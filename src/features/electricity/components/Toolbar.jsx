@@ -45,11 +45,11 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
   };
 
   return (
-    <div className="toolbar">
+    <div className="toolbar toolbar--v2">
       {/* ── Top Row: Search, Language, Add ── */}
       <div className="toolbar__row toolbar__row--top">
-        <div className="search-box">
-          <FiSearch size={14} />
+        <div className="search-box search-box--v2">
+          <FiSearch size={16} className="search-box__icon" />
           <input
             value={localQuery}
             onChange={e => setLocalQuery(e.target.value)}
@@ -59,63 +59,59 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
         
         <div className="toolbar__group">
           <button 
-            className="btn btn--ghost btn--sm" 
+            className="btn btn--ghost btn--sm btn--v2 btn--lang" 
             onClick={toggleLanguage} 
             title={t('language')} 
             aria-label={t('language')}
-            style={{ padding: '0 8px' }}
           >
             <FiGlobe size={15} />
-            <span className="hide-mobile-sm" style={{ marginLeft: '4px' }}>{isTelugu ? 'English' : 'తెలుగు'}</span>
-            <span className="show-mobile-sm" style={{ marginLeft: '4px', fontSize: '11px', fontWeight: '800' }}>{isTelugu ? 'En' : 'తె'}</span>
+            <span className="hide-mobile-sm">{isTelugu ? 'English' : 'తెలుగు'}</span>
+            <span className="show-mobile-sm">{isTelugu ? 'En' : 'తె'}</span>
           </button>
 
-          <button className="btn btn--primary btn--sm" onClick={onAdd} aria-label={t('add_service')}>
-            <FiPlus size={15} />
-            <span style={{ marginLeft: '4px' }}>{t('add')}</span>
+          <button className="btn btn--primary btn--sm btn--v2 btn--add" onClick={onAdd} aria-label={t('add_service')}>
+            <FiPlus size={16} />
+            <span>{t('add')}</span>
           </button>
         </div>
       </div>
 
-      <div className="toolbar__row toolbar__row--bottom" style={{ flexWrap: 'wrap', gap: '8px', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="toolbar__group" style={{ flex: '1 1 auto', justifyContent: 'flex-start', gap: '6px', flexWrap: 'wrap' }}>
-          <div className="seg">
+      <div className="toolbar__row toolbar__row--bottom toolbar__row--v2">
+        <div className="toolbar__group toolbar__group--v2">
+          <div className="seg seg--v2">
             <button 
-              className={`seg__btn ${activeView === 'active' ? 'seg__btn--active' : ''}`} 
+              className={`seg__btn seg__btn--v2 ${activeView === 'active' ? 'seg__btn--active' : ''}`} 
               onClick={() => onViewChange('active')}
               aria-label={t('view_active_services', 'View active services')}
             >
-               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                 <FiZap size={14} className="show-mobile-sm" />
-                 {t('active')}
-               </span>
+               <FiZap size={14} className="seg__icon" />
+               <span>{t('active')}</span>
             </button>
             <button 
-              className={`seg__btn ${activeView === 'trash' ? 'seg__btn--active' : ''}`} 
+              className={`seg__btn seg__btn--v2 ${activeView === 'trash' ? 'seg__btn--active' : ''}`} 
               onClick={() => onViewChange('trash')}
               aria-label={t('view_trash', 'View trash')}
             >
-              <FiTrash2 size={13} />
-              {trashCount > 0 && <span className="badge">{trashCount}</span>}
+              <FiTrash2 size={14} className="seg__icon" />
+              {trashCount > 0 && <span className="badge badge--v2">{trashCount}</span>}
+              <span className="hide-mobile-sm">{t('trash')}</span>
             </button>
           </div>
 
           <button 
-            className="btn btn--ghost btn--sm" 
+            className={`btn btn--ghost btn--sm btn--v2 btn--style ${cardStyle === 'rich' ? 'btn--style-active' : ''}`}
             onClick={onToggleCardStyle} 
             title={cardStyle === 'classic' ? 'Switch to Quick Glance' : 'Switch to Classic'}
             aria-label={cardStyle === 'classic' ? 'Switch to Quick Glance' : 'Switch to Classic'}
-            style={{ padding: '0 6px', height: '32px', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', gap: '4px' }}
           >
-            <span style={{ fontSize: '11px', fontWeight: '700' }} className="hide-xs">View Style</span>
-            <span style={{ fontSize: '11px', fontWeight: '700' }} className="show-xs hide-xxs">Style</span>
-            {cardStyle === 'classic' ? <FiLayout size={17} style={{ color: 'var(--text-3)' }} /> : <FiEye size={17} style={{ color: 'var(--primary)' }} />}
+            {cardStyle === 'classic' ? <FiLayout size={16} /> : <FiEye size={16} />}
+            <span className="hide-xs">{cardStyle === 'classic' ? 'Classic' : 'Glance'}</span>
           </button>
 
-          <div className="toolbar__filters" style={{ display: 'flex', gap: '4px' }}>
-            <div className="select-wrap">
+          <div className="toolbar__filters-group">
+            <div className="select-wrap select-wrap--v2">
               <select 
-                className="select" 
+                className="select select--v2" 
                 value={filters.status} 
                 onChange={e => onFiltersChange({ ...filters, status: e.target.value })}
                 aria-label={t('filter_by_status', 'Filter by status')}
@@ -126,30 +122,28 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
                 <option value="NO_DUES">{t('filter_no_dues')}</option>
                 <option value="UNKNOWN">{t('filter_unknown')}</option>
               </select>
-              <FiChevronDown size={12} className="select-icon" />
+              <FiChevronDown size={14} className="select-icon" />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', paddingRight: '2px' }}>
-              <div className="select-wrap" style={{ border: 'none' }}>
+            <div className="sort-group--v2">
+              <div className="select-wrap select-wrap--v2">
                 <select 
-                  className="select" 
+                  className="select select--v2" 
                   value={filters.sort} 
                   onChange={e => onFiltersChange({ ...filters, sort: e.target.value })}
                   aria-label={t('sort_by', 'Sort by')}
-                  style={{ border: 'none', background: 'transparent' }}
                 >
                   <option value="amount">{t('sort_amount')}</option>
                   <option value="dueDate">{t('sort_due_date')}</option>
                   <option value="name">{t('sort_name')}</option>
                 </select>
-                <FiChevronDown size={12} className="select-icon" />
+                <FiChevronDown size={14} className="select-icon" />
               </div>
               <button 
-                className="icon-btn-micro" 
+                className="icon-btn-micro icon-btn-micro--v2" 
                 onClick={toggleSortOrder}
                 title={filters.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
                 aria-label={filters.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-                style={{ height: '24px', width: '24px', color: 'var(--text-2)' }}
               >
                 {filters.sortOrder === 'asc' ? <FiArrowUp size={14} /> : <FiArrowDown size={14} />}
               </button>
@@ -157,9 +151,9 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
           </div>
         </div>
 
-        <div className="toolbar__group toolbar__group--refresh" style={{ background: 'var(--surface-2)', padding: '2px 4px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+        <div className="toolbar__actions--v2">
           <button 
-            className="btn btn--ghost btn--sm" 
+            className="btn btn--ghost btn--sm btn--v2 btn--refresh-all" 
             onClick={(e) => {
               if (isOffline) {
                 toast('You are offline. Reconnect to refresh.', { icon: <FiWifiOff color="var(--amber)" /> });
@@ -169,12 +163,12 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
             }} 
             disabled={refreshingAll || !hasServices || isOffline} 
             aria-label={t('refresh_all', 'Refresh all services')}
-            style={{ border: 'none', background: 'transparent', padding: '0 6px', opacity: isOffline ? 0.5 : 1, cursor: isOffline ? 'not-allowed' : 'pointer' }}
             title={isOffline ? 'Offline' : ''}
           >
-            {refreshingAll ? <Loader size={13} /> : (isOffline ? <FiWifiOff size={13} /> : <FiRefreshCw size={13} />)}
-            <span className="hide-xs" style={{ marginLeft: '4px' }}>{t('refresh')}</span>
+            {refreshingAll ? <Loader size={14} /> : (isOffline ? <FiWifiOff size={14} /> : <FiRefreshCw size={14} />)}
+            <span className="hide-xs">{t('refresh')}</span>
           </button>
+          <div className="toolbar__divider" />
           <SessionIndicator />
         </div>
       </div>

@@ -50,12 +50,12 @@ export function TrashView({ services, onRestore, onDeletePermanent, selectedIds,
   };
 
   return (
-    <div className="trash-container">
-      <div className="trash-list">
+    <div className="trash-container--v2">
+      <div className="trash-list--v2">
         {services.map(s => (
           <div 
             key={s.id} 
-            className={`trash-item ${selectedIds.has(s.id) ? 'trash-item--selected' : ''}`}
+            className={`trash-item--v2 ${selectedIds.has(s.id) ? 'trash-item--selected' : ''}`}
             onMouseDown={handlePressStart(s.id)}
             onMouseUp={handlePressEnd}
             onMouseLeave={handlePressEnd}
@@ -68,27 +68,44 @@ export function TrashView({ services, onRestore, onDeletePermanent, selectedIds,
             style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
           >
             {selecting && (
-              <div className="trash-item__select" style={{ paddingRight: '12px', display: 'flex', alignItems: 'center' }}>
+              <div className="trash-item__select--v2">
                 <input 
                   type="checkbox" 
                   checked={selectedIds.has(s.id)} 
                   readOnly
-                  style={{ width: '18px', height: '18px', margin: 0, pointerEvents: 'none' }}
+                  className="checkbox--v2"
                 />
               </div>
             )}
             <div className="trash-item__info">
-              <h4>{s.label || t('untitled')}</h4>
-              <span className="mono-sm">{s.serviceNumber}</span>
-              <small>{t('deleted')} {formatDate(s.deletedAt)}</small>
+              <h4 className="trash-item__name">{s.label || t('untitled')}</h4>
+              <div className="trash-item__meta">
+                <span className="trash-item__num">{s.serviceNumber}</span>
+                <span className="trash-item__dot" />
+                <span className="trash-item__date">{t('deleted')} {formatDate(s.deletedAt)}</span>
+              </div>
             </div>
-            <div className="trash-item__actions">
-              <button className="btn btn--ghost btn--xs" onClick={(e) => { e.stopPropagation(); onRestore(s.id); }}><Loader size={12} /> {t('restore')}</button>
-              <button className="btn btn--danger btn--xs" onClick={(e) => { e.stopPropagation(); onDeletePermanent(s.id); }}><FiTrash2 size={12} /></button>
+            <div className="trash-item__actions--v2">
+              <button 
+                className="btn btn--ghost btn--sm btn--v2 btn--restore" 
+                onClick={(e) => { e.stopPropagation(); onRestore(s.id); }}
+                title={t('restore')}
+              >
+                <FiRefreshCw size={14} />
+                <span className="hide-mobile-sm">{t('restore')}</span>
+              </button>
+              <button 
+                className="btn btn--danger btn--sm btn--v2" 
+                onClick={(e) => { e.stopPropagation(); onDeletePermanent(s.id); }}
+                title={t('delete_permanent')}
+              >
+                <FiTrash2 size={14} />
+              </button>
             </div>
           </div>
         ))}
       </div>
     </div>
+
   );
 }
