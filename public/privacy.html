@@ -61,8 +61,13 @@
   <h2>3. Notifications</h2>
   <p>If you grant notification permission, the app schedules local and push notifications for bill due-date reminders. Your device notification token is stored only in association with your bill data and is not used for advertising or shared with third parties.</p>
 
-  <h2>4. Analytics</h2>
-  <p>The web version may collect anonymous, non-personal usage analytics (page views, feature usage counts) via Vercel Analytics. No personal data or device identifiers are included. The Android app does not include analytics SDKs.</p>
+  <h2>4. Analytics & Monitoring</h2>
+  <p>This app uses the following third-party services to understand usage patterns and improve performance. No personally identifiable information (name, email, Aadhaar, phone number) is collected. Analytics data is anonymous and aggregated.</p>
+  <ul>
+    <li><strong>PostHog</strong> — records page navigation events (which tab was visited). No bill data, service numbers, or personal details are included. Data is stored on PostHog's servers. <a href="https://posthog.com/privacy" target="_blank" rel="noopener">posthog.com/privacy</a></li>
+    <li><strong>Vercel Analytics & Speed Insights</strong> — monitors app load performance and Core Web Vitals. No user content is captured. <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">vercel.com/legal/privacy-policy</a></li>
+  </ul>
+  <p>You can disable JavaScript in your browser to prevent analytics collection, though this will also prevent the app from functioning.</p>
 
   <h2>5. Data Sharing</h2>
   <p>We do not sell, trade, or share your data with any third parties. Your APSPDCL service numbers and bill data never leave your device except to fetch data directly from APSPDCL and BillDesk.</p>

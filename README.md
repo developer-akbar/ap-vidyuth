@@ -1,59 +1,88 @@
-# APSPDCL Bill Dashboard
+# AP Vidyuth — APSPDCL Bill Tracker
 
-A modern, privacy-first personal tracking dashboard built with **React 18 + Vite + Capacitor**. Currently focused on comprehensive electricity bill tracking (specifically APSPDCL and BillDesk integrations), it is designed to run seamlessly in modern web browsers and as a native Android app.
-
----
-
-## ⚡ Key Features
-
-- **Multi-Service Tracking:** Monitor multiple APSPDCL electricity connections from a single, unified view.        
-- **Pinning Services:** Pin important services to the top of the dashboard with a visual indicator for quick access.
-- **Bulk Actions:** Select multiple services via long-press or checkboxes to trash, restore, or purge them in one shot.
-- **Trash & Recovery:** Accidental deletions are a thing of the past. Move services to Trash and restore them anytime with full history preserved.
-- **Dynamic UPI QR Payments (In Progress):** Generate custom UPI QR codes for instant bill payments directly to APSPDCL. (Experimental)
-- **Visual Feedback:** Smooth auto-scroll and highlight animations when adding or restoring services.
-- **Customizable Card Appearance:** Switch between a minimal **Classic** view (header-focused) and a data-rich **Quick Glance** view (includes metrics and history chips) with a single tap. Preferences are automatically persisted.
-- **Smart Expansion:** Regardless of the active view mode, expanding a card provides an instant high-density summary, including billed units, 3-month history chips, and granular insights.
-- **Multi-Language Support:** Full i18n support with dynamically toggleable English and Telugu options.
-- **Rich Visualizations:**
-  - 18-month historical trend charts.
-  - Granular bill breakups (Energy Charges, Fixed Charges, Fuel Surcharge, ISD, Arrears).    
-  - Monthly usage predictions and spike detection.
-- **Automated Captcha Solving:** Custom Node.js proxy server utilizing OCR to automatically solve BillDesk Captchas.
-- **Hybrid Fallback:** Graceful degradation to manual Captcha entry if OCR fails.
-- **Service Migration:** Automatically handles the shift from old service numbers to the new unique numbering system.
-- **About Info:** Quick access to service metadata like Circle, Division, and Section.
-- **Light / Dark Mode:** Native support for both themes with a clean, modern SaaS aesthetic.
-- **Payment Streak:** Tracks your on-time payment consistency with motivational badges (🔥) and status icons (✅/🕒/❌) integrated directly into your payment history.
-- **Mid-Month Meter Logging:** Log manual meter readings to track usage in real-time.
-- **Bill Prediction:** Automatically projects your end-of-month bill and units based on logged readings and historical trends.
-- **Sync & History:** Seamlessly synchronizes reading logs between Consumption Insights and Bill Predictor with a detailed 12-month history view.
-- **Privacy-First Storage:** All data is stored locally on your device (IndexedDB for Web, SQLite for Android).
+A privacy-first electricity bill tracking app for APSPDCL consumers, built with **React 18 + Vite + Capacitor 5**. Runs as a native Android app and a modern PWA, with all data stored entirely on-device.
 
 ---
 
-## 🧪 Experimental Feature: Dynamic QR Payments
+## ⚡ Features
 
-We have reverse-engineered the APSPDCL UPI logic to generate dynamic payment links. 
+### 🏠 Dashboard (Electricity)
+- **Multi-Service Tracking** — Monitor multiple APSPDCL connections from a single unified view
+- **Card View Modes** — Switch between **Classic** (header-focused) and **Quick Glance** (metrics + history chips) with persisted preference
+- **Smart Card Expansion** — Expand any card for a high-density summary: billed units, 3-month history chips, granular insights
+- **Pinning** — Pin important services to the top with a visual indicator for quick access
+- **Pull-to-Refresh** — Swipe down to refresh bill data for all services at once
+- **Bulk Actions** — Long-press or checkbox select to trash, restore, or purge multiple services in one shot
+- **Trash & Recovery** — Accidentally deleted a service? Restore it anytime from Trash with full history preserved
+- **Visual Feedback** — Smooth auto-scroll and highlight animations when adding or restoring services
 
-**Note on "The Hard Part":**
-A valid APSPDCL VPA requires the exact **Bill Generation Time (HHMM)**. Since this is not always available in public history APIs, we have implemented:
-- **Deep Time Extraction:** Automatically scanning raw API responses for hidden timestamps.
-- **Manual Override:** Allowing users to enter the generation time directly from their physical receipt to ensure 100% accurate QR codes.
+### 📊 Bill Intelligence
+- **18-Month Historical Trend Charts** — Visualize your consumption and bill amount over time
+- **Granular Bill Breakup** — Energy Charges, Fixed Charges, Fuel Surcharge, ISD, Arrears
+- **Monthly Usage Predictions** — Automatically projects end-of-month units and bill based on logged readings and trends
+- **Spike Detection** — Flags unusual month-over-month usage increases
+- **Bill Prediction** — Projects your end-of-month bill from mid-month meter readings
+- **About Info** — Quick access to service metadata: Circle, Division, Section
 
-*Current Status: Experimental. Do not use for high-value payments without validation. Official "Pay Now" redirection remains the primary safe method.*
+### 📖 Meter Reading Log
+- **Mid-Month Meter Logging** — Record manual meter readings to track real-time usage
+- **Sync & History** — 12-month history view synced between Consumption Insights and Bill Predictor
+- **Reading Continuity** — Seamlessly continues from the last billed reading
+
+### 🏆 Payment Streak
+- **On-Time Payment Tracking** — Tracks your consecutive on-time payment consistency
+- **Motivational Badges** — 🔥 streak badges and status icons (✅ paid / 🕒 pending / ❌ missed) integrated directly into payment history
+
+### 🎯 Budget Goal
+- **Per-Service Monthly Budget** — Set a ₹ target for each service
+- **Progress Bar** — Visual progress toward your monthly budget cap
+
+### 💸 Cost Split Tracker
+- **Split Bills Among People** — Divide electricity cost among N housemates or family members
+- **Per-Person Settlement** — Mark each person as paid individually
+
+### 🔔 Notifications
+- **Push Notifications** — Bill due alerts delivered to your device
+- **Notification Inbox** — In-app inbox to view and manage past notifications
+- **Android Shortcuts** — Long-press the app icon to directly refresh bills or navigate to payments
+
+### 📱 Overview Tab
+- **Cross-Service Summary** — Total amount due, total units this month, year-to-date spend and units across all services
+- **Year in Review** — Annual consumption and spend breakdown per service
+- **Share Summary** — Share a formatted bill table directly from the app
+
+### 🔌 Appliance Calculator
+- **Usage Estimator** — Estimate monthly electricity cost by entering your appliances and daily usage hours
+
+### ⚙️ Settings & Customisation
+- **Calculation Settings** — Configure tariff slabs, arrears deduction behaviour, and BillDesk vs. APSPDCL data source preference
+- **Prefix Migration** — Handles automatic migration from old to new APSPDCL service number format
+- **Density Control** — Comfortable or Compact layout density
+- **Light / Dark / System Theme** — Native support for both themes with automatic system preference detection
+- **Language Toggle** — Full i18n support with dynamically toggleable **English** and **Telugu**
+- **Backup & Restore** — Export and import all data as a local JSON file
+
+### 🔐 Privacy & Security
+- **Privacy-First Local Storage** — All data stored on-device (IndexedDB for Web / SQLite for Android). Nothing sent to any cloud
+- **Privacy Policy** — Accessible in-app without login
+- **Offline Support** — All cached data remains accessible with no internet connection
+
+### 🧪 Experimental
+- **Dynamic UPI QR Payments** — Reverse-engineered APSPDCL UPI logic generates dynamic payment QR codes. Requires Bill Generation Time (HHMM) for a valid VPA. Manual override available. *Do not use for high-value payments without validation — official "Pay Now" redirection remains the primary safe method.*
 
 ---
 
-## 🛠️ Architecture & Tech Stack
+## 🛠️ Tech Stack
 
 | Domain | Technology |
 |---|---|
-| **Frontend UI** | React 18, Recharts, Vanilla CSS (variables-driven) |
+| **Frontend UI** | React 18, Recharts, Vanilla CSS (CSS variables) |
 | **Mobile Bridge** | Capacitor 5 |
 | **Local Storage** | IndexedDB (`idb`) for Web, SQLite for Android |
-| **Backend Proxy** | Node.js + Express (Scraping, CORS bypass, OCR) |
+| **Backend Proxy** | Node.js + Express (scraping, CORS bypass, OCR) |
 | **Image Processing** | `sharp` (noise reduction), `tesseract.js` (OCR) |
+| **Internationalisation** | i18next (English + Telugu) |
+| **Push Notifications** | `@capacitor/push-notifications` |
 
 ---
 
@@ -64,25 +93,50 @@ Create a `.env` file in the root directory based on `.env.example`:
 ```env
 VITE_API_URL=http://<YOUR_LAN_IP>:4201/api
 ```
-For local development, use your LAN IP. For production (Vercel), use your public Vercel URL.
+Use your LAN IP for local development. For production (Vercel), use your public Vercel URL.
 
 ### 2. Backend Deployment (Public Access)
-To access the app from anywhere:
-1. Install Vercel CLI: `npm i -g vercel`
-2. Run `vercel --prod` in the project root.
-3. Once deployed, update your `.env` file with the production URL.
+```bash
+npm i -g vercel
+vercel --prod
+```
+Update `.env` with the production Vercel URL after deployment.
 
 ### 3. Local Development
-- **Install Dependencies**: `npm install`
-- **Run Dev Server**: `npm run dev` (Starts both UI and local API proxy)
+```bash
+npm install
+npm run dev        # Starts UI + local API proxy
+```
 
 ### 4. Building for Android (Capacitor)
-1. **Build the Web Assets**: `npm run build`
-2. **Sync to Android**: `npx cap sync android`
-3. **Run via Android Studio**: `npx cap open android`
+```bash
+npm run build              # Build web assets
+npx cap sync android       # Sync to Android
+npx cap open android       # Open in Android Studio
+```
 
 ---
 
-## 🔧 Extensibility
+## 📁 Project Structure
 
-The codebase is structured modularly. The `src/features` folder is designed so you can easily plug in new tracking domains (Water, Broadband, Subscriptions) and link them to the shared local storage wrapper in `src/shared/db`.
+```
+src/
+├── app/                   # App shell, routing, theme
+├── features/
+│   └── electricity/       # All electricity bill tracking features
+│       ├── components/    # BudgetGoal, PaymentStreak, MeterReadingLog, CostSplitTracker, etc.
+│       ├── hooks/         # useElectricityServices (data layer)
+│       └── utils/         # Billing calculations, notifications
+├── shared/
+│   ├── components/        # ConfirmDialog, Loader, etc.
+│   ├── db/                # Unified storage abstraction (IndexedDB + SQLite)
+│   └── hooks/             # useNetwork, etc.
+└── styles/                # global.css (CSS variable design system)
+```
+
+The `src/features` folder is modular — additional tracking domains (Water, Broadband, Gas) can be added alongside `electricity/` and share the same `src/shared/db` storage layer.
+
+---
+
+## 📦 Package ID
+`com.akbar.apvidyuth`

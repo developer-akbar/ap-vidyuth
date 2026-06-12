@@ -74,7 +74,7 @@ export function CostSplitTracker({ service }) {
       <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', marginTop: '8px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
           <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-1)' }}>Split {formatInr(totalBill)} among:</span>
-          <button className="icon-btn-micro" onClick={() => setSetupMode(false)}><FiX size={13} /></button>
+          <button className="icon-btn-micro" onClick={() => setSetupMode(false)} aria-label="Cancel split setup"><FiX size={13} /></button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
           {names.map((name, i) => (
@@ -86,13 +86,13 @@ export function CostSplitTracker({ service }) {
                 style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--border-md)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-1)', color: 'var(--text-1)', fontSize: '13px' }}
               />
               {names.length > 2 && (
-                <button className="icon-btn-micro" onClick={() => setNames(names.filter((_, j) => j !== i))}><FiTrash2 size={11} /></button>
+                <button className="icon-btn-micro" onClick={() => setNames(names.filter((_, j) => j !== i))} aria-label="Remove person from split"><FiTrash2 size={11} /></button>
               )}
             </div>
           ))}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn--ghost btn--sm" onClick={() => setNames([...names, ''])} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button className="btn btn--ghost btn--sm" onClick={() => setNames([...names, ''])} aria-label="Add person to split" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <FiPlus size={12} /> Add person
           </button>
           <button className="btn btn--pay btn--sm" onClick={saveSplit} style={{ flex: 1, justifyContent: 'center' }}>
@@ -138,8 +138,8 @@ export function CostSplitTracker({ service }) {
           {pendingCount > 0 && <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--amber, #f59e0b)' }}>· {pendingCount} pending</span>}
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
-          <button className="icon-btn-micro" onClick={() => { setNames(split.people.map(p => p.name)); setSetupMode(true); }} title="Edit split"><FiEdit2 size={11} /></button>
-          <button className="icon-btn-micro" onClick={clearSplit} title="Clear split" style={{ color: 'var(--text-3)' }}><FiTrash2 size={11} /></button>
+          <button className="icon-btn-micro" onClick={() => { setNames(split.people.map(p => p.name)); setSetupMode(true); }} title="Edit split" aria-label="Edit split details"><FiEdit2 size={11} /></button>
+          <button className="icon-btn-micro" onClick={clearSplit} title="Clear split" aria-label="Clear split details" style={{ color: 'var(--text-3)' }}><FiTrash2 size={11} /></button>
         </div>
       </div>
 
@@ -164,6 +164,7 @@ export function CostSplitTracker({ service }) {
               <span style={{ fontSize: '13px', fontWeight: 700 }}>{formatInr(person.share)}</span>
               <button
                 onClick={() => togglePaid(i)}
+                aria-label={person.paid ? `Mark ${person.name} as unpaid` : `Mark ${person.name} as paid`}
                 style={{
                   padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600,
                   border: 'none', cursor: 'pointer',
