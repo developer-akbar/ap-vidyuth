@@ -4,6 +4,7 @@ import { FiX, FiExternalLink, FiClock, FiCheck, FiInfo, FiCopy, FiAlertCircle } 
 import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import { generateAPSPDCLUpiString } from '../utils/qrcode.js';
+import { BsQrCode } from 'react-icons/bs';
 import toast from 'react-hot-toast';
 
 export function QRCodeDialog({ open, service, onClose, onSave }) {
@@ -129,7 +130,7 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
 
   return createPortal(
     <div className="overlay overlay--center" onClick={onClose}>
-      <div className="dialog" onClick={e => e.stopPropagation()} style={{ width: '85%', maxWidth: '340px', position: 'relative' }}>
+      <div className="dialog" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '340px', position: 'relative' }}>
         <div className="sheet__header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border)', display: 'block', position: 'relative' }}>
           <h3 className="sheet__title" style={{ textAlign: 'center', width: '100%', marginBottom: '4px', fontSize: '18px' }}>{t('pay_bill', 'Pay Bill')}</h3>
           <p className="sheet__eyebrow" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '10px' }}>
@@ -140,15 +141,17 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
               onClick={() => setShowInfo(true)}
               className="icon-btn" 
               style={{ width: '18px', height: '18px', padding: 0, marginLeft: '2px', background: 'none', border: 'none' }}
+              aria-label="Show Technical Details"
             >
               <FiInfo size={13} style={{ color: 'var(--text-3)' }} />
             </button>
           </p>
-          <button className="icon-btn sheet__close" onClick={onClose} style={{ position: 'absolute', right: '-5px', top: '-5px', border: 'none', background: 'none' }}><FiX size={18} /></button>
+          <button className="icon-btn sheet__close" onClick={onClose} style={{ position: 'absolute', right: '-5px', top: '-5px', border: 'none', background: 'none' }} aria-label="Close"><FiX size={18} /></button>
         </div>
 
         <div className="dialog__body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', maxHeight: '70vh', overflowY: 'auto' }}>
 
+          {/* 1. QR Code Section */}
           <div style={{ 
             background: '#fff', 
             padding: '16px', 
@@ -156,32 +159,115 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
             marginBottom: '12px', 
             flexShrink: 0,
-            border: isDataMissing ? '2px solid var(--red)' : 'none'
+            border: isDataMissing ? '2px solid var(--red)' : 'none',
+            position: 'relative',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}>
-            <QRCodeSVG
-              value={upiString}
-              size={200}
-              level="M"
-              includeMargin={false}
-            />
+            <div style={{ 
+              filter: isDataMissing ? 'blur(2px)' : 'none', 
+              opacity: isDataMissing ? 0.3 : 1, 
+              transition: 'all 0.3s ease',
+              display: 'flex'
+            }}>
+              <QRCodeSVG
+                value={upiString}
+                size={200}
+                level="M"
+                includeMargin={false}
+              />
+            </div>
+            
+            {isDataMissing && (
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', padding: '20px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: 'var(--red)', fontWeight: '800',
+                zIndex: 2
+              }}>
+                <FiAlertCircle size={32} style={{ marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }} />
+                <span style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', textShadow: '0 1px 2px rgba(255,255,255,0.8)' }}>QR Disabled</span>
+                <span style={{ fontSize: '10px', fontWeight: '700', textShadow: '0 1px 2px rgba(255,255,255,0.8)' }}>Enter Details Below</span>
+              </div>
+            )}
           </div>
 
-          {/* Bill No Visualization */}
+          {/* 2. Amount Display */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-1)' }}>
+              ₹{Number(service.publicBillAmount || service.lastAmountDue).toLocaleString('en-IN')}
+            </h2>
+            {isDataMissing && (
+              <button 
+                onClick={() => {
+                  setIsTimeInfoHighlighted(true);
+                  setTimeout(() => setIsTimeInfoHighlighted(false), 3000);
+                }}
+                style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: 0 }}
+                title="Why is this required?"
+              >
+                <FiInfo size={16} />
+              </button>
+            )}
+          </div>
+
+          {/* 3. Pay via UPI Button */}
+          <a
+            href={isDataMissing ? '#' : upiString}
+            className={`btn btn--primary ${isDataMissing ? 'btn--disabled' : ''}`}
+            onClick={(e) => {
+              if (isDataMissing) {
+                e.preventDefault();
+                setIsTimeInfoHighlighted(true);
+                setTimeout(() => setIsTimeInfoHighlighted(false), 2000);
+              }
+            }}
+            style={{ 
+              width: '100%', 
+              justifyContent: 'center', 
+              height: '44px', 
+              fontSize: '15px', 
+              padding: '6px 12px', 
+              textDecoration: 'none',
+              cursor: isDataMissing ? 'not-allowed' : 'pointer',
+              pointerEvents: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              background: isDataMissing ? 'var(--surface-3)' : 'var(--primary)',
+              color: isDataMissing ? 'var(--text-3)' : '#fff',
+              border: isDataMissing ? '1px solid var(--border)' : 'none',
+              opacity: isDataMissing ? 0.6 : 1,
+              marginBottom: '20px'
+            }}
+          >
+            {isDataMissing && <FiAlertCircle size={18} style={{ marginRight: '8px' }} />}
+            Pay via UPI
+          </a>
+
+          {/* 4. Bill Number Visualization */}
           <div style={{ width: '100%', marginBottom: '12px', padding: '8px', background: 'var(--surface-3)', borderRadius: '8px', border: '1px solid var(--border)' }}>
              <p style={{ fontSize: '9px', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: '800', marginBottom: '4px' }}>Bill Number for QR</p>
              <p className="mono" style={{ fontSize: '14px', letterSpacing: '1px', color: isDataMissing ? 'var(--text-3)' : 'var(--primary)', fontWeight: '700' }}>
                {billNoDisplay}
              </p>
+             <p style={{ fontSize: '10px', color: 'var(--text-3)', marginTop: '4px', fontStyle: 'italic' }}>
+               Verify if this matches the "Bill No" on your paper receipt.
+             </p>
           </div>
 
-          {/* Configuration Section */}
+          {/* 5. Configuration Section (Verification Details) */}
           <div style={{ 
             width: '100%', 
             marginBottom: '20px', 
             padding: '12px', 
             background: 'var(--surface-2)', 
             borderRadius: '10px', 
-            border: '1px solid var(--border)' 
+            border: '1px solid var(--border)',
+            borderBottom: isTimeInfoHighlighted ? '2px solid var(--amber)' : '1px solid var(--border)',
+            transition: 'border 0.3s ease'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <p style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: '700' }}>Verification Details</p>
@@ -246,6 +332,7 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
                       onClick={handleSaveData}
                       disabled={currentCleanTime.length !== 6 || currentCleanPrefix.length !== 3}
                       style={{ background: 'var(--primary)', border: 'none', borderRadius: '4px', color: '#fff', width: '44px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: (currentCleanTime.length === 6 && currentCleanPrefix.length === 3) ? 1 : 0.5 }}
+                      aria-label="Save verification data"
                     >
                       <FiCheck size={16} />
                     </button>
@@ -275,57 +362,13 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-1)' }}>
-              ₹{Number(service.publicBillAmount || service.lastAmountDue).toLocaleString('en-IN')}
-            </h2>
-            {isDataMissing && (
-              <button 
-                onClick={() => {
-                  setIsTimeInfoHighlighted(true);
-                  setTimeout(() => setIsTimeInfoHighlighted(false), 3000);
-                }}
-                style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: 0 }}
-                title="Why is this required?"
-              >
-                <FiInfo size={16} />
-              </button>
-            )}
-          </div>
-
-          <a
-            href={upiString}
-            className={`btn btn--primary ${isDataMissing ? 'btn--danger-outline' : ''}`}
-            onClick={(e) => {
-              // Ensure navigation happens even if href is weird
-              if (!upiString) e.preventDefault();
-            }}
-            style={{ 
-              width: '100%', 
-              justifyContent: 'center', 
-              height: '44px', 
-              fontSize: '15px', 
-              padding: '6px 12px', 
-              textDecoration: 'none',
-              cursor: 'pointer',
-              pointerEvents: 'auto',
-              display: 'flex',
-              alignItems: 'center',
-              ...(isDataMissing ? { borderColor: 'var(--red)', color: 'var(--red)', background: 'transparent', borderWidth: '2px' } : {})
-            }}
-          >
-            {isDataMissing && <FiAlertCircle size={18} style={{ marginRight: '8px' }} />}
-            Pay via UPI
-          </a>
-
-          <div style={{ padding: '12px', background: 'var(--red-dim)', borderRadius: '8px', border: '1px solid var(--red-glow)', marginTop: '24px' }}>
+          {/* 6. Experimental Alert */}
+          <div style={{ padding: '12px', background: 'var(--red-dim)', borderRadius: '8px', border: '1px solid var(--red-glow)', marginTop: '4px', marginBottom: '24px' }}>
             <p style={{ fontSize: '11px', color: 'var(--red)', fontWeight: '600', lineHeight: '1.4' }}>
               ⚠️ EXPERIMENTAL FEATURE
             </p>
             <p style={{ fontSize: '10px', color: 'var(--text-2)', marginTop: '4px', lineHeight: '1.6', textAlign: 'left' }}>
               Currently, APSPDCL does not store generation data in public records, so <b>manual entry</b> is required for valid Direct UPI payment.
-              <br /><br />
-              For confirmed safety, use the <b>Pay Now</b> button on Service Card.
             </p>
           </div>
         </div>
@@ -366,6 +409,7 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
             </div>
           </div>
         )}
+
       </div>
     </div>,
     document.body

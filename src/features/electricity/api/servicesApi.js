@@ -78,6 +78,8 @@ function snapshotToPatch(snapshot, existing = {}) {
     lastRefreshedDate: today,
     isPaid:            snapshot.isPaid,
     paidDate:          snapshot.paidDate,
+    billTime:          snapshot.billTime || existing.billTime || null,
+    billNoPrefix:      existing.billNoPrefix || null,
     receiptNumber:     snapshot.receiptNumber,
     paidAmount:        snapshot.paidAmount,
     billBreakup:       snapshot.billBreakup,
