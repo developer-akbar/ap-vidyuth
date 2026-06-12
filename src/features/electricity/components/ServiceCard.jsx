@@ -377,6 +377,20 @@ export function ServiceCard({
             )}
           </div>
         </div>
+        {service.isPaid && (
+          <button 
+            className="btn-pay-more" 
+            onClick={(e) => { e.stopPropagation(); handlePayClick(e); }}
+            style={{
+              fontSize: '11px', fontWeight: '700', color: 'var(--primary)',
+              background: 'var(--primary-dim)', border: '1px solid var(--primary-glow)',
+              padding: '6px 10px', borderRadius: '14px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '4px'
+            }}
+          >
+            Pay more
+          </button>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {status === 'DUE' && Number(service.lastAmountDue || 0) > 0 && (

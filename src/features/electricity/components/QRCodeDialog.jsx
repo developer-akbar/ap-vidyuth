@@ -157,7 +157,7 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
             padding: '16px', 
             borderRadius: '12px', 
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
-            marginBottom: '12px', 
+            marginBlock: '12px', 
             flexShrink: 0,
             border: isDataMissing ? '2px solid var(--red)' : 'none',
             position: 'relative',
