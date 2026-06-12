@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiExternalLink, FiClock, FiCheck, FiInfo, FiCopy, FiAlertCircle } from 'react-icons/fi';
 import { QRCodeSVG } from 'qrcode.react';
@@ -15,6 +15,7 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
   const [showInfo, setShowInfo] = useState(false);
   const [isTimeInfoHighlighted, setIsTimeInfoHighlighted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const triggerRef = useRef(null);
 
   const currentCleanTime = timeInput.replace(/\D/g, '');
   const currentCleanPrefix = prefixInput.replace(/\D/g, '');
@@ -57,9 +58,19 @@ export function QRCodeDialog({ open, service, onClose, onSave }) {
   }, [open, service]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      document.body.style.overflow = '';
+      document.body.classList.remove('modal-open');
+      triggerRef.current?.focus();
+      return;
+    }
+    triggerRef.current = document.activeElement;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    document.body.classList.add('modal-open');
+    return () => { 
+      document.body.style.overflow = ''; 
+      document.body.classList.remove('modal-open');
+    };
   }, [open]);
 
   // Handle Esc and Back button

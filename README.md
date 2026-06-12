@@ -1,6 +1,6 @@
 # AP Vidyuth — APSPDCL Bill Tracker
 
-A privacy-first electricity bill tracking app for APSPDCL consumers, built with **React 18 + Vite + Capacitor 5**. Runs as a native Android app and a modern PWA, with all data stored entirely on-device.
+A privacy-first electricity bill tracking app for APSPDCL consumers, built with **React 18 + Vite + Capacitor 6**. Runs as a native Android app and a modern PWA, with all data stored entirely on-device.
 
 ---
 
@@ -77,7 +77,7 @@ A privacy-first electricity bill tracking app for APSPDCL consumers, built with 
 | Domain | Technology |
 |---|---|
 | **Frontend UI** | React 18, Recharts, Vanilla CSS (CSS variables) |
-| **Mobile Bridge** | Capacitor 5 |
+| **Mobile Bridge** | Capacitor 6 |
 | **Local Storage** | IndexedDB (`idb`) for Web, SQLite for Android |
 | **Backend Proxy** | Node.js + Express (scraping, CORS bypass, OCR) |
 | **Image Processing** | `sharp` (noise reduction), `tesseract.js` (OCR) |
