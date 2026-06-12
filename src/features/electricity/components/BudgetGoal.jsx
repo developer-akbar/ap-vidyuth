@@ -59,9 +59,9 @@ export function BudgetGoal({ service }) {
           }}
           autoFocus
         />
-        <button className="icon-btn-micro" onClick={saveBudget} title="Save"><FiCheck size={13} style={{ color: 'var(--green, #22c55e)' }} /></button>
-        <button className="icon-btn-micro" onClick={() => setEditing(false)} title="Cancel"><FiX size={13} /></button>
-        {budget && <button className="icon-btn-micro" onClick={clearBudget} title="Clear budget" style={{ color: 'var(--text-3)', fontSize: '10px' }}>Clear</button>}
+        <button className="icon-btn-micro" onClick={saveBudget} title="Save" aria-label="Save budget goal"><FiCheck size={13} style={{ color: 'var(--green, #22c55e)' }} /></button>
+        <button className="icon-btn-micro" onClick={() => setEditing(false)} title="Cancel" aria-label="Cancel editing budget goal"><FiX size={13} /></button>
+        {budget && <button className="icon-btn-micro" onClick={clearBudget} title="Clear budget" aria-label="Clear budget goal" style={{ color: 'var(--text-3)', fontSize: '10px' }}>Clear</button>}
       </div>
     );
   }
@@ -95,7 +95,7 @@ export function BudgetGoal({ service }) {
           <span style={{ fontSize: '12px', fontWeight: 700, color }}>
             {pct}% used
           </span>
-          <button className="icon-btn-micro" onClick={() => { setInputVal(String(budget)); setEditing(true); }} title="Edit budget">
+          <button className="icon-btn-micro" onClick={() => { setInputVal(String(budget)); setEditing(true); }} title="Edit budget" aria-label="Edit budget goal">
             <FiEdit2 size={11} />
           </button>
         </div>

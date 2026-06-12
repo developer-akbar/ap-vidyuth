@@ -78,6 +78,7 @@ export function PaymentStreak({ service }) {
     <div style={{ marginTop: '8px' }}>
       <button
         onClick={() => setOpen(v => !v)}
+        aria-label="View payment streak details"
         style={{
           display: 'flex', alignItems: 'center', gap: '8px',
           width: '100%', padding: '8px 10px', background: 'var(--surface-2)',

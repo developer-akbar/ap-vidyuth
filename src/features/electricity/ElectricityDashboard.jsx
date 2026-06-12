@@ -34,7 +34,10 @@ import { Virtuoso } from 'react-virtuoso';
 
 export function ElectricityDashboard({ onOpenCalcSettings, electricityContext }) {
   const isWeb = Capacitor.getPlatform() === 'web';
-  const { isOffline } = useNetwork();
+  const { t } = useTranslation();
+  const { isOffline } = useNetwork({
+    onReconnect: () => toast.success(t('back_online'), { duration: 2000 })
+  });
   const { services, trash, loading, refreshingIds, actions } = electricityContext;
   const [filters, setFilters] = useState({ query: '', status: '', sort: 'amount' });
   const [cardStyle, setCardStyle] = useState(localStorage.getItem('appearance_card_style') || 'classic'); 
@@ -344,7 +347,6 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(null);
   const [flashingId, setFlashingId] = useState(null);
-  const { t } = useTranslation();
   const ph = usePostHog();
 
   const [bulkResult, setBulkResult] = useState(null);
