@@ -87,38 +87,50 @@ function AppContent() {
     }
     return 'electricity';
   });
-  const [theme, setTheme] = useState('system');
-  const [density, setDensity] = useState('comfortable');
+  // Use localStorage as the synchronous fast-path for initial render to prevent theme flashing.
+  // The actual source of truth for backups remains db.getSetting/db.setSetting.
+  const [theme, setTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') || 'system';
+    }
+    return 'system';
+  });
+  const [density, setDensity] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('density') || 'comfortable';
+    }
+    return 'comfortable';
+  });
 
   useEffect(() => {
-    // Load initial settings from DB
+    // Sync DB values to state on boot just in case localStorage was cleared
     Promise.all([
       db.getSetting('theme'),
       db.getSetting('density')
     ]).then(([savedTheme, savedDensity]) => {
-      // Fallback to localStorage temporarily for smooth migration, then default
-      if (!savedTheme) {
-        savedTheme = localStorage.getItem('theme') || 'system';
-        db.setSetting('theme', savedTheme);
+      if (savedTheme && savedTheme !== localStorage.getItem('theme')) {
+        setTheme(savedTheme);
+        localStorage.setItem('theme', savedTheme);
       }
-      if (!savedDensity) {
-        savedDensity = localStorage.getItem('density') || 'comfortable';
-        db.setSetting('density', savedDensity);
+      if (savedDensity && savedDensity !== localStorage.getItem('density')) {
+        setDensity(savedDensity);
+        localStorage.setItem('density', savedDensity);
       }
-      setTheme(savedTheme);
-      setDensity(savedDensity);
     });
   }, []);
 
   const handleThemeChange = (newTheme) => {
     setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
     db.setSetting('theme', newTheme);
   };
 
   const handleDensityChange = (newDensity) => {
     setDensity(newDensity);
+    localStorage.setItem('density', newDensity);
     db.setSetting('density', newDensity);
   };
+
   const { t, i18n } = useTranslation();
   const ph = usePostHog();
 
@@ -153,7 +165,6 @@ function AppContent() {
     };
 
     applyTheme(theme);
-    localStorage.setItem('theme', theme);
 
     if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -162,11 +173,6 @@ function AppContent() {
       return () => mediaQuery.removeEventListener('change', listener);
     }
   }, [theme]);
-
-  // Density Sync (Standard #12)
-  useEffect(() => {
-    localStorage.setItem('density', density);
-  }, [density]);
 
   const triggerHaptic = async (style = ImpactStyle.Light) => {
     if (!Capacitor.isNativePlatform()) return;
@@ -463,9 +469,9 @@ function AppContent() {
                           <span style={{ fontSize: '15px', fontWeight: '600' }}>{t('theme')}</span>
                         </div>
                         <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
-                          <button className={`seg__btn ${theme === 'system' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('system')}>Auto</button>
-                          <button className={`seg__btn ${theme === 'dark' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('dark')}>{t('dark')}</button>
-                          <button className={`seg__btn ${theme === 'light' ? 'seg__btn--active' : ''}`} onClick={() => setTheme('light')}>{t('light')}</button>
+                          <button className={`seg__btn ${theme === 'system' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('system')}>Auto</button>
+                          <button className={`seg__btn ${theme === 'dark' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('dark')}>{t('dark')}</button>
+                          <button className={`seg__btn ${theme === 'light' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('light')}>{t('light')}</button>
                         </div>
                       </div>
 
@@ -477,8 +483,8 @@ function AppContent() {
                           <span style={{ fontSize: '15px', fontWeight: '600' }}>Display Density</span>
                         </div>
                         <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
-                          <button className={`seg__btn ${density === 'comfortable' ? 'seg__btn--active' : ''}`} onClick={() => setDensity('comfortable')}>Default</button>
-                          <button className={`seg__btn ${density === 'compact' ? 'seg__btn--active' : ''}`} onClick={() => setDensity('compact')}>Compact</button>
+                          <button className={`seg__btn ${density === 'comfortable' ? 'seg__btn--active' : ''}`} onClick={() => handleDensityChange('comfortable')}>Default</button>
+                          <button className={`seg__btn ${density === 'compact' ? 'seg__btn--active' : ''}`} onClick={() => handleDensityChange('compact')}>Compact</button>
                         </div>
                       </div>
 
