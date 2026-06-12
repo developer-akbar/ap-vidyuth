@@ -3,7 +3,7 @@
 ## Quick reference
 - App: AP Vidyuth — APSPDCL electricity bill tracker
 - Package ID: com.akbar.apvidyuth
-- Stack: React 18 + Vite + Capacitor 6 + SQLite
+- Stack: React 18 + Vite + Capacitor 5 + SQLite
 - Repo: developer-akbar/ap-vidyuth
 
 ## Standards & architecture

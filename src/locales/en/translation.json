@@ -188,5 +188,6 @@
   "reading_less_than_prev": "Reading cannot be less than previous reading",
   "enter_valid_reading": "Enter a valid reading",
   "history_unavailable": "APSPDCL payment history is unavailable for this service number",
-  "no_records_found": "No payment records found"
+  "no_records_found": "No payment records found",
+  "back_online": "Back online"
 }

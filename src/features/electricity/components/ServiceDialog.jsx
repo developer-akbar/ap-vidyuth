@@ -13,6 +13,9 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
   const [saving, setSaving] = useState(false);
   const [showPrefixes, setShowPrefixes] = useState(false);
   const { t } = useTranslation();
+  
+  const triggerRef = useRef(null);
+  const sheetRef = useRef(null);
   const labelRef = useRef(null);
   const numRef = useRef(null);
   const bulkRef = useRef(null);
@@ -41,6 +44,8 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
 
   useEffect(() => {
     if (!open) return;
+    
+    triggerRef.current = document.activeElement;
     document.body.style.overflow = 'hidden';
 
     const handleBack = (e) => {
@@ -57,13 +62,32 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
       }
     };
 
+    const handleTab = (e) => {
+      if (e.key !== 'Tab') return;
+      const focusables = sheetRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focusables?.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
     window.addEventListener('app-back-button', handleBack);
     window.addEventListener('keydown', handleEsc);
+    window.addEventListener('keydown', handleTab);
 
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('app-back-button', handleBack);
       window.removeEventListener('keydown', handleEsc);
+      window.removeEventListener('keydown', handleTab);
+      triggerRef.current?.focus();
     };
   }, [open, onClose]);
 
@@ -89,7 +113,7 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [service, open]);
+  }, [service, open, isBulk, initialServiceNumber]);
 
   // Handle clicking outside prefix dropdown
   useEffect(() => {
@@ -167,7 +191,7 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
 
   return createPortal(
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true">
+      <div className="sheet" role="dialog" aria-modal="true" ref={sheetRef}>
         <div className="sheet__handle" />
 
         <div className="sheet__header">

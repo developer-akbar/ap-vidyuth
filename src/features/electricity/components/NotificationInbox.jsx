@@ -110,11 +110,11 @@ export function NotificationInbox({ open, onClose, onAction }) {
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {notifications.length > 0 && (
-              <button className="icon-btn-ghost" onClick={clearAll} title="Clear All">
+              <button className="icon-btn-ghost" onClick={clearAll} title="Clear All" aria-label="Mark all as read">
                 <FiTrash2 size={16} />
               </button>
             )}
-            <button className="icon-btn-ghost" onClick={onClose}>
+            <button className="icon-btn-ghost" onClick={onClose} aria-label="Close notifications">
               <FiX size={20} />
             </button>
           </div>

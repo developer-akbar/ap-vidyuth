@@ -1,11 +1,22 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 export function ConfirmDialog({ open, title, description, confirmText = 'Confirm', cancelText = 'Cancel', onConfirm, onClose, isDanger = false }) {
-  // Prevent scrolling when open
+  const triggerRef = useRef(null);
+  const dialogRef = useRef(null);
+
+  // Prevent scrolling and handle focus/accessibility when open
   useEffect(() => {
     if (!open) return;
+    
+    triggerRef.current = document.activeElement;
     document.body.style.overflow = 'hidden';
+
+    // Move focus to first button
+    setTimeout(() => {
+      const firstBtn = dialogRef.current?.querySelector('button');
+      firstBtn?.focus();
+    }, 10);
 
     const handleBack = (e) => {
       if (e.type === 'app-back-button' && e.detail) {
@@ -21,13 +32,32 @@ export function ConfirmDialog({ open, title, description, confirmText = 'Confirm
       }
     };
 
+    const handleTab = (e) => {
+      if (e.key !== 'Tab') return;
+      const focusables = dialogRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focusables?.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
     window.addEventListener('app-back-button', handleBack);
     window.addEventListener('keydown', handleEsc);
+    window.addEventListener('keydown', handleTab);
 
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('app-back-button', handleBack);
       window.removeEventListener('keydown', handleEsc);
+      window.removeEventListener('keydown', handleTab);
+      triggerRef.current?.focus();
     };
   }, [open, onClose]);
 
@@ -39,7 +69,7 @@ export function ConfirmDialog({ open, title, description, confirmText = 'Confirm
       if (isDanger) return;
       onClose();
     }}>
-      <div className="dialog" role="dialog" aria-modal="true">
+      <div className="dialog" role="dialog" aria-modal="true" ref={dialogRef}>
         <h2 className="dialog__title">{title}</h2>
         <p className="dialog__desc">{description}</p>
         <div className="dialog__footer">
