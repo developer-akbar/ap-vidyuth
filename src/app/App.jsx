@@ -22,6 +22,7 @@ import { Loader } from '../shared/components/Loader.jsx';
 import { FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail, FiWifiOff } from 'react-icons/fi';
 
 import { useNetwork } from '../shared/hooks/useNetwork.js';
+import { db } from '../shared/db/storage.js';
 
 // ── Error Boundary ─────────────────────────────────────────────────────────
 class ErrorBoundary extends Component {
@@ -86,8 +87,38 @@ function AppContent() {
     }
     return 'electricity';
   });
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system');
-  const [density, setDensity] = useState(() => localStorage.getItem('density') || 'comfortable');
+  const [theme, setTheme] = useState('system');
+  const [density, setDensity] = useState('comfortable');
+
+  useEffect(() => {
+    // Load initial settings from DB
+    Promise.all([
+      db.getSetting('theme'),
+      db.getSetting('density')
+    ]).then(([savedTheme, savedDensity]) => {
+      // Fallback to localStorage temporarily for smooth migration, then default
+      if (!savedTheme) {
+        savedTheme = localStorage.getItem('theme') || 'system';
+        db.setSetting('theme', savedTheme);
+      }
+      if (!savedDensity) {
+        savedDensity = localStorage.getItem('density') || 'comfortable';
+        db.setSetting('density', savedDensity);
+      }
+      setTheme(savedTheme);
+      setDensity(savedDensity);
+    });
+  }, []);
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    db.setSetting('theme', newTheme);
+  };
+
+  const handleDensityChange = (newDensity) => {
+    setDensity(newDensity);
+    db.setSetting('density', newDensity);
+  };
   const { t, i18n } = useTranslation();
   const ph = usePostHog();
 
@@ -549,6 +580,7 @@ function AppContent() {
 
       <Toaster
         position="bottom-center"
+        visibleToasts={1}
         containerClassName="toast-container"
         containerStyle={{ zIndex: 200000 }}
         toastOptions={{
