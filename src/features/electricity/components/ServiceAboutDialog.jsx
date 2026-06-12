@@ -1,17 +1,39 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiInfo } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 
 export function ServiceAboutDialog({ open, service, onClose }) {
   const { t } = useTranslation();
+  const triggerRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      triggerRef.current = document.activeElement;
+      document.body.style.overflow = 'hidden';
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.style.overflow = '';
+      document.body.classList.remove('modal-open');
+      triggerRef.current?.focus();
+    }
+  }, [open]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && open) onClose();
     };
+    const handleBack = (e) => {
+      if (!open) return;
+      onClose();
+      if (e.detail) e.detail.handled = true;
+    };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('app-back-button', handleBack);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('app-back-button', handleBack);
+    };
   }, [open, onClose]);
 
   if (!open || !service) return null;
