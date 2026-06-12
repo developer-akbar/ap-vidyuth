@@ -6,19 +6,35 @@ import { useTranslation } from 'react-i18next';
 import { generateAPSPDCLUpiString } from '../utils/qrcode.js';
 import toast from 'react-hot-toast';
 
-export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
+export function QRCodeDialog({ open, service, onClose, onSave }) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [timeInput, setTimeInput] = useState('');
+  const [prefixInput, setPrefixInput] = useState('');
   const [showInfo, setShowInfo] = useState(false);
   const [isTimeInfoHighlighted, setIsTimeInfoHighlighted] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const currentCleanTime = timeInput.replace(/\D/g, '');
-  const isTimeMissing = !service?.billTime && currentCleanTime.length !== 6;
+  const currentCleanPrefix = prefixInput.replace(/\D/g, '');
+  const isDataMissing = !service?.billTime || !service?.billNoPrefix;
 
-  // Extract time from current service data
+  // Extract date segments for pattern visualization
   const dateObj = service?.lastBillDate ? new Date(service.lastBillDate) : null;
+  const yy = dateObj ? String(dateObj.getFullYear()).slice(-2) : 'YY';
+  const mm = dateObj ? String(dateObj.getMonth() + 1).padStart(2, '0') : 'MM';
+  const dd = dateObj ? String(dateObj.getDate()).padStart(2, '0') : 'DD';
+  const mSuffix = dateObj ? String(dateObj.getMonth() + 1) : 'M';
+  
+  const divCode = service?.serviceNumber ? service.serviceNumber.substring(0, 2) : 'DIV';
   const displayDate = dateObj ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  // Dynamic Bill No Pattern: [DIV][SEQ][DDMMYY][HHMMSS]1[M][YY]
+  const seqPart = currentCleanPrefix.padEnd(3, '_');
+  const ddmmyyPart = dateObj ? `${dd}${mm}${yy}` : 'DDMMYY';
+  const hhmmssPart = currentCleanTime.padEnd(6, '_');
+  const myyPart = `1${mSuffix}${yy}`;
+  const billNoDisplay = `${divCode}${seqPart}${ddmmyyPart}${hhmmssPart}${myyPart}`;
 
   useEffect(() => {
     if (open && service) {
@@ -29,7 +45,11 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
       } else {
         setTimeInput('');
       }
-      setIsEditing(!service.billTime); // Auto-open edit mode if time is missing
+
+      // billNoPrefix is stored as 3 digits (e.g. 551)
+      setPrefixInput(service.billNoPrefix || '');
+
+      setIsEditing(!service.billTime || !service.billNoPrefix); // Auto-open edit mode if data is missing
       setShowInfo(false);
       setIsTimeInfoHighlighted(false);
     }
@@ -46,7 +66,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
     const handleKeyDown = (e) => { 
       if (e.key === 'Escape' && open) {
         if (showInfo) setShowInfo(false);
-        else if (isEditing && service?.billTime) setIsEditing(false);
+        else if (isEditing && service?.billTime && service?.billNoPrefix) setIsEditing(false);
         else onClose();
       }
     };
@@ -55,7 +75,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
         if (showInfo) {
           setShowInfo(false);
           if (e.detail) e.detail.handled = true;
-        } else if (isEditing && service?.billTime) {
+        } else if (isEditing && service?.billTime && service?.billNoPrefix) {
           setIsEditing(false);
           if (e.detail) e.detail.handled = true;
         } else {
@@ -77,13 +97,25 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
   // Use live time input for dynamic QR preview
   const upiString = generateAPSPDCLUpiString({ 
     ...service, 
-    billTime: currentCleanTime.length === 6 ? currentCleanTime : null 
+    billTime: currentCleanTime.length === 6 ? currentCleanTime : null,
+    billNoPrefix: currentCleanPrefix.length === 3 ? currentCleanPrefix : null
   });
 
-  const handleSaveTime = () => {
-    if (currentCleanTime.length !== 6) return;
-    onUpdateTime(service.id, currentCleanTime);
-    setIsEditing(false);
+  const handleSaveData = async () => {
+    if (currentCleanTime.length !== 6 || currentCleanPrefix.length !== 3) return;
+    
+    setIsSaving(true);
+    try {
+      await onSave(service.id, {
+        billTime: currentCleanTime,
+        billNoPrefix: currentCleanPrefix
+      });
+      setIsEditing(false);
+    } catch (e) {
+      toast.error('Failed to save data');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const copyUpiString = async () => {
@@ -101,7 +133,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
         <div className="sheet__header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border)', display: 'block', position: 'relative' }}>
           <h3 className="sheet__title" style={{ textAlign: 'center', width: '100%', marginBottom: '4px', fontSize: '18px' }}>{t('pay_bill', 'Pay Bill')}</h3>
           <p className="sheet__eyebrow" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '10px' }}>
-            <span style={{ fontWeight: '600' }}>{service.label || t('untitled')}</span>
+            <span style={{ fontWeight: '600' }}>{service.label || service.customerName || t('untitled')}</span>
             <span style={{ color: 'var(--text-3)', fontSize: '8px' }}>•</span>
             <span className="mono">{service.serviceNumber}</span>
             <button 
@@ -122,9 +154,9 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
             padding: '16px', 
             borderRadius: '12px', 
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
-            marginBottom: '16px', 
+            marginBottom: '12px', 
             flexShrink: 0,
-            border: isTimeMissing ? '2px solid var(--red)' : 'none'
+            border: isDataMissing ? '2px solid var(--red)' : 'none'
           }}>
             <QRCodeSVG
               value={upiString}
@@ -134,7 +166,15 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
             />
           </div>
 
-          {/* Time Configuration Section */}
+          {/* Bill No Visualization */}
+          <div style={{ width: '100%', marginBottom: '12px', padding: '8px', background: 'var(--surface-3)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+             <p style={{ fontSize: '9px', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: '800', marginBottom: '4px' }}>Bill Number for QR</p>
+             <p className="mono" style={{ fontSize: '14px', letterSpacing: '1px', color: isDataMissing ? 'var(--text-3)' : 'var(--primary)', fontWeight: '700' }}>
+               {billNoDisplay}
+             </p>
+          </div>
+
+          {/* Configuration Section */}
           <div style={{ 
             width: '100%', 
             marginBottom: '20px', 
@@ -144,31 +184,54 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
             border: '1px solid var(--border)' 
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <p style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: '700' }}>Bill generation info</p>
+              <p style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: '700' }}>Verification Details</p>
               {!isEditing && (
                 <button
                   onClick={() => setIsEditing(true)}
                   style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '11px', fontWeight: '600', cursor: 'pointer', padding: '2px 6px' }}
                 >
-                  Edit Time
+                  Edit Data
                 </button>
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left' }}>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: '10px', color: 'var(--text-3)' }}>Bill Date</p>
-                <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-1)' }}>{displayDate}</p>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '10px', color: 'var(--text-3)' }}>Bill Date</p>
+                  <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-1)' }}>{displayDate}</p>
+                </div>
 
-              <div style={{ flex: 1.2 }}>
-                <p style={{ fontSize: '10px', color: 'var(--text-3)' }}>Gen. Time (HH:MM:SS)</p>
-                {isEditing ? (
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '10px', color: 'var(--text-3)' }}>Sequence ID (3 digits)</p>
+                  {isEditing ? (
                     <input
                       type="text"
                       className="field__input"
-                      style={{ height: '32px', padding: '0 4px', fontSize: '12px', width: '72px', textAlign: 'center', fontFamily: 'var(--mono)', borderColor: isTimeMissing ? 'var(--red)' : 'var(--border-md)' }}
+                      style={{ height: '32px', padding: '0 8px', fontSize: '12px', width: '100%', textAlign: 'center', fontFamily: 'var(--mono)', borderColor: !service?.billNoPrefix ? 'var(--red)' : 'var(--border-md)' }}
+                      placeholder="e.g. 551"
+                      value={prefixInput}
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '').substring(0, 3);
+                        setPrefixInput(val);
+                      }}
+                    />
+                  ) : (
+                    <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-1)' }}>
+                      {prefixInput || '—'}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ width: '100%' }}>
+                <p style={{ fontSize: '10px', color: 'var(--text-3)' }}>Gen. Time (HH:MM:SS)</p>
+                {isEditing ? (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <input
+                      type="text"
+                      className="field__input"
+                      style={{ height: '32px', flex: 1, padding: '0 8px', fontSize: '12px', textAlign: 'center', fontFamily: 'var(--mono)', borderColor: !service?.billTime ? 'var(--red)' : 'var(--border-md)' }}
                       placeholder="10:15:30"
                       value={timeInput}
                       onChange={e => {
@@ -180,16 +243,16 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
                       }}
                     />
                     <button
-                      onClick={handleSaveTime}
-                      disabled={currentCleanTime.length !== 6}
-                      style={{ background: 'var(--primary)', border: 'none', borderRadius: '4px', color: '#fff', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: currentCleanTime.length === 6 ? 1 : 0.5 }}
+                      onClick={handleSaveData}
+                      disabled={currentCleanTime.length !== 6 || currentCleanPrefix.length !== 3}
+                      style={{ background: 'var(--primary)', border: 'none', borderRadius: '4px', color: '#fff', width: '44px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: (currentCleanTime.length === 6 && currentCleanPrefix.length === 3) ? 1 : 0.5 }}
                     >
-                      <FiCheck size={14} />
+                      <FiCheck size={16} />
                     </button>
                   </div>
                 ) : (
                   <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <FiClock size={12} style={{ color: isTimeMissing ? 'var(--red)' : 'var(--primary)' }} />
+                    <FiClock size={12} style={{ color: !service?.billTime ? 'var(--red)' : 'var(--primary)' }} />
                     {timeInput || '—'}
                   </p>
                 )}
@@ -208,7 +271,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
               borderRadius: '4px',
               transition: 'all 0.3s ease'
             }}>
-              * Providing the exact bill generation time (found on your receipt) generates a valid QR code for payments directly to APSPDCL.
+              * Sequence ID and Generation Time are found on your physical receipt. Both are required for a valid payment QR.
             </p>
           </div>
 
@@ -216,7 +279,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
             <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-1)' }}>
               ₹{Number(service.publicBillAmount || service.lastAmountDue).toLocaleString('en-IN')}
             </h2>
-            {isTimeMissing && (
+            {isDataMissing && (
               <button 
                 onClick={() => {
                   setIsTimeInfoHighlighted(true);
@@ -232,7 +295,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
 
           <a
             href={upiString}
-            className={`btn btn--primary ${isTimeMissing ? 'btn--danger-outline' : ''}`}
+            className={`btn btn--primary ${isDataMissing ? 'btn--danger-outline' : ''}`}
             onClick={(e) => {
               // Ensure navigation happens even if href is weird
               if (!upiString) e.preventDefault();
@@ -248,10 +311,10 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
               pointerEvents: 'auto',
               display: 'flex',
               alignItems: 'center',
-              ...(isTimeMissing ? { borderColor: 'var(--red)', color: 'var(--red)', background: 'transparent', borderWidth: '2px' } : {})
+              ...(isDataMissing ? { borderColor: 'var(--red)', color: 'var(--red)', background: 'transparent', borderWidth: '2px' } : {})
             }}
           >
-            {isTimeMissing && <FiAlertCircle size={18} style={{ marginRight: '8px' }} />}
+            {isDataMissing && <FiAlertCircle size={18} style={{ marginRight: '8px' }} />}
             Pay via UPI
           </a>
 
@@ -260,7 +323,7 @@ export function QRCodeDialog({ open, service, onClose, onUpdateTime }) {
               ⚠️ EXPERIMENTAL FEATURE
             </p>
             <p style={{ fontSize: '10px', color: 'var(--text-2)', marginTop: '4px', lineHeight: '1.6', textAlign: 'left' }}>
-              Currently, APSPDCL does not store generation times in public records, so <b>manual entry</b> is required for valid Direct UPI payment.
+              Currently, APSPDCL does not store generation data in public records, so <b>manual entry</b> is required for valid Direct UPI payment.
               <br /><br />
               For confirmed safety, use the <b>Pay Now</b> button on Service Card.
             </p>

@@ -66,26 +66,35 @@ const DynamicBuilders = {
   },
   /**
    * New TR Observation: 555510206261742291626
-   * Structure:
-   * - '5' + <first 4 digits of SN>
-   * - DDMMYY (from receipt)
-   * - HHMM (from receipt)
-   * - SS (seconds from receipt)
-   * - '1626' static suffix
+   * Structure (21 digits):
+   * - [DIV] (2 digits): First 2 digits of SN
+   * - [PREFIX] (3 digits): Dynamic prefix from receipt (e.g. 551, 287)
+   * - [DDMMYY] (6 digits): Bill Date
+   * - [HHMMSS] (6 digits): Bill Time
+   * - '1' (1 digit): Constant/Separator
+   * - [M][YY] (3-4 digits): Month (1-12) + Year (26)
    */
   tr: (service, dateCode, timeCode) => {
-    const prefix = '5' + service.serviceNumber.substring(0, 4);
+    // 1. Division Code (First 2 digits of SN)
+    const div = service.serviceNumber.substring(0, 2);
     
+    // 2. Prefix (3 digits). User provided or fallback.
+    const prefix = String(service.billNoPrefix || '000').padStart(3, '0');
+    
+    // 3. Date (DDMMYY)
     const yy = dateCode.substring(0, 2);
     const mm = dateCode.substring(2, 4);
     const dd = dateCode.substring(4, 6);
     const ddmmyy = `${dd}${mm}${yy}`;
     
-    const hhmm = timeCode.substring(0, 4);
-    const ss = timeCode.length >= 6 ? timeCode.substring(4, 6) : String(Math.floor(Math.random() * 60)).padStart(2, '0');
-    const staticSuffix = '1626';
+    // 4. Time (HHMMSS)
+    const hhmmss = timeCode.padStart(6, '0');
     
-    return `${prefix}${ddmmyy}${hhmm}${ss}${staticSuffix}`;
+    // 5. Month/Year suffix (1 + M + YY)
+    const m = parseInt(mm, 10).toString();
+    const myy = `${m}${yy}`;
+    
+    return `${div}${prefix}${ddmmyy}${hhmmss}1${myy}`;
   },
   /**
    * New PN Structure: APSPDCL_<NAME>_<SN>
