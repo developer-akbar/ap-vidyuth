@@ -84,7 +84,7 @@ function ChartTip({ active, payload, label }) {
 function AggregateTrendChart({ activeServices }) {
   const [view, setView] = useState('amount');
 
-  const { chartData, avgAmount, avgUnits } = useMemo(() => {
+  const { chartData, avg12, avg6 } = useMemo(() => {
     // Build a map of month → { amount, units }
     const map = {};
     activeServices.forEach(s => {
@@ -98,7 +98,7 @@ function AggregateTrendChart({ activeServices }) {
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-12); // last 12 months
 
-    if (entries.length === 0) return { chartData: [], avgAmount: 0, avgUnits: 0 };
+    if (entries.length === 0) return { chartData: [], avg12: { amount: 0, units: 0 }, avg6: { amount: 0, units: 0 } };
 
     const data = entries.map(([month, v]) => ({
       month,
@@ -107,23 +107,25 @@ function AggregateTrendChart({ activeServices }) {
       units:  Math.round(v.units),
     }));
 
-    const avgAmount = Math.round(data.reduce((s, d) => s + d.amount, 0) / data.length);
-    const avgUnits  = Math.round(data.reduce((s, d) => s + d.units,  0) / data.length);
+    const calculateAvg = (arr, key) => arr.length ? Math.round(arr.reduce((s, d) => s + d[key], 0) / arr.length) : 0;
+    const avg12 = { amount: calculateAvg(data, 'amount'), units: calculateAvg(data, 'units') };
+    const avg6  = { amount: calculateAvg(data.slice(-6), 'amount'), units: calculateAvg(data.slice(-6), 'units') };
 
-    return { chartData: data, avgAmount, avgUnits };
+    return { chartData: data, avg12, avg6 };
   }, [activeServices]);
 
   if (chartData.length < 2) return null;
 
   const currentMonth = new Date().toISOString().slice(0, 7);
   const isCurrentBar = (d) => d.month === currentMonth;
+  const currentAvg = view === 'amount' ? avg12.amount : avg12.units;
 
   return (
     <div className="scard" style={{ padding: '16px', marginBottom: 16 }}>
       {/* Header + toggle */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>
-          Household Trend{activeServices.length > 1 ? ` — ${activeServices.length} services` : ''}
+          Household Trend (12 Months)
         </p>
         <div style={{ display: 'flex', gap: 4 }}>
           {['amount', 'units'].map(v => (
@@ -148,7 +150,7 @@ function AggregateTrendChart({ activeServices }) {
           />
           <Tooltip content={<ChartTip />} />
           <ReferenceLine
-            y={view === 'amount' ? avgAmount : avgUnits}
+            y={currentAvg}
             stroke="var(--text-3)" strokeDasharray="3 3"
             label={{ value: 'avg', fontSize: 8, fill: 'var(--text-3)', position: 'insideTopRight' }}
           />
@@ -165,11 +167,17 @@ function AggregateTrendChart({ activeServices }) {
       </ResponsiveContainer>
 
       {/* Average annotation */}
-      <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginTop: 6, textAlign: 'right' }}>
-        12-mo avg: {view === 'amount' ? formatInr(avgAmount) : `${avgUnits} units`}
-        {' · '}
-        <span style={{ color: 'var(--amber)', fontWeight: 600 }}>■</span> = current month
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 6 }}>
+        <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: 0 }}>
+          12m Avg: <b>{view === 'amount' ? formatInr(avg12.amount) : `${avg12.units} u`}</b>
+        </p>
+        <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: 0 }}>
+          6m Avg: <b>{view === 'amount' ? formatInr(avg6.amount) : `${avg6.units} u`}</b>
+        </p>
+        <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: 0 }}>
+          <span style={{ color: 'var(--amber)', fontWeight: 600 }}>■</span> current
+        </p>
+      </div>
     </div>
   );
 }
@@ -396,11 +404,14 @@ function ComparisonRow({ r, service, currentYear, maxAmt }) {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{r.name}</p>
-              <FiChevronDown style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-3)', fontSize: '0.75rem' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{r.name}</p>
+                <FiChevronDown style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-3)', fontSize: '0.75rem' }} />
+              </div>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>{r.serviceNumber}</span>
             </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
               {r.unitsDelta !== null ? (
                 <span style={{
                   fontSize: '0.6875rem', fontWeight: 700,
@@ -451,7 +462,7 @@ function ComparisonRow({ r, service, currentYear, maxAmt }) {
         <div style={{ padding: '0 16px 16px', borderTop: 'none' }}>
            {/* Trend Chart */}
            <div style={{ marginTop: 16, marginBottom: 20 }}>
-              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trend Analysis</p>
+              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trend Analysis (12 Months)</p>
               <ServiceTrendChart service={service} />
            </div>
 
@@ -485,6 +496,7 @@ function MonthComparison({ activeServices, currentYear }) {
       return {
         id: s.id,
         name: s.label || s.customerName || s.serviceNumber,
+        serviceNumber: s.serviceNumber,
         currAmt, prevAmt, currUnits, prevUnits,
         amtDelta, unitsDelta,
         status: s.lastStatus,
@@ -718,7 +730,7 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
 function ServiceTrendChart({ service }) {
   const [view, setView] = useState('amount');
 
-  const { chartData, avgAmount, avgUnits } = useMemo(() => {
+  const { chartData, avg12, avg6 } = useMemo(() => {
     const data = (service.trendData || [])
       .sort((a, b) => a.month.localeCompare(b.month))
       .slice(-12)
@@ -729,13 +741,25 @@ function ServiceTrendChart({ service }) {
         units: Math.round(td.billedUnits || 0),
       }));
     
-    const avgAmount = data.length ? Math.round(data.reduce((s, d) => s + d.amount, 0) / data.length) : 0;
-    const avgUnits  = data.length ? Math.round(data.reduce((s, d) => s + d.units, 0) / data.length) : 0;
+    const calculateAvg = (arr, key) => arr.length ? Math.round(arr.reduce((s, d) => s + d[key], 0) / arr.length) : 0;
 
-    return { chartData: data, avgAmount, avgUnits };
+    const avg12 = {
+      amount: calculateAvg(data, 'amount'),
+      units: calculateAvg(data, 'units')
+    };
+
+    const data6 = data.slice(-6);
+    const avg6 = {
+      amount: calculateAvg(data6, 'amount'),
+      units: calculateAvg(data6, 'units')
+    };
+
+    return { chartData: data, avg12, avg6 };
   }, [service.trendData]);
 
   if (chartData.length < 2) return <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', textAlign: 'center', padding: '20px 0' }}>Not enough data for trend</p>;
+
+  const currentAvg = view === 'amount' ? avg12.amount : avg12.units;
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -759,7 +783,7 @@ function ServiceTrendChart({ service }) {
           <YAxis tickFormatter={view === 'amount' ? fmtK : v => v} tick={{ fontSize: 9, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} width={42} />
           <Tooltip content={<ChartTip />} />
           <ReferenceLine 
-            y={view === 'amount' ? avgAmount : avgUnits} 
+            y={currentAvg} 
             stroke="var(--text-3)" strokeDasharray="3 3" 
             label={{ value: 'avg', position: 'insideTopRight', fill: 'var(--text-3)', fontSize: 8 }} 
           />
@@ -767,9 +791,14 @@ function ServiceTrendChart({ service }) {
         </BarChart>
       </ResponsiveContainer>
       
-      <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', marginTop: 4, textAlign: 'right' }}>
-        Avg: {view === 'amount' ? formatInr(avgAmount) : `${avgUnits} units`}
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 4 }}>
+        <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', margin: 0 }}>
+          12m Avg: <b>{view === 'amount' ? formatInr(avg12.amount) : `${avg12.units} u`}</b>
+        </p>
+        <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', margin: 0 }}>
+          6m Avg: <b>{view === 'amount' ? formatInr(avg6.amount) : `${avg6.units} u`}</b>
+        </p>
+      </div>
     </div>
   );
 }
