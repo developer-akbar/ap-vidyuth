@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   FiGrid, FiZap, FiShare2, FiAlertCircle, FiClock,
   FiTrendingUp, FiTrendingDown, FiMinus, FiCalendar,
@@ -349,9 +349,37 @@ function BudgetRollup({ budgets, activeServices }) {
 // ─── Service Comparison Row ──────────────────────────────────────────────────
 function ComparisonRow({ r, service, currentYear, maxAmt }) {
   const [expanded, setExpanded] = useState(false);
+  const rowRef = useRef(null);
+
+  useEffect(() => {
+    if (expanded && rowRef.current) {
+      // Delay to allow the accordion to start expanding and layout to shift
+      setTimeout(() => {
+        const mainEl = document.querySelector('.main');
+        const headerEl = document.querySelector('.page__header--sticky');
+        
+        if (mainEl && rowRef.current) {
+          const headerHeight = headerEl ? headerEl.offsetHeight : 0;
+          const headerOffset = headerHeight + 8; // Height + small gap
+          
+          const rect = rowRef.current.getBoundingClientRect();
+          const containerRect = mainEl.getBoundingClientRect();
+          
+          // Calculate the distance from the top of the scroll container
+          const relativeTop = rect.top - containerRect.top;
+          
+          mainEl.scrollBy({
+            top: relativeTop - headerOffset,
+            behavior: 'smooth'
+          });
+        }
+      }, 150);
+    }
+  }, [expanded]);
 
   return (
-    <div style={{ 
+    <div ref={rowRef} style={{ 
+      scrollMarginTop: '72px', // Offset for sticky header
       borderBottom: '1px solid var(--border-md)', 
       paddingBottom: expanded ? 0 : 14,
       marginBottom: expanded ? 14 : 0,
