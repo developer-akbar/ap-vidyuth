@@ -3,6 +3,7 @@ import {
   FiGrid, FiZap, FiShare2, FiAlertCircle, FiClock,
   FiTrendingUp, FiTrendingDown, FiMinus, FiCalendar,
   FiCheckCircle, FiAlertTriangle, FiTarget, FiBarChart2,
+  FiChevronDown,
 } from 'react-icons/fi';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -32,8 +33,15 @@ function fmtMoKeyFull(key) {
 }
 
 function fmtK(v) {
-  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000)   return `₹${(v / 1000).toFixed(1)}k`;
+  if (v === 0) return '0';
+  if (v >= 100000) {
+    const val = (v / 100000).toFixed(1);
+    return `₹${val.endsWith('.0') ? val.slice(0, -2) : val}L`;
+  }
+  if (v >= 1000) {
+    const val = (v / 1000).toFixed(1);
+    return `₹${val.endsWith('.0') ? val.slice(0, -2) : val}k`;
+  }
   return `₹${v}`;
 }
 
@@ -338,8 +346,100 @@ function BudgetRollup({ budgets, activeServices }) {
   );
 }
 
+// ─── Service Comparison Row ──────────────────────────────────────────────────
+function ComparisonRow({ r, service, currentYear, maxAmt }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div style={{ 
+      borderBottom: '1px solid var(--border-md)', 
+      paddingBottom: expanded ? 0 : 14,
+      marginBottom: expanded ? 14 : 0,
+      background: expanded ? 'var(--surface-2)' : 'transparent',
+      borderRadius: expanded ? 'var(--radius-sm)' : 0,
+      border: expanded ? '1px solid var(--primary-glow)' : 'none',
+    }}>
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        style={{ 
+          width: '100%', border: 'none', background: 'transparent', 
+          padding: expanded ? '14px 16px 12px' : '0', textAlign: 'left', cursor: 'pointer' 
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{r.name}</p>
+              <FiChevronDown style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-3)', fontSize: '0.75rem' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
+              {r.unitsDelta !== null ? (
+                <span style={{
+                  fontSize: '0.6875rem', fontWeight: 700,
+                  color: r.unitsDelta > 0 ? 'var(--red)' : r.unitsDelta < 0 ? 'var(--green)' : 'var(--text-3)',
+                  display: 'flex', alignItems: 'center', gap: 3,
+                }}>
+                  {r.unitsDelta > 0 ? <FiTrendingUp size={10} /> : r.unitsDelta < 0 ? <FiTrendingDown size={10} /> : <FiMinus size={10} />}
+                  {r.unitsDelta > 0 ? '+' : ''}{Math.round(r.unitsDelta)}% units
+                  <span style={{ fontWeight: 400, color: 'var(--text-3)' }}>
+                    ({r.prevUnits}→{r.currUnits}u)
+                  </span>
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>{r.currUnits} units</span>
+              )}
+              {r.amtDelta !== null && (
+                <span style={{
+                  fontSize: '0.6875rem', fontWeight: 700,
+                  color: r.amtDelta > 0 ? 'var(--red)' : r.amtDelta < 0 ? 'var(--green)' : 'var(--text-3)',
+                }}>
+                  {r.amtDelta > 0 ? '+' : ''}{Math.round(r.amtDelta)}% bill
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-1)' }}>{formatInr(r.currAmt)}</span>
+            {r.prevAmt > 0 && (
+              <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: '2px 0 0' }}>
+                was {formatInr(r.prevAmt)}
+              </p>
+            )}
+          </div>
+        </div>
+        {/* Bar */}
+        <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', borderRadius: 99,
+            width: `${(r.currAmt / maxAmt) * 100}%`,
+            background: r.amtDelta > 25 ? 'var(--red)' : r.amtDelta < -10 ? 'var(--green)' : 'var(--primary)',
+            opacity: 0.8,
+            transition: 'width 0.4s',
+          }} />
+        </div>
+      </button>
+
+      {expanded && (
+        <div style={{ padding: '0 16px 16px', borderTop: 'none' }}>
+           {/* Trend Chart */}
+           <div style={{ marginTop: 16, marginBottom: 20 }}>
+              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trend Analysis</p>
+              <ServiceTrendChart service={service} />
+           </div>
+
+           {/* Year Review */}
+           <div style={{ borderTop: '1px dashed var(--border-md)', paddingTop: 16 }}>
+              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{currentYear} Service Review</p>
+              <YearInReview activeServices={[service]} currentYear={currentYear} forceOpen={true} hideToggle={true} hideMonthlyChart={true} />
+           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Month-over-month comparison table ───────────────────────────────────────
-function MonthComparison({ activeServices }) {
+function MonthComparison({ activeServices, currentYear }) {
   const rows = useMemo(() => {
     return activeServices.map(s => {
       const trend = (s.trendData || []).slice().sort((a, b) => b.month.localeCompare(a.month));
@@ -360,6 +460,7 @@ function MonthComparison({ activeServices }) {
         currAmt, prevAmt, currUnits, prevUnits,
         amtDelta, unitsDelta,
         status: s.lastStatus,
+        service: s, // keep ref
       };
     }).filter(r => r.currAmt > 0 || r.currUnits > 0);
   }, [activeServices]);
@@ -373,62 +474,12 @@ function MonthComparison({ activeServices }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
         <FiBarChart2 size={14} color="var(--primary)" />
         <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>
-          This Month vs Last Month
+          Performance & Detailed Breakdown
         </p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {rows.map(r => (
-          <div key={r.id}>
-            {/* Name + amounts */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-              <div>
-                <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{r.name}</p>
-                <div style={{ display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
-                  {r.unitsDelta !== null ? (
-                    <span style={{
-                      fontSize: '0.6875rem', fontWeight: 700,
-                      color: r.unitsDelta > 0 ? 'var(--red)' : r.unitsDelta < 0 ? 'var(--green)' : 'var(--text-3)',
-                      display: 'flex', alignItems: 'center', gap: 3,
-                    }}>
-                      {r.unitsDelta > 0 ? <FiTrendingUp size={10} /> : r.unitsDelta < 0 ? <FiTrendingDown size={10} /> : <FiMinus size={10} />}
-                      {r.unitsDelta > 0 ? '+' : ''}{Math.round(r.unitsDelta)}% units
-                      <span style={{ fontWeight: 400, color: 'var(--text-3)' }}>
-                        ({r.prevUnits}→{r.currUnits}u)
-                      </span>
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>{r.currUnits} units</span>
-                  )}
-                  {r.amtDelta !== null && (
-                    <span style={{
-                      fontSize: '0.6875rem', fontWeight: 700,
-                      color: r.amtDelta > 0 ? 'var(--red)' : r.amtDelta < 0 ? 'var(--green)' : 'var(--text-3)',
-                    }}>
-                      {r.amtDelta > 0 ? '+' : ''}{Math.round(r.amtDelta)}% bill
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-1)' }}>{formatInr(r.currAmt)}</span>
-                {r.prevAmt > 0 && (
-                  <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: '2px 0 0' }}>
-                    was {formatInr(r.prevAmt)}
-                  </p>
-                )}
-              </div>
-            </div>
-            {/* Bar */}
-            <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', borderRadius: 99,
-                width: `${(r.currAmt / maxAmt) * 100}%`,
-                background: r.amtDelta > 25 ? 'var(--red)' : r.amtDelta < -10 ? 'var(--green)' : 'var(--primary)',
-                opacity: 0.8,
-                transition: 'width 0.4s',
-              }} />
-            </div>
-          </div>
+          <ComparisonRow key={r.id} r={r} service={r.service} currentYear={currentYear} maxAmt={maxAmt} />
         ))}
       </div>
     </div>
@@ -436,8 +487,9 @@ function MonthComparison({ activeServices }) {
 }
 
 // ─── Year in Review ───────────────────────────────────────────────────────────
-function YearInReview({ activeServices, currentYear }) {
+function YearInReview({ activeServices, currentYear, forceOpen = false, hideToggle = false, hideMonthlyChart = false }) {
   const [open, setOpen] = useState(false);
+  const isExpanded = forceOpen || open;
 
   const { data, chartData, hasData } = useMemo(() => {
     let totalSpent = 0, totalUnits = 0, onTimePaid = 0, totalBills = 0;
@@ -510,38 +562,42 @@ function YearInReview({ activeServices, currentYear }) {
   };
 
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: hideToggle ? 0 : 24 }}>
       {/* Accordion toggle */}
-      <button
-        onClick={() => setOpen(v => !v)}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          width: '100%', padding: '14px 16px',
-          background: open ? 'var(--primary-dim)' : 'var(--surface-2)',
-          border: `1px solid ${open ? 'var(--primary-glow)' : 'var(--border)'}`,
-          borderRadius: open ? 'var(--radius-sm) var(--radius-sm) 0 0' : 'var(--radius-sm)',
-          cursor: 'pointer',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <FiCalendar size={15} style={{ color: 'var(--primary)' }} />
-          <div style={{ textAlign: 'left' }}>
-            <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{currentYear} Year in Review</p>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>
-              {hasData
-                ? `${formatInr(data.totalSpent)} · ${data.totalUnits.toLocaleString('en-IN')} units`
-                : 'No data yet for this year'}
-            </p>
+      {!hideToggle && (
+        <button
+          onClick={() => setOpen(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            width: '100%', padding: '14px 16px',
+            background: isExpanded ? 'var(--primary-dim)' : 'var(--surface-2)',
+            border: `1px solid ${isExpanded ? 'var(--primary-glow)' : 'var(--border)'}`,
+            borderRadius: isExpanded ? 'var(--radius-sm) var(--radius-sm) 0 0' : 'var(--radius-sm)',
+            cursor: 'pointer',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <FiCalendar size={15} style={{ color: 'var(--primary)' }} />
+            <div style={{ textAlign: 'left' }}>
+              <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{currentYear} Year in Review</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>
+                {hasData
+                  ? `${formatInr(data.totalSpent)} · ${data.totalUnits.toLocaleString('en-IN')} units`
+                  : 'No data yet for this year'}
+              </p>
+            </div>
           </div>
-        </div>
-        <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>{open ? '▲' : '▼'}</span>
-      </button>
+          <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>{isExpanded ? '▲' : '▼'}</span>
+        </button>
+      )}
 
-      {open && hasData && (
+      {isExpanded && hasData && (
         <div style={{
-          padding: 16, background: 'var(--surface-2)',
-          border: '1px solid var(--primary-glow)', borderTop: 'none',
-          borderRadius: '0 0 var(--radius-sm) var(--radius-sm)',
+          padding: hideToggle ? 0 : 16, 
+          background: hideToggle ? 'transparent' : 'var(--surface-2)',
+          border: hideToggle ? 'none' : '1px solid var(--primary-glow)', 
+          borderTop: 'none',
+          borderRadius: hideToggle ? 0 : '0 0 var(--radius-sm) var(--radius-sm)',
         }}>
           {/* 4-stat grid */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
@@ -596,7 +652,7 @@ function YearInReview({ activeServices, currentYear }) {
           )}
 
           {/* Monthly breakdown mini-chart */}
-          {chartData.length >= 2 && (
+          {chartData.length >= 2 && !hideMonthlyChart && (
             <>
               <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', marginBottom: 6 }}>Monthly Breakdown</p>
               <ResponsiveContainer width="100%" height={110}>
@@ -610,20 +666,82 @@ function YearInReview({ activeServices, currentYear }) {
             </>
           )}
 
-          <button
-            onClick={handleShare}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              width: '100%', marginTop: 14, padding: '10px',
-              background: 'var(--primary)', color: '#fff',
-              border: 'none', borderRadius: 'var(--radius-sm)',
-              fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
-            }}
-          >
-            <FiShare2 size={14} /> Share {currentYear} Summary
-          </button>
+          {!hideToggle && (
+            <button
+              onClick={handleShare}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                width: '100%', marginTop: 14, padding: '10px',
+                background: 'var(--primary)', color: '#fff',
+                border: 'none', borderRadius: 'var(--radius-sm)',
+                fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+              }}
+            >
+              <FiShare2 size={14} /> Share {currentYear} Summary
+            </button>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Service Trend Chart ─────────────────────────────────────────────────────
+function ServiceTrendChart({ service }) {
+  const [view, setView] = useState('amount');
+
+  const { chartData, avgAmount, avgUnits } = useMemo(() => {
+    const data = (service.trendData || [])
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-12)
+      .map(td => ({
+        month: td.month,
+        label: fmtMoKey(td.month),
+        amount: Math.round(td.billAmount || 0),
+        units: Math.round(td.billedUnits || 0),
+      }));
+    
+    const avgAmount = data.length ? Math.round(data.reduce((s, d) => s + d.amount, 0) / data.length) : 0;
+    const avgUnits  = data.length ? Math.round(data.reduce((s, d) => s + d.units, 0) / data.length) : 0;
+
+    return { chartData: data, avgAmount, avgUnits };
+  }, [service.trendData]);
+
+  if (chartData.length < 2) return <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', textAlign: 'center', padding: '20px 0' }}>Not enough data for trend</p>;
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {/* View Toggle */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginBottom: 8 }}>
+        {['amount', 'units'].map(v => (
+          <button key={v} onClick={() => setView(v)} style={{
+            padding: '2px 8px', borderRadius: 20, fontSize: '0.625rem', fontWeight: 600, cursor: 'pointer',
+            border: `1px solid ${view === v ? 'var(--primary)' : 'var(--border-md)'}`,
+            background: view === v ? 'var(--primary-dim)' : 'transparent',
+            color: view === v ? 'var(--primary)' : 'var(--text-3)',
+          }}>
+            {v === 'amount' ? '₹ Bill' : '⚡ Units'}
+          </button>
+        ))}
+      </div>
+
+      <ResponsiveContainer width="100%" height={150}>
+        <BarChart data={chartData} margin={{ top: 5, right: 4, left: -22, bottom: 0 }} barSize={12}>
+          <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} />
+          <YAxis tickFormatter={view === 'amount' ? fmtK : v => v} tick={{ fontSize: 9, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} width={42} />
+          <Tooltip content={<ChartTip />} />
+          <ReferenceLine 
+            y={view === 'amount' ? avgAmount : avgUnits} 
+            stroke="var(--text-3)" strokeDasharray="3 3" 
+            label={{ value: 'avg', position: 'insideTopRight', fill: 'var(--text-3)', fontSize: 8 }} 
+          />
+          <Bar dataKey={view} name={view} fill={view === 'amount' ? 'var(--primary)' : 'var(--cyan)'} radius={[2, 2, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+      
+      <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', marginTop: 4, textAlign: 'right' }}>
+        Avg: {view === 'amount' ? formatInr(avgAmount) : `${avgUnits} units`}
+      </p>
     </div>
   );
 }
@@ -793,7 +911,7 @@ export function OverviewTab({ electricityContext }) {
       </div>
 
       {/* ── Month-over-month comparison ─────────────────── */}
-      <MonthComparison activeServices={activeServices} />
+      <MonthComparison activeServices={activeServices} currentYear={currentYear} />
 
       {/* ── Aggregate trend chart ───────────────────────── */}
       <AggregateTrendChart activeServices={activeServices} />

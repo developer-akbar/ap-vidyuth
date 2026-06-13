@@ -18,7 +18,18 @@ function ChartTip({ active, payload, label }) {
   );
 }
 
-function fmtK(v) { return v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`; }
+function fmtK(v) {
+  if (v === 0) return '0';
+  if (v >= 100000) {
+    const val = (v / 100000).toFixed(1);
+    return `₹${val.endsWith('.0') ? val.slice(0, -2) : val}L`;
+  }
+  if (v >= 1000) {
+    const val = (v / 1000).toFixed(1);
+    return `₹${val.endsWith('.0') ? val.slice(0, -2) : val}k`;
+  }
+  return `₹${v}`;
+}
 
 export function TrendChart({ chartData, view, insights }) {
   if (view === 'amount') {
