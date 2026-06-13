@@ -88,10 +88,16 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
         const toAdd = [];
 
         // Restore settings for existing, prepare bulk add for new
+        const nowMonth = new Date().toISOString().slice(0, 7); // e.g. "2026-06"
+        const readingCutoff = Date.now() - 45 * 24 * 60 * 60 * 1000;
+
         for (const entry of validEntries) {
           const sn = entry.serviceNumber;
           const inActive = services.find(s => s.serviceNumber === sn);
           const inTrash = trash.find(t => t.serviceNumber === sn);
+
+          const backupMonth = entry.lastBillDate ? entry.lastBillDate.slice(0, 7) : null;
+          const isCurrentPeriod = backupMonth === nowMonth;
 
           if (inActive || inTrash) {
             skipCount++;
@@ -99,14 +105,23 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
               const patch = {};
               if (entry.label && !inActive.label) patch.label = entry.label;
               if (entry.pinned) patch.pinned = true;
-              if (entry.billTime) patch.billTime = entry.billTime;
-              if (entry.billNoPrefix) patch.billNoPrefix = entry.billNoPrefix;
+              
+              // Only restore month-specific data if it's from the current period
+              if (isCurrentPeriod) {
+                if (entry.billTime) patch.billTime = entry.billTime;
+                if (entry.billNoPrefix) patch.billNoPrefix = entry.billNoPrefix;
+              }
+
               if (Object.keys(patch).length > 0) {
                 await actions.update(inActive.id, patch);
               }
             }
             if (entry.meterReadings && entry.meterReadings.length > 0) {
-              await db.setSetting(`readings_${sn}`, entry.meterReadings);
+              // Handle meter readings: Filter for freshness
+              const freshReadings = entry.meterReadings.filter(r => new Date(r.date).getTime() > readingCutoff);
+              if (freshReadings.length > 0) {
+                await db.setSetting(`readings_${sn}`, freshReadings);
+              }
             }
           } else {
             toAdd.push({ number: sn, label: entry.label, pinned: !!entry.pinned, entryData: entry });
@@ -136,15 +151,25 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
                    failCount++;
                  } else {
                    successCount++;
-                   // Restore meter readings and billTime for newly added service
+                   // Restore meter readings and billTime for newly added service (period-aware)
                    const originalEntry = toAdd.find(a => a.number === result.serviceNumber)?.entryData;
                    if (originalEntry) {
                      const patch = {};
-                     if (originalEntry.billTime) patch.billTime = originalEntry.billTime;
-                     if (originalEntry.billNoPrefix) patch.billNoPrefix = originalEntry.billNoPrefix;
-                     if (Object.keys(patch).length > 0) await actions.update(result.id, patch);
+                     const backupMonth = originalEntry.lastBillDate ? originalEntry.lastBillDate.slice(0, 7) : null;
+                     const isCurrentPeriod = backupMonth === nowMonth;
+
+                     if (isCurrentPeriod) {
+                       if (originalEntry.billTime) patch.billTime = originalEntry.billTime;
+                       if (originalEntry.billNoPrefix) patch.billNoPrefix = originalEntry.billNoPrefix;
+                       if (Object.keys(patch).length > 0) await actions.update(result.id, patch);
+                     }
                      
-                     if (originalEntry.meterReadings?.length > 0) await db.setSetting(`readings_${result.serviceNumber}`, originalEntry.meterReadings);
+                     if (originalEntry.meterReadings?.length > 0) {
+                       const freshReadings = originalEntry.meterReadings.filter(r => new Date(r.date).getTime() > readingCutoff);
+                       if (freshReadings.length > 0) {
+                         await db.setSetting(`readings_${result.serviceNumber}`, freshReadings);
+                       }
+                     }
                    }
                  }
                }
