@@ -10,7 +10,13 @@ import {
   ResponsiveContainer, Cell, ReferenceLine,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
-import { formatInr, generateShareTable } from '../../shared/utils/index.js';
+import { 
+  formatInr, 
+  generateShareTable, 
+  formatIndianCurrency, 
+  formatShareDate, 
+  generatePlainShareTable 
+} from '../../shared/utils/index.js';
 import { db } from '../../shared/db/storage.js';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
@@ -613,15 +619,33 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
   }, [activeServices, currentYear]);
 
   const handleShare = async () => {
-    const { totalSpent, totalUnits, maxMo, minMo, bestService } = data;
+    const { totalSpent, totalUnits, maxMo, minMo, bestService, bestRate } = data;
+    
+    // Find the cost-per-unit for the best service
+    // In our ranking, bestRate is currently avg units per month.
+    // The prompt asks for (₹X.XX/unit) in the share message.
+    let bestServiceCostPerUnit = 0;
+    const winner = activeServices.find(s => (s.label || s.customerName || s.serviceNumber) === bestService);
+    if (winner) {
+      let svcAmt = 0, svcUnits = 0;
+      (winner.trendData || []).forEach(td => {
+        if (parseInt(td.month.split('-')[0], 10) === currentYear) {
+          svcAmt += Number(td.billAmount || 0);
+          svcUnits += Number(td.billedUnits || 0);
+        }
+      });
+      if (svcUnits > 0) bestServiceCostPerUnit = svcAmt / svcUnits;
+    }
+
     const text =
-      `⚡ ${currentYear} Electricity Summary\n\n` +
-      `💰 Total Spent: ${formatInr(totalSpent)}\n` +
-      `🔌 Total Units: ${totalUnits.toLocaleString('en-IN')} u\n` +
-      (maxMo ? `📈 Highest: ${fmtMoKeyFull(maxMo[0])} — ${formatInr(maxMo[1].amount)}\n` : '') +
-      (minMo ? `📉 Lowest: ${fmtMoKeyFull(minMo[0])} — ${formatInr(minMo[1].amount)}\n` : '') +
-      (bestService ? `🏆 Most efficient: ${bestService} (₹${data.bestRate.toFixed(2)}/unit)\n` : '') +
-      `\nTracked via AP Vidyuth`;
+      `⚡ *${currentYear} Electricity Summary*\n\n` +
+      `💰 Total Spent: ${formatIndianCurrency(totalSpent)}\n` +
+      `🔌 Total Units: ${totalUnits.toLocaleString('en-IN')} units\n` +
+      (maxMo ? `📈 Highest: ${fmtMoKeyFull(maxMo[0])} — ${formatIndianCurrency(maxMo[1].amount)}\n` : '') +
+      (minMo ? `📉 Lowest: ${fmtMoKeyFull(minMo[0])} — ${formatIndianCurrency(minMo[1].amount)}\n` : '') +
+      (bestService ? `🏆 Most efficient: ${bestService} (₹${bestServiceCostPerUnit.toFixed(2)}/unit)\n` : '') +
+      `\nhttps://ap-vidyuth.vercel.app\n` +
+      `_Shared via AP Vidyuth_`;
 
     if (Capacitor.getPlatform() !== 'web') {
       try { await Share.share({ title: `${currentYear} Electricity Summary`, text }); return; } catch {}
@@ -904,13 +928,18 @@ export function OverviewTab({ electricityContext }) {
 
   const handleShareSummary = async () => {
     if (!summary) return;
-    const monthYear = new Date().toLocaleString('default', { month: 'short', year: 'numeric' });
+    const monthYear = new Date().toLocaleString('en-IN', { month: 'short', year: 'numeric' });
     const rows = activeServices.map(s => ({
       name: s.label || s.customerName || s.serviceNumber,
       amount: s.lastAmountDue || s.paidAmount || 0,
       units: s.lastBilledUnits || 0,
     })).sort((a, b) => b.amount - a.amount);
-    const text = `*Electricity Bill — ${monthYear}*\n\n${generateShareTable(rows)}\n\nhttps://ap-vidyuth.vercel.app`;
+    
+    const text = `⚡ *Electricity Bill — ${monthYear}*\n\n` + 
+                 `${generatePlainShareTable(rows)}\n\n` +
+                 `https://ap-vidyuth.vercel.app\n` +
+                 `_Shared via AP Vidyuth_`;
+
     if (Capacitor.getPlatform() !== 'web') {
       try { await Share.share({ title: 'Electricity Summary', text }); return; } catch {}
     }

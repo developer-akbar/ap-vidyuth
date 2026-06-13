@@ -14,7 +14,13 @@ import { DailyTip } from './components/DailyTip.jsx';
 import { Toolbar } from './components/Toolbar.jsx';
 import { TrashView } from './components/TrashView.jsx';
 import { filterServices } from './utils/filters.js';
-import { formatInr, generateShareTable } from '../../shared/utils/index.js';
+import { 
+  formatInr, 
+  generateShareTable, 
+  formatIndianCurrency, 
+  formatShareDate, 
+  generatePlainShareTable 
+} from '../../shared/utils/index.js';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog.jsx';
 import { Loader } from '../../shared/components/Loader.jsx';
 import { useTranslation } from 'react-i18next';
@@ -474,7 +480,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
     const selectedServices = currentItems.filter(s => selectedIds.has(s.id));
     if (selectedServices.length === 0) return;
 
-    const monthYear = new Date().toLocaleString('default', { month: 'short', year: 'numeric' });
+    const monthYear = new Date().toLocaleString('en-IN', { month: 'short', year: 'numeric' });
     const sortedServices = [...selectedServices].sort((a, b) => (b.lastAmountDue || 0) - (a.lastAmountDue || 0));
     
     const items = sortedServices.map(s => ({
@@ -483,11 +489,10 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       units: s.lastBilledUnits || 0
     }));
 
-    const tableText = generateShareTable(items);
-
-    const text = `*Electricity Bill for ${monthYear}*\n\n` +
-                 tableText + `\n\n` +
-                 `Link: https://ap-vidyuth.vercel.app`;
+    const text = `⚡ *Electricity Bill — ${monthYear}*\n\n` +
+                 generatePlainShareTable(items) + `\n\n` +
+                 `https://ap-vidyuth.vercel.app\n` +
+                 `_Shared via AP Vidyuth_`;
 
     if (Capacitor.getPlatform() !== 'web') {
       try {
@@ -513,7 +518,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
 
     try {
       await navigator.clipboard.writeText(text);
-      toast.success('Summary copied to clipboard!');
+      toast.success('Summary copied!');
     } catch {
       toast.error('Sharing failed');
     }
@@ -792,24 +797,24 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
     
     let text = '';
     if (isPaid) {
-      text = `⚡ *Electricity Bill Payment Receipt*\n\n` +
-             `*Service No:* ${sn}\n` +
-             `*Name:* ${name}\n` +
-             `*Amount Paid:* ₹${amount}\n` +
-             `*Date:* ${date ? new Date(date).toLocaleDateString('en-IN') : 'N/A'}\n` +
+      text = `⚡ *Electricity Bill — Payment Receipt*\n\n` +
+             `*Service:* ${name}\n` +
+             `*SC No:* ${sn}\n` +
+             `*Amount Paid:* ${formatIndianCurrency(amount)}\n` +
+             `*Paid On:* ${formatShareDate(date)}\n` +
              `*Status:* ✅ Successfully Paid\n\n` +
-             `Link: ${url}\n\n` +
-             `Shared via AP Vidyuth`;
+             `${url}\n` +
+             `_Shared via AP Vidyuth_`;
     } else {
-      text = `⚡ *Electricity Bill Update*\n\n` +
-             `*Service No:* ${sn}\n` +
-             `*Name:* ${name}\n` +
-             `*Amount Due:* ₹${amount}\n` +
-             `*Due Date:* ${date ? new Date(date).toLocaleDateString('en-IN') : 'N/A'}\n` +
-             `*Status:* ⏳ Pending Payment\n\n` +
-             `Please pay your bill to avoid late fees.\n\n` +
-             `Link: ${url}\n\n` +
-             `Shared via AP Vidyuth`;
+      text = `⚡ *Electricity Bill — Amount Due*\n\n` +
+             `*Service:* ${name}\n` +
+             `*SC No:* ${sn}\n` +
+             `*Amount Due:* ${formatIndianCurrency(amount)}\n` +
+             `*Due Date:* ${formatShareDate(date)}\n` +
+             `*Status:* ⏳ Payment Pending\n\n` +
+             `Late payment may attract additional charges.\n\n` +
+             `${url}\n` +
+             `_Shared via AP Vidyuth_`;
     }
 
     // Try native share first (Capacitor)
@@ -852,21 +857,25 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
     const name = service.customerName || service.label || 'Consumer';
     const sn = service.serviceNumber;
     const trend = insights.vsLastMonth;
-    const trendText = trend ? `(${trend.amountPct > 0 ? '📈 +' : '📉 '}${trend.amountPct}% vs last month)` : '';
+    const trendText = trend ? `${trend.unitsPct > 0 ? '📈 +' : '📉 '}${Math.round(Math.abs(trend.unitsPct))}% vs last month` : '';
     const url = `https://ap-vidyuth.vercel.app/${sn}`;
+    const monthYear = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
-    const text = `📊 *Electricity Usage Report — ${new Date().toLocaleString('default', { month: 'long' })}*\n\n` +
-                 `*Service:* ${name} (${sn})\n` +
-                 `*Usage:* ${service.lastBilledUnits || 0} Units\n` +
-                 `*Cost:* ₹${service.lastAmountDue || service.billAmount}\n` +
-                 `${trendText}\n\n` +
-                 `*Quick Insights:*\n` +
-                 `• Monthly Average: ₹${insights.avgAmount}\n` +
-                 `• Highest ever: ₹${insights.maxAmount}\n` +
-                 `• Efficiency: ₹${insights.avgCostPerUnit}/unit\n\n` +
-                 `*Next Est:* ~₹${insights.predictedNextBill || '...'}\n\n` +
-                 `Link: ${url}\n\n` +
-                 `Shared via AP Vidyuth`;
+    let text = `📊 *Electricity Usage — ${monthYear}*\n\n` +
+               `*Service:* ${name} (${sn})\n` +
+               `*Units Used:* ${service.lastBilledUnits || 0} units  ${trendText}\n` +
+               `*Amount:* ${formatIndianCurrency(service.lastAmountDue || service.billAmount)}\n\n` +
+               `*Insights:*\n` +
+               `- Avg monthly spend: ${formatIndianCurrency(insights.avgAmount)}\n` +
+               `- Highest on record: ${formatIndianCurrency(insights.maxAmount)}\n` +
+               `- Cost per unit: ₹${Number(insights.avgCostPerUnit || 0).toFixed(2)}\n`;
+
+    if (insights.predictedNextBill) {
+      text += `\n*Next bill estimate:* ~${formatIndianCurrency(insights.predictedNextBill)}\n`;
+    }
+
+    text += `\n${url}\n` +
+            `_Shared via AP Vidyuth_`;
 
     if (Capacitor.getPlatform() !== 'web') {
       try {
