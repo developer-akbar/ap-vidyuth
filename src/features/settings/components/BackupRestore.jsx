@@ -36,6 +36,7 @@ export function BackupRestore({ electricityContext }) {
         pinned: s.pinned,
         billTime: s.billTime,
         billNoPrefix: s.billNoPrefix,
+        lastBillDate: s.lastBillDate || s.billDate,
         meterReadings: readings
       };
     }));
