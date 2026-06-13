@@ -385,6 +385,9 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
     }
   }, [expanded]);
 
+  const isDomestic = (service.serviceNumber || '').startsWith('5') || (service.serviceNumber || '').startsWith('12') || (service.serviceNumber || '').startsWith('11');
+  const serviceType = isDomestic ? 'LT-I' : 'LT-II';
+
   return (
     <div ref={rowRef} style={{ 
       scrollMarginTop: '72px', // Offset for sticky header
@@ -394,11 +397,13 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
       background: expanded ? 'var(--surface-2)' : 'transparent',
       borderRadius: expanded ? 'var(--radius-sm)' : 0,
       border: expanded ? '1px solid var(--primary-glow)' : 'none',
+      transition: 'background 0.2s',
     }}>
       <button 
         onClick={() => setExpanded(!expanded)}
         style={{ 
-          width: '100%', border: 'none', background: 'transparent', 
+          width: '100%', border: 'none', 
+          background: expanded ? 'var(--primary-dim)' : 'transparent', 
           padding: expanded ? '14px 16px 12px' : '0', textAlign: 'left', cursor: 'pointer' 
         }}
       >
@@ -411,7 +416,13 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
                 </p>
                 <FiChevronDown style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-3)', fontSize: '0.75rem' }} />
               </div>
-              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>{r.serviceNumber}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>{r.serviceNumber}</span>
+                <span style={{ 
+                  fontSize: '0.6rem', fontWeight: 700, padding: '1px 5px', borderRadius: 4, 
+                  background: 'var(--surface-3)', color: 'var(--text-3)', letterSpacing: '0.02em' 
+                }}>{serviceType}</span>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
               {r.unitsDelta !== null ? (
@@ -441,11 +452,12 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
           </div>
           <div style={{ textAlign: 'right' }}>
             <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-1)' }}>{formatInr(r.currAmt)}</span>
-            {r.prevAmt > 0 && (
-              <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: '2px 0 0' }}>
-                was {formatInr(r.prevAmt)}
-              </p>
-            )}
+            <p style={{ 
+              fontSize: '0.6875rem', fontWeight: 700, margin: '2px 0 0',
+              color: r.status === 'PAID' ? 'var(--green)' : 'var(--red)' 
+            }}>
+              {r.status === 'PAID' ? 'PAID' : 'DUE'}
+            </p>
           </div>
         </div>
         {/* Bar */}
@@ -462,8 +474,20 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
 
       {expanded && (
         <div style={{ padding: '0 16px 16px', borderTop: 'none' }}>
+           {/* Summary Stats */}
+           <div style={{ marginTop: 12, marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center' }}>
+             {service.lastDueDate && r.status !== 'PAID' && (
+               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-3)', padding: '4px 10px', borderRadius: 'var(--radius-sm)' }}>
+                 <FiCalendar size={13} color="var(--text-3)" />
+                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-2)' }}>
+                   Due: {new Date(service.lastDueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                 </span>
+               </div>
+             )}
+           </div>
+
            {/* Trend Chart */}
-           <div style={{ marginTop: 16, marginBottom: 20 }}>
+           <div style={{ marginBottom: 20 }}>
               <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trend Analysis (12 Months)</p>
               <ServiceTrendChart service={service} />
            </div>
@@ -646,38 +670,37 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
           borderTop: 'none',
           borderRadius: hideToggle ? 0 : '0 0 var(--radius-sm) var(--radius-sm)',
         }}>
-          {/* Responsive stats grid */}
+          {/* Responsive stats flex container for perfect space-filling */}
           <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
+            display: 'flex', 
+            flexWrap: 'wrap', 
             gap: 10, 
             marginBottom: 14 
           }}>
+            {/* Stat chips that fill row space */}
             {[
               { label: 'Total Spent',    val: formatInr(data.totalSpent),                          color: 'var(--primary)' },
               { label: 'Total Units',    val: `${data.totalUnits.toLocaleString('en-IN')} u`,       color: 'var(--text-1)' },
               { label: 'Highest Month',  val: fmtMoKeyFull(data.maxMo?.[0]),                        sub: formatInr(data.maxMo?.[1]?.amount || 0), color: 'var(--red)' },
               { label: 'Lowest Month',   val: fmtMoKeyFull(data.minMo?.[0]),                        sub: formatInr(data.minMo?.[1]?.amount || 0), color: 'var(--green)' },
             ].map(({ label, val, sub, color }) => (
-              <div key={label} style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <div key={label} style={{ 
+                flex: '1 1 130px', // Small basis to fit exactly 2 columns on most phones
+                padding: '10px 12px', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' 
+              }}>
                 <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>{label}</p>
                 <p style={{ fontSize: '1rem', fontWeight: 700, color, margin: 0 }}>{val}</p>
                 {sub && <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', margin: '2px 0 0' }}>{sub}</p>}
               </div>
             ))}
 
-            {/* On-time payment score - Slide into space if available, else new row */}
+            {/* On-time payment rate - Fills remaining space in current row or full width if alone */}
             {data.totalBills > 0 && (
               <div style={{
+                flex: '1 1 280px', // Wide basis forces wrap on mobile but shares row on desktop with 3+ columns
                 padding: '10px 12px',
                 background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                gridColumn: '1 / -1', // Default to full width
-                // At widths where 3 columns fit (approx 460px+ container), or 2 columns fit exactly,
-                // we want it to span only what's needed or remaining.
-                // However, 'auto-fill' with a spanning item can be tricky.
-                // Reverting to a more flexible spanning strategy:
-                flex: '1 1 140px',
               }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 2px' }}>On-time Payment Rate</p>
@@ -811,10 +834,10 @@ function ServiceTrendChart({ service }) {
       </ResponsiveContainer>
       
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 4 }}>
-        <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>
           12m Avg: <b>{view === 'amount' ? formatInr(avg12.amount) : `${avg12.units} u`}</b>
         </p>
-        <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>
           6m Avg: <b>{view === 'amount' ? formatInr(avg6.amount) : `${avg6.units} u`}</b>
         </p>
       </div>
