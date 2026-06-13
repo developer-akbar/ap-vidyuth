@@ -1,109 +1,716 @@
-import { useMemo, useState } from 'react';
-import { FiGrid, FiZap, FiBarChart2, FiAward, FiShare2, FiCalendar, FiTrendingUp, FiStar } from 'react-icons/fi';
+import { useMemo, useState, useEffect } from 'react';
+import {
+  FiGrid, FiZap, FiShare2, FiAlertCircle, FiClock,
+  FiTrendingUp, FiTrendingDown, FiMinus, FiCalendar,
+  FiCheckCircle, FiAlertTriangle, FiTarget, FiBarChart2,
+} from 'react-icons/fi';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, Cell, ReferenceLine,
+} from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { formatInr, generateShareTable } from '../../shared/utils/index.js';
+import { db } from '../../shared/db/storage.js';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 import toast from 'react-hot-toast';
 import { Loader } from '../../shared/components/Loader.jsx';
 
-export function OverviewTab({ electricityContext }) {
-  const { t } = useTranslation();
-  const { services, loading } = electricityContext;
-  const [showYearReview, setShowYearReview] = useState(false);
+// ─── Constants ────────────────────────────────────────────────────────────────
+const MO_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  const activeServices = useMemo(() => services.filter(s => !s.isDeleted), [services]);
+function fmtMoKey(key) {
+  if (!key) return '—';
+  const [, mo] = key.split('-');
+  return MO_SHORT[parseInt(mo, 10) - 1];
+}
 
-  const overviewData = useMemo(() => {
-    if (activeServices.length === 0) return null;
+function fmtMoKeyFull(key) {
+  if (!key) return '—';
+  const [yr, mo] = key.split('-');
+  return `${MO_SHORT[parseInt(mo, 10) - 1]} ${yr}`;
+}
 
-    let totalDue = 0;
-    let totalUnitsThisMonth = 0;
-    let totalSpentThisYear = 0;
-    let totalUnitsThisYear = 0;
-    
-    const currentYear = new Date().getFullYear();
+function fmtK(v) {
+  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000)   return `₹${(v / 1000).toFixed(1)}k`;
+  return `₹${v}`;
+}
 
-    const comparisons = activeServices.map(s => {
-      const units = s.lastBilledUnits || 0;
-      const amt = s.lastAmountDue || s.paidAmount || 0;
-      const rate = units > 0 ? amt / units : 0;
-      
-      totalDue += (s.lastStatus === 'DUE' ? (s.lastAmountDue || 0) : 0);
-      totalUnitsThisMonth += units;
+// ─── Delta badge ─────────────────────────────────────────────────────────────
+function Delta({ current, previous, unit = '' }) {
+  if (!previous || previous === 0) return null;
+  const diff = current - previous;
+  const pct  = Math.round(Math.abs(diff / previous) * 100);
+  if (pct === 0) return <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>Same as last month</span>;
+  const up = diff > 0;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontSize: '0.6875rem', fontWeight: 700,
+      color: up ? 'var(--red)' : 'var(--green)',
+    }}>
+      {up ? <FiTrendingUp size={11} /> : <FiTrendingDown size={11} />}
+      {up ? '+' : '−'}{pct}% vs last month
+      {unit ? ` (${unit})` : ''}
+    </span>
+  );
+}
 
-      // Calculate year totals
-      if (s.paymentHistory) {
-        s.paymentHistory.forEach(ph => {
-          if (new Date(ph.date).getFullYear() === currentYear) {
-            totalSpentThisYear += Number(ph.amount);
-          }
-        });
+// ─── Aggregate chart tooltip ──────────────────────────────────────────────────
+function ChartTip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="ctip">
+      <p className="ctip__label">{label}</p>
+      {payload.map(p => (
+        <p key={p.name} style={{ color: p.color, margin: 0, fontSize: '0.75rem' }}>
+          {p.name === 'amount' ? formatInr(p.value) : `${p.value} u`}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// ─── Aggregate trend chart (all services combined) ────────────────────────────
+function AggregateTrendChart({ activeServices }) {
+  const [view, setView] = useState('amount');
+
+  const { chartData, avgAmount, avgUnits } = useMemo(() => {
+    // Build a map of month → { amount, units }
+    const map = {};
+    activeServices.forEach(s => {
+      (s.trendData || []).forEach(td => {
+        if (!map[td.month]) map[td.month] = { amount: 0, units: 0 };
+        map[td.month].amount += Number(td.billAmount || 0);
+        map[td.month].units  += Number(td.billedUnits || 0);
+      });
+    });
+    const entries = Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12); // last 12 months
+
+    if (entries.length === 0) return { chartData: [], avgAmount: 0, avgUnits: 0 };
+
+    const data = entries.map(([month, v]) => ({
+      month,
+      label: fmtMoKey(month),
+      amount: Math.round(v.amount),
+      units:  Math.round(v.units),
+    }));
+
+    const avgAmount = Math.round(data.reduce((s, d) => s + d.amount, 0) / data.length);
+    const avgUnits  = Math.round(data.reduce((s, d) => s + d.units,  0) / data.length);
+
+    return { chartData: data, avgAmount, avgUnits };
+  }, [activeServices]);
+
+  if (chartData.length < 2) return null;
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const isCurrentBar = (d) => d.month === currentMonth;
+
+  return (
+    <div className="scard" style={{ padding: '16px', marginBottom: 16 }}>
+      {/* Header + toggle */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>
+          Household Trend{activeServices.length > 1 ? ` — ${activeServices.length} services` : ''}
+        </p>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['amount', 'units'].map(v => (
+            <button key={v} onClick={() => setView(v)} style={{
+              padding: '3px 10px', borderRadius: 20, fontSize: '0.6875rem', fontWeight: 600, cursor: 'pointer',
+              border: `1px solid ${view === v ? 'var(--primary)' : 'var(--border-md)'}`,
+              background: view === v ? 'var(--primary-dim)' : 'transparent',
+              color: view === v ? 'var(--primary)' : 'var(--text-3)',
+            }}>
+              {v === 'amount' ? '₹ Bill' : '⚡ Units'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ResponsiveContainer width="100%" height={140}>
+        <BarChart data={chartData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }} barSize={14}>
+          <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} />
+          <YAxis
+            tickFormatter={view === 'amount' ? fmtK : v => v}
+            tick={{ fontSize: 9, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} width={40}
+          />
+          <Tooltip content={<ChartTip />} />
+          <ReferenceLine
+            y={view === 'amount' ? avgAmount : avgUnits}
+            stroke="var(--text-3)" strokeDasharray="3 3"
+            label={{ value: 'avg', fontSize: 8, fill: 'var(--text-3)', position: 'insideTopRight' }}
+          />
+          <Bar dataKey={view} name={view} radius={[3, 3, 0, 0]}>
+            {chartData.map((d, i) => (
+              <Cell
+                key={i}
+                fill={isCurrentBar(d) ? 'var(--amber)' : 'var(--primary)'}
+                fillOpacity={isCurrentBar(d) ? 1 : 0.7}
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+
+      {/* Average annotation */}
+      <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginTop: 6, textAlign: 'right' }}>
+        12-mo avg: {view === 'amount' ? formatInr(avgAmount) : `${avgUnits} units`}
+        {' · '}
+        <span style={{ color: 'var(--amber)', fontWeight: 600 }}>■</span> = current month
+      </p>
+    </div>
+  );
+}
+
+// ─── Attention cards ──────────────────────────────────────────────────────────
+function AttentionSection({ activeServices }) {
+  const items = useMemo(() => {
+    const now = new Date();
+    const results = [];
+
+    activeServices.forEach(s => {
+      const name = s.label || s.customerName || s.serviceNumber;
+
+      // Overdue
+      if (s.lastStatus === 'DUE' && s.lastDueDate) {
+        const due = new Date(s.lastDueDate);
+        const daysOverdue = Math.floor((now - due) / 86400000);
+        if (daysOverdue > 0) {
+          results.push({
+            id: s.id, priority: 1, icon: <FiAlertCircle size={15} />, color: 'var(--red)',
+            bg: 'var(--red-dim)',
+            text: `${name} — overdue by ${daysOverdue}d`,
+            sub: `${formatInr(s.lastAmountDue)} due since ${due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
+          });
+          return;
+        }
+        // Due within 3 days
+        const daysTil = Math.ceil((due - now) / 86400000);
+        if (daysTil <= 3) {
+          results.push({
+            id: s.id, priority: 2, icon: <FiClock size={15} />, color: 'var(--amber)',
+            bg: 'var(--amber-dim)',
+            text: `${name} — due ${daysTil === 0 ? 'today' : daysTil === 1 ? 'tomorrow' : `in ${daysTil}d`}`,
+            sub: formatInr(s.lastAmountDue),
+          });
+          return;
+        }
       }
-      if (s.trendData) {
-        s.trendData.forEach(td => {
-          if (parseInt(td.month.split('-')[0]) === currentYear) {
-            totalUnitsThisYear += Number(td.billedUnits || 0);
+
+      // Spike detection: current vs previous month >25%
+      const trend = (s.trendData || []).slice().sort((a, b) => b.month.localeCompare(a.month));
+      if (trend.length >= 2) {
+        const curr = Number(trend[0].billedUnits || 0);
+        const prev = Number(trend[1].billedUnits || 0);
+        if (prev > 0 && curr > 0) {
+          const rise = ((curr - prev) / prev) * 100;
+          if (rise >= 25) {
+            results.push({
+              id: `${s.id}_spike`, priority: 3, icon: <FiTrendingUp size={15} />, color: 'var(--violet)',
+              bg: 'var(--violet-dim)',
+              text: `${name} — usage spike +${Math.round(rise)}%`,
+              sub: `${prev} → ${curr} units vs last month`,
+            });
           }
-        });
+        }
       }
+
+      // Stale data: not refreshed in 7+ days
+      if (s.lastFetchedAt) {
+        const staleDays = Math.floor((now - new Date(s.lastFetchedAt)) / 86400000);
+        if (staleDays >= 7) {
+          results.push({
+            id: `${s.id}_stale`, priority: 4, icon: <FiAlertTriangle size={15} />, color: 'var(--text-3)',
+            bg: 'var(--surface-3)',
+            text: `${name} — data is ${staleDays}d old`,
+            sub: 'Pull to refresh for latest bill',
+          });
+        }
+      }
+    });
+
+    return results.sort((a, b) => a.priority - b.priority).slice(0, 5);
+  }, [activeServices]);
+
+  if (items.length === 0) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 14px', borderRadius: 'var(--radius-sm)',
+        background: 'var(--green-dim)', border: '1px solid var(--green)',
+        marginBottom: 16,
+      }}>
+        <FiCheckCircle size={16} color="var(--green)" />
+        <span style={{ fontSize: '0.8125rem', color: 'var(--green)', fontWeight: 600 }}>
+          All services are up to date — nothing needs attention
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+      {items.map(item => (
+        <div key={item.id} style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+          background: item.bg, border: `1px solid ${item.color}22`,
+        }}>
+          <span style={{ color: item.color, marginTop: 1, flexShrink: 0 }}>{item.icon}</span>
+          <div>
+            <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{item.text}</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: '2px 0 0' }}>{item.sub}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Budget rollup ────────────────────────────────────────────────────────────
+function BudgetRollup({ budgets, activeServices }) {
+  const items = useMemo(() => {
+    return activeServices
+      .map(s => {
+        const budget = budgets[s.serviceNumber];
+        if (!budget) return null;
+        const current = s.lastAmountDue || s.paidAmount || 0;
+        const pct = Math.min(Math.round((current / budget) * 100), 100);
+        const over = current > budget;
+        return {
+          id: s.id,
+          name: s.label || s.customerName || s.serviceNumber,
+          budget, current, pct, over,
+        };
+      })
+      .filter(Boolean);
+  }, [activeServices, budgets]);
+
+  if (items.length === 0) return null;
+
+  const withinCount = items.filter(i => !i.over).length;
+
+  return (
+    <div className="scard" style={{ padding: '14px 16px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FiTarget size={14} color="var(--primary)" />
+          <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>Budget Goals</p>
+        </div>
+        <span style={{
+          fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+          background: withinCount === items.length ? 'var(--green-dim)' : 'var(--amber-dim)',
+          color: withinCount === items.length ? 'var(--green)' : 'var(--amber)',
+        }}>
+          {withinCount}/{items.length} within budget
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {items.map(item => (
+          <div key={item.id}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-2)', fontWeight: 500 }}>{item.name}</span>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: item.over ? 'var(--red)' : 'var(--text-1)' }}>
+                {formatInr(item.current)} / {formatInr(item.budget)}
+              </span>
+            </div>
+            <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 99,
+                width: `${item.pct}%`,
+                background: item.over ? 'var(--red)' : item.pct >= 80 ? 'var(--amber)' : 'var(--green)',
+                transition: 'width 0.4s',
+              }} />
+            </div>
+            {item.over && (
+              <p style={{ fontSize: '0.6875rem', color: 'var(--red)', marginTop: 3 }}>
+                Over by {formatInr(item.current - item.budget)}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Month-over-month comparison table ───────────────────────────────────────
+function MonthComparison({ activeServices }) {
+  const rows = useMemo(() => {
+    return activeServices.map(s => {
+      const trend = (s.trendData || []).slice().sort((a, b) => b.month.localeCompare(a.month));
+      const curr  = trend[0] || null;
+      const prev  = trend[1] || null;
+
+      const currAmt   = Number(curr?.billAmount  || s.lastAmountDue || 0);
+      const prevAmt   = Number(prev?.billAmount   || 0);
+      const currUnits = Number(curr?.billedUnits  || s.lastBilledUnits || 0);
+      const prevUnits = Number(prev?.billedUnits  || 0);
+
+      const amtDelta   = prevAmt   > 0 ? ((currAmt   - prevAmt)   / prevAmt)   * 100 : null;
+      const unitsDelta = prevUnits > 0 ? ((currUnits - prevUnits) / prevUnits) * 100 : null;
 
       return {
         id: s.id,
-        name: s.label || s.customerName || t('untitled'),
-        units,
-        amount: amt,
-        rate
+        name: s.label || s.customerName || s.serviceNumber,
+        currAmt, prevAmt, currUnits, prevUnits,
+        amtDelta, unitsDelta,
+        status: s.lastStatus,
       };
+    }).filter(r => r.currAmt > 0 || r.currUnits > 0);
+  }, [activeServices]);
+
+  if (rows.length === 0) return null;
+
+  const maxAmt = Math.max(...rows.map(r => r.currAmt), 1);
+
+  return (
+    <div className="scard" style={{ padding: '14px 16px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <FiBarChart2 size={14} color="var(--primary)" />
+        <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>
+          This Month vs Last Month
+        </p>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {rows.map(r => (
+          <div key={r.id}>
+            {/* Name + amounts */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+              <div>
+                <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{r.name}</p>
+                <div style={{ display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
+                  {r.unitsDelta !== null ? (
+                    <span style={{
+                      fontSize: '0.6875rem', fontWeight: 700,
+                      color: r.unitsDelta > 0 ? 'var(--red)' : r.unitsDelta < 0 ? 'var(--green)' : 'var(--text-3)',
+                      display: 'flex', alignItems: 'center', gap: 3,
+                    }}>
+                      {r.unitsDelta > 0 ? <FiTrendingUp size={10} /> : r.unitsDelta < 0 ? <FiTrendingDown size={10} /> : <FiMinus size={10} />}
+                      {r.unitsDelta > 0 ? '+' : ''}{Math.round(r.unitsDelta)}% units
+                      <span style={{ fontWeight: 400, color: 'var(--text-3)' }}>
+                        ({r.prevUnits}→{r.currUnits}u)
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>{r.currUnits} units</span>
+                  )}
+                  {r.amtDelta !== null && (
+                    <span style={{
+                      fontSize: '0.6875rem', fontWeight: 700,
+                      color: r.amtDelta > 0 ? 'var(--red)' : r.amtDelta < 0 ? 'var(--green)' : 'var(--text-3)',
+                    }}>
+                      {r.amtDelta > 0 ? '+' : ''}{Math.round(r.amtDelta)}% bill
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-1)' }}>{formatInr(r.currAmt)}</span>
+                {r.prevAmt > 0 && (
+                  <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: '2px 0 0' }}>
+                    was {formatInr(r.prevAmt)}
+                  </p>
+                )}
+              </div>
+            </div>
+            {/* Bar */}
+            <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 99,
+                width: `${(r.currAmt / maxAmt) * 100}%`,
+                background: r.amtDelta > 25 ? 'var(--red)' : r.amtDelta < -10 ? 'var(--green)' : 'var(--primary)',
+                opacity: 0.8,
+                transition: 'width 0.4s',
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Year in Review ───────────────────────────────────────────────────────────
+function YearInReview({ activeServices, currentYear }) {
+  const [open, setOpen] = useState(false);
+
+  const { data, chartData, hasData } = useMemo(() => {
+    let totalSpent = 0, totalUnits = 0, onTimePaid = 0, totalBills = 0;
+    let bestService = null, bestRate = Infinity;
+    let worstService = null, worstRate = 0;
+    const monthlyMap = {};
+
+    activeServices.forEach(s => {
+      let svcUnits = 0, svcAmt = 0;
+      (s.trendData || []).forEach(td => {
+        if (parseInt(td.month.split('-')[0], 10) !== currentYear) return;
+        const units = Number(td.billedUnits || 0);
+        const amt   = Number(td.billAmount   || 0);
+        totalSpent += amt; totalUnits += units;
+        svcUnits += units; svcAmt += amt;
+        if (!monthlyMap[td.month]) monthlyMap[td.month] = { units: 0, amount: 0 };
+        monthlyMap[td.month].units  += units;
+        monthlyMap[td.month].amount += amt;
+      });
+
+      // On-time streaks from billHistory
+      (s.billHistory || []).forEach(b => {
+        if (!b.billDate || parseInt(b.billDate.slice(0, 4), 10) !== currentYear) return;
+        totalBills++;
+        if (b.isPaid && b.paidDate && b.dueDate && new Date(b.paidDate) <= new Date(b.dueDate)) onTimePaid++;
+      });
+
+      const rate = svcUnits > 0 ? svcAmt / svcUnits : null;
+      if (rate !== null) {
+        if (rate < bestRate  && svcUnits > 0) { bestRate  = rate;  bestService  = s.label || s.customerName || s.serviceNumber; }
+        if (rate > worstRate && svcUnits > 0) { worstRate = rate; worstService = s.label || s.customerName || s.serviceNumber; }
+      }
     });
 
-    // Sort comparisons by effective rate
-    comparisons.sort((a, b) => a.rate - b.rate);
+    const entries = Object.entries(monthlyMap).sort(([a], [b]) => a.localeCompare(b));
+    const chartData = entries.map(([month, v]) => ({
+      label: fmtMoKey(month),
+      amount: Math.round(v.amount),
+      units:  Math.round(v.units),
+    }));
 
-    return { totalDue, totalUnitsThisMonth, totalSpentThisYear, totalUnitsThisYear, comparisons, currentYear };
-  }, [activeServices, t]);
+    const maxMo = entries.reduce((best, cur) => (!best || cur[1].amount > best[1].amount) ? cur : best, null);
+    const minMo = entries.reduce((best, cur) => (!best || cur[1].amount < best[1].amount) ? cur : best, null);
 
-  const handleShareSummary = async () => {
-    if (!overviewData) return;
-    
-    const monthYear = new Date().toLocaleString('default', { month: 'short', year: 'numeric' });
-    const sortedByAmount = [...overviewData.comparisons].sort((a, b) => b.amount - a.amount);
-    
-    const tableText = generateShareTable(sortedByAmount);
-    
-    const text = `*Electricity Bill for ${monthYear}*\n\n` +
-                 tableText + `\n\n` +
-                 `Link: https://ap-vidyuth.vercel.app`;
+    return {
+      data: { totalSpent, totalUnits, onTimePaid, totalBills, bestService, bestRate, worstService, worstRate, maxMo, minMo },
+      chartData,
+      hasData: totalSpent > 0,
+    };
+  }, [activeServices, currentYear]);
+
+  const handleShare = async () => {
+    const { totalSpent, totalUnits, maxMo, minMo, bestService } = data;
+    const text =
+      `⚡ ${currentYear} Electricity Summary\n\n` +
+      `💰 Total Spent: ${formatInr(totalSpent)}\n` +
+      `🔌 Total Units: ${totalUnits.toLocaleString('en-IN')} u\n` +
+      (maxMo ? `📈 Highest: ${fmtMoKeyFull(maxMo[0])} — ${formatInr(maxMo[1].amount)}\n` : '') +
+      (minMo ? `📉 Lowest: ${fmtMoKeyFull(minMo[0])} — ${formatInr(minMo[1].amount)}\n` : '') +
+      (bestService ? `🏆 Most efficient: ${bestService} (₹${data.bestRate.toFixed(2)}/unit)\n` : '') +
+      `\nTracked via AP Vidyuth`;
 
     if (Capacitor.getPlatform() !== 'web') {
-      try {
-        await Share.share({ title: 'My Electricity Summary', text });
-        return;
-      } catch (e) { }
+      try { await Share.share({ title: `${currentYear} Electricity Summary`, text }); return; } catch {}
     }
-    
     if (navigator.share) {
-      try {
-        await navigator.share({ title: 'My Electricity Summary', text });
-        return;
-      } catch (e) {}
+      try { await navigator.share({ title: `${currentYear} Electricity Summary`, text }); return; } catch {}
     }
-    
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Summary copied to clipboard!');
-    } catch(e) {
-      toast.error('Failed to copy');
-    }
+    try { await navigator.clipboard.writeText(text); toast.success('Summary copied!'); } catch { toast.error('Copy failed'); }
   };
 
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {/* Accordion toggle */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: '100%', padding: '14px 16px',
+          background: open ? 'var(--primary-dim)' : 'var(--surface-2)',
+          border: `1px solid ${open ? 'var(--primary-glow)' : 'var(--border)'}`,
+          borderRadius: open ? 'var(--radius-sm) var(--radius-sm) 0 0' : 'var(--radius-sm)',
+          cursor: 'pointer',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <FiCalendar size={15} style={{ color: 'var(--primary)' }} />
+          <div style={{ textAlign: 'left' }}>
+            <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{currentYear} Year in Review</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>
+              {hasData
+                ? `${formatInr(data.totalSpent)} · ${data.totalUnits.toLocaleString('en-IN')} units`
+                : 'No data yet for this year'}
+            </p>
+          </div>
+        </div>
+        <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && hasData && (
+        <div style={{
+          padding: 16, background: 'var(--surface-2)',
+          border: '1px solid var(--primary-glow)', borderTop: 'none',
+          borderRadius: '0 0 var(--radius-sm) var(--radius-sm)',
+        }}>
+          {/* 4-stat grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            {[
+              { label: 'Total Spent',    val: formatInr(data.totalSpent),                          color: 'var(--primary)' },
+              { label: 'Total Units',    val: `${data.totalUnits.toLocaleString('en-IN')} u`,       color: 'var(--text-1)' },
+              { label: 'Highest Month',  val: fmtMoKeyFull(data.maxMo?.[0]),                        sub: formatInr(data.maxMo?.[1]?.amount || 0), color: 'var(--red)' },
+              { label: 'Lowest Month',   val: fmtMoKeyFull(data.minMo?.[0]),                        sub: formatInr(data.minMo?.[1]?.amount || 0), color: 'var(--green)' },
+            ].map(({ label, val, sub, color }) => (
+              <div key={label} style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>{label}</p>
+                <p style={{ fontSize: '1rem', fontWeight: 700, color, margin: 0 }}>{val}</p>
+                {sub && <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', margin: '2px 0 0' }}>{sub}</p>}
+              </div>
+            ))}
+          </div>
+
+          {/* On-time payment score */}
+          {data.totalBills > 0 && (
+            <div style={{
+              padding: '10px 12px', marginBottom: 12,
+              background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div>
+                <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 2px' }}>On-time Payment Rate</p>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-2)', margin: 0 }}>{data.onTimePaid} of {data.totalBills} bills paid before due date</p>
+              </div>
+              <span style={{
+                fontSize: '1.125rem', fontWeight: 800,
+                color: data.onTimePaid / data.totalBills >= 0.8 ? 'var(--green)' : 'var(--amber)',
+              }}>
+                {Math.round((data.onTimePaid / data.totalBills) * 100)}%
+              </span>
+            </div>
+          )}
+
+          {/* Efficiency callout */}
+          {data.bestService && activeServices.length > 1 && (
+            <div style={{
+              padding: '8px 12px', marginBottom: 12,
+              background: 'var(--green-dim)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--green)',
+              fontSize: '0.8125rem', color: 'var(--text-1)',
+            }}>
+              🏆 Most efficient connection: <b>{data.bestService}</b> · avg ₹{data.bestRate.toFixed(2)}/unit
+              {data.worstService && data.worstService !== data.bestService && (
+                <span style={{ color: 'var(--text-3)' }}>
+                  {' '}· Highest: <b>{data.worstService}</b> at ₹{data.worstRate.toFixed(2)}/unit
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Monthly breakdown mini-chart */}
+          {chartData.length >= 2 && (
+            <>
+              <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', marginBottom: 6 }}>Monthly Breakdown</p>
+              <ResponsiveContainer width="100%" height={110}>
+                <BarChart data={chartData} margin={{ top: 2, right: 4, left: -22, bottom: 0 }} barSize={10}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} />
+                  <YAxis tickFormatter={fmtK} tick={{ fontSize: 8, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} width={38} />
+                  <Tooltip content={<ChartTip />} />
+                  <Bar dataKey="amount" name="amount" fill="var(--primary)" fillOpacity={0.7} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </>
+          )}
+
+          <button
+            onClick={handleShare}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              width: '100%', marginTop: 14, padding: '10px',
+              background: 'var(--primary)', color: '#fff',
+              border: 'none', borderRadius: 'var(--radius-sm)',
+              fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+            }}
+          >
+            <FiShare2 size={14} /> Share {currentYear} Summary
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+export function OverviewTab({ electricityContext }) {
+  const { t } = useTranslation();
+  const { services, loading } = electricityContext;
+
+  const activeServices = useMemo(() => services.filter(s => !s.isDeleted), [services]);
+
+  // Load all budget goals keyed by serviceNumber from db.getSetting
+  const [budgets, setBudgets] = useState({});
+  useEffect(() => {
+    if (activeServices.length === 0) return;
+    (async () => {
+      const entries = await Promise.all(
+        activeServices.map(async s => {
+          const val = await db.getSetting(`budget_${s.serviceNumber}`);
+          return [s.serviceNumber, val];
+        })
+      );
+      const map = {};
+      entries.forEach(([sn, val]) => { if (val) map[sn] = val; });
+      setBudgets(map);
+    })();
+  }, [activeServices]);
+
+  const summary = useMemo(() => {
+    if (activeServices.length === 0) return null;
+    let totalDue = 0, totalUnitsThisMonth = 0, overdueCount = 0;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    activeServices.forEach(s => {
+      if (s.lastStatus === 'DUE') {
+        totalDue += s.lastAmountDue || 0;
+        const due = s.lastDueDate ? new Date(s.lastDueDate) : null;
+        if (due && due < new Date()) overdueCount++;
+      }
+      // Use trendData current month first, fallback to lastBilledUnits
+      const currTd = (s.trendData || []).find(td => td.month === currentMonth);
+      totalUnitsThisMonth += Number(currTd?.billedUnits || s.lastBilledUnits || 0);
+    });
+
+    // Month-over-month totals for the top delta
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+    const lastMonthKey = lastMonth.toISOString().slice(0, 7);
+    let totalLastMonth = 0;
+    activeServices.forEach(s => {
+      const prevTd = (s.trendData || []).find(td => td.month === lastMonthKey);
+      totalLastMonth += Number(prevTd?.billAmount || 0);
+    });
+    const totalThisMonth = activeServices.reduce((sum, s) => {
+      const currTd = (s.trendData || []).find(td => td.month === currentMonth);
+      return sum + Number(currTd?.billAmount || s.lastAmountDue || 0);
+    }, 0);
+
+    return { totalDue, totalUnitsThisMonth, overdueCount, totalThisMonth, totalLastMonth };
+  }, [activeServices]);
+
+  const handleShareSummary = async () => {
+    if (!summary) return;
+    const monthYear = new Date().toLocaleString('default', { month: 'short', year: 'numeric' });
+    const rows = activeServices.map(s => ({
+      name: s.label || s.customerName || s.serviceNumber,
+      amount: s.lastAmountDue || s.paidAmount || 0,
+      units: s.lastBilledUnits || 0,
+    })).sort((a, b) => b.amount - a.amount);
+    const text = `*Electricity Bill — ${monthYear}*\n\n${generateShareTable(rows)}\n\nhttps://ap-vidyuth.vercel.app`;
+    if (Capacitor.getPlatform() !== 'web') {
+      try { await Share.share({ title: 'Electricity Summary', text }); return; } catch {}
+    }
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Electricity Summary', text }); return; } catch {}
+    }
+    try { await navigator.clipboard.writeText(text); toast.success('Summary copied!'); } catch { toast.error('Copy failed'); }
+  };
+
+  // ── Loading / empty ─────────────────────────────────────────────────────────
   if (loading) {
-    return <div className="page"><div className="state-box"><Loader size={22} /><p>Loading Overview...</p></div></div>;
+    return <div className="page"><div className="state-box"><Loader size={22} /><p>Loading Overview…</p></div></div>;
   }
 
   if (activeServices.length === 0) {
     return (
-      <div className="page" style={{ padding: '24px' }}>
+      <div className="page" style={{ padding: 24 }}>
         <div className="state-box">
           <FiGrid size={28} />
           <h3>No services</h3>
@@ -113,205 +720,90 @@ export function OverviewTab({ electricityContext }) {
     );
   }
 
-  const { totalDue, totalUnitsThisMonth, totalSpentThisYear, totalUnitsThisYear, comparisons, currentYear } = overviewData;
-
-  const maxAmount = Math.max(...comparisons.map(c => c.amount), 1);
+  const currentYear = new Date().getFullYear();
 
   return (
     <div className="page">
-      <div className="page__header page__header--sticky">
+
+      {/* ── Sticky header ─────────────────────────────── */}
+      <header className="page__header page__header--sticky">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
           <div>
             <h2 className="page__title">Overview</h2>
-            <p>Your electricity at a glance</p>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-3)' }}>
+              {activeServices.length} service{activeServices.length !== 1 ? 's' : ''} · {currentYear}
+            </p>
           </div>
-          <button className="icon-btn-ghost" onClick={handleShareSummary} title="Share Summary">
+          <button className="icon-btn-ghost" onClick={handleShareSummary} title="Share this month's summary" aria-label="Share summary">
             <FiShare2 size={20} />
           </button>
         </div>
+      </header>
+
+      {/* ── Top stat cards ─────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+        {/* Amount due now */}
+        <div className="scard" style={{
+          padding: '14px 16px',
+          background: summary.totalDue > 0 ? 'var(--red-dim)' : 'var(--green-dim)',
+          border: `1px solid ${summary.totalDue > 0 ? 'var(--red)' : 'var(--green)'}22`,
+        }}>
+          <p style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px', color: summary.totalDue > 0 ? 'var(--red)' : 'var(--green)' }}>
+            {summary.totalDue > 0 ? `Due Now${summary.overdueCount > 0 ? ` · ${summary.overdueCount} overdue` : ''}` : 'All Paid'}
+          </p>
+          <h2 style={{ fontSize: '1.375rem', margin: 0, color: 'var(--text-1)', lineHeight: 1 }}>
+            {summary.totalDue > 0 ? formatInr(summary.totalDue) : '✓'}
+          </h2>
+          <div style={{ marginTop: 4 }}>
+            <Delta current={summary.totalThisMonth} previous={summary.totalLastMonth} />
+          </div>
+        </div>
+
+        {/* Units this month */}
+        <div className="scard" style={{ padding: '14px 16px', background: 'var(--surface-2)' }}>
+          <p style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px', color: 'var(--text-3)' }}>
+            Units This Month
+          </p>
+          <h2 style={{ fontSize: '1.375rem', margin: 0, color: 'var(--text-1)', lineHeight: 1 }}>
+            {summary.totalUnitsThisMonth.toLocaleString('en-IN')}
+            <span style={{ fontSize: '0.875rem', fontWeight: 400, marginLeft: 4, color: 'var(--text-3)' }}>u</span>
+          </h2>
+          <div style={{ marginTop: 4 }}>
+            {/* units delta across all services */}
+            {(() => {
+              const currentMonth = new Date().toISOString().slice(0, 7);
+              const lastMonth = new Date(); lastMonth.setMonth(lastMonth.getMonth() - 1);
+              const lastMonthKey = lastMonth.toISOString().slice(0, 7);
+              const prevUnits = activeServices.reduce((sum, s) => {
+                const td = (s.trendData || []).find(d => d.month === lastMonthKey);
+                return sum + Number(td?.billedUnits || 0);
+              }, 0);
+              return <Delta current={summary.totalUnitsThisMonth} previous={prevUnits} />;
+            })()}
+          </div>
+        </div>
       </div>
 
-      <div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-          <div className="scard" style={{ padding: '16px', background: 'var(--primary-dim)', border: '1px solid var(--primary-glow)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--primary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 700 }}>Total Spent ({currentYear})</p>
-            <h2 style={{ fontSize: '24px', color: 'var(--text-1)' }}>{formatInr(totalSpentThisYear)}</h2>
-          </div>
-          <div className="scard" style={{ padding: '16px', background: 'var(--surface-2)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--text-3)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 700 }}>Total Units ({currentYear})</p>
-            <h2 style={{ fontSize: '24px', color: 'var(--text-1)' }}>{totalUnitsThisYear.toLocaleString('en-IN')} <span style={{fontSize:'14px', fontWeight:400}}>u</span></h2>
-          </div>
-        </div>
-
-        <h3 style={{ fontSize: '15px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <FiBarChart2 color="var(--primary)" /> Compare Services (This Month)
-        </h3>
-
-        <div className="scard" style={{ padding: '16px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {comparisons.map((c, i) => (
-              <div key={c.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'flex-end' }}>
-                  <div>
-                    <span style={{ fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {i === 0 && comparisons.length > 1 && <FiAward color="var(--amber)" size={14} title="Most Efficient" />}
-                      {c.name}
-                    </span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>{c.units} units • ₹{c.rate.toFixed(2)}/u</span>
-                  </div>
-                  <span style={{ fontSize: '14px', fontWeight: 700 }}>{formatInr(c.amount)}</span>
-                </div>
-                <div style={{ width: '100%', height: '8px', background: 'var(--surface-3)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${(c.amount / maxAmount) * 100}%`, height: '100%', background: i === 0 ? 'var(--green)' : 'var(--primary)', borderRadius: '4px' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Year-in-Review (Feature 11) ── */}
-        <YearInReview activeServices={activeServices} currentYear={currentYear} />
+      {/* ── Attention section ──────────────────────────── */}
+      <div style={{ marginBottom: 4 }}>
+        <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+          Attention
+        </p>
+        <AttentionSection activeServices={activeServices} />
       </div>
-    </div>
-  );
-}
 
-const MO_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      {/* ── Month-over-month comparison ─────────────────── */}
+      <MonthComparison activeServices={activeServices} />
 
-function YearInReview({ activeServices, currentYear }) {
-  const [open, setOpen] = useState(false);
+      {/* ── Aggregate trend chart ───────────────────────── */}
+      <AggregateTrendChart activeServices={activeServices} />
 
-  const reviewData = useMemo(() => {
-    let totalSpent = 0;
-    let totalUnits = 0;
-    let monthlyMap = {};
-    let onTimePaid = 0, totalBills = 0;
-    let bestService = null;
-    let bestRate = Infinity;
+      {/* ── Budget rollup ───────────────────────────────── */}
+      <BudgetRollup budgets={budgets} activeServices={activeServices} />
 
-    activeServices.forEach(s => {
-      let serviceUnits = 0;
-      let serviceAmount = 0;
+      {/* ── Year in Review ─────────────────────────────── */}
+      <YearInReview activeServices={activeServices} currentYear={currentYear} />
 
-      (s.trendData || []).forEach(td => {
-        const year = parseInt(td.month.split('-')[0], 10);
-        if (year === currentYear) {
-          const units = Number(td.billedUnits || 0);
-          const amt = Number(td.billAmount || 0);
-          totalSpent += amt;
-          totalUnits += units;
-          serviceUnits += units;
-          serviceAmount += amt;
-          if (!monthlyMap[td.month]) monthlyMap[td.month] = { units: 0, amount: 0 };
-          monthlyMap[td.month].units += units;
-          monthlyMap[td.month].amount += amt;
-        }
-      });
-
-      (s.paymentHistory || []).forEach(ph => {
-        if (new Date(ph.date).getFullYear() === currentYear) {
-          totalBills++;
-          // We count them as paid (they appear in payment history)
-          onTimePaid++;
-        }
-      });
-
-      const rate = serviceUnits > 0 ? serviceAmount / serviceUnits : Infinity;
-      if (rate < bestRate && serviceUnits > 0) {
-        bestRate = rate;
-        bestService = s.label || s.customerName || s.serviceNumber;
-      }
-    });
-
-    const months = Object.entries(monthlyMap).sort(([a], [b]) => a.localeCompare(b));
-    const maxMonth = months.reduce((best, cur) => (!best || cur[1].amount > best[1].amount) ? cur : best, null);
-    const minMonth = months.reduce((best, cur) => (!best || cur[1].amount < best[1].amount) ? cur : best, null);
-
-    const fmtMo = key => {
-      if (!key) return '—';
-      const [yr, mo] = key.split('-');
-      return `${MO_SHORT[parseInt(mo, 10) - 1]} ${yr}`;
-    };
-
-    return { totalSpent, totalUnits, onTimePaid, totalBills, bestService, bestRate, maxMonth, minMonth, fmtMo, months };
-  }, [activeServices, currentYear]);
-
-  const handleShareReview = async () => {
-    const { totalSpent, totalUnits, maxMonth, minMonth, fmtMo, bestService } = reviewData;
-    const text =
-      `⚡ My ${currentYear} Electricity Summary\n\n` +
-      `💰 Total Spent: ${formatInr(totalSpent)}\n` +
-      `🔌 Total Units: ${totalUnits.toLocaleString('en-IN')} u\n` +
-      `📈 Highest: ${fmtMo(maxMonth?.[0])} — ${formatInr(maxMonth?.[1]?.amount || 0)}\n` +
-      `📉 Lowest: ${fmtMo(minMonth?.[0])} — ${formatInr(minMonth?.[1]?.amount || 0)}\n` +
-      (bestService ? `🏆 Most Efficient: ${bestService}\n` : '') +
-      `\nTracked via AP Vidyuth`;
-
-    if (Capacitor.getPlatform() !== 'web') {
-      try { await Share.share({ title: `My ${currentYear} Electricity Summary`, text }); return; } catch (e) {}
-    }
-    if (navigator.share) {
-      try { await navigator.share({ title: `My ${currentYear} Electricity Summary`, text }); return; } catch (e) {}
-    }
-    try { await navigator.clipboard.writeText(text); toast.success('Summary copied!'); } catch (e) { toast.error('Copy failed'); }
-  };
-
-  const hasData = reviewData.totalSpent > 0;
-
-  return (
-    <div style={{ marginBottom: '24px' }}>
-      <button
-        onClick={() => setOpen(v => !v)}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          width: '100%', padding: '14px 16px',
-          background: open ? 'var(--primary-dim)' : 'var(--surface-2)',
-          border: `1px solid ${open ? 'var(--primary-glow)' : 'var(--border)'}`,
-          borderRadius: 'var(--radius-sm)', cursor: 'pointer', marginBottom: open ? '0' : undefined
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <FiCalendar size={16} style={{ color: 'var(--primary)' }} />
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-1)' }}>{currentYear} Year in Review</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-3)' }}>
-              {hasData ? `${formatInr(reviewData.totalSpent)} · ${reviewData.totalUnits.toLocaleString('en-IN')} units` : 'No data yet'}
-            </div>
-          </div>
-        </div>
-        <FiStar size={16} style={{ color: open ? 'var(--primary)' : 'var(--text-3)' }} />
-      </button>
-
-      {open && hasData && (
-        <div style={{ padding: '16px', background: 'var(--surface-2)', border: '1px solid var(--primary-glow)', borderTop: 'none', borderRadius: '0 0 var(--radius-sm) var(--radius-sm)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-            {[
-              { label: `Total Spent`, val: formatInr(reviewData.totalSpent), color: 'var(--primary)' },
-              { label: 'Total Units', val: `${reviewData.totalUnits.toLocaleString('en-IN')} u`, color: 'var(--text-1)' },
-              { label: 'Highest', val: `${reviewData.fmtMo(reviewData.maxMonth?.[0])}`, sub: formatInr(reviewData.maxMonth?.[1]?.amount || 0), color: 'var(--red, #ef4444)' },
-              { label: 'Lowest', val: `${reviewData.fmtMo(reviewData.minMonth?.[0])}`, sub: formatInr(reviewData.minMonth?.[1]?.amount || 0), color: 'var(--green, #22c55e)' },
-            ].map(({ label, val, sub, color }) => (
-              <div key={label} style={{ padding: '12px', background: 'var(--surface-1)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>{label}</div>
-                <div style={{ fontSize: '16px', fontWeight: 700, color }}>{val}</div>
-                {sub && <div style={{ fontSize: '11px', color: 'var(--text-2)' }}>{sub}</div>}
-              </div>
-            ))}
-          </div>
-          {reviewData.bestService && (
-            <div style={{ padding: '10px', background: 'rgba(34,197,94,0.08)', border: '1px solid var(--green, #22c55e)', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: 'var(--text-1)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <FiAward size={14} style={{ color: 'var(--amber, #f59e0b)' }} />
-              <span>Most efficient: <b>{reviewData.bestService}</b> (₹{reviewData.bestRate.toFixed(2)}/unit)</span>
-            </div>
-          )}
-          <button
-            onClick={handleShareReview}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '10px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontWeight: 600, fontSize: '13px', cursor: 'pointer', justifyContent: 'center' }}
-          >
-            <FiShare2 size={14} /> Share {currentYear} Summary
-          </button>
-        </div>
-      )}
     </div>
   );
 }
