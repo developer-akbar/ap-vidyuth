@@ -47,6 +47,7 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
           }
           // Clear settings as well
           await db.setSetting('saved_appliances', []);
+          await db.setSetting('saved_appliances_v2', []);
           await db.setSetting('notification_history', []);
           
           // Use empty arrays for local matching
@@ -65,6 +66,9 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
             localStorage.setItem('i18nextLng', meta.language);
           }
           if (meta.appliances) {
+            // Restore to the latest version key
+            await db.setSetting('saved_appliances_v2', meta.appliances);
+            // Also keep legacy for backward compatibility if needed by other components
             await db.setSetting('saved_appliances', meta.appliances);
           }
         }
@@ -96,6 +100,7 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
               if (entry.label && !inActive.label) patch.label = entry.label;
               if (entry.pinned) patch.pinned = true;
               if (entry.billTime) patch.billTime = entry.billTime;
+              if (entry.billNoPrefix) patch.billNoPrefix = entry.billNoPrefix;
               if (Object.keys(patch).length > 0) {
                 await actions.update(inActive.id, patch);
               }
@@ -134,7 +139,11 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
                    // Restore meter readings and billTime for newly added service
                    const originalEntry = toAdd.find(a => a.number === result.serviceNumber)?.entryData;
                    if (originalEntry) {
-                     if (originalEntry.billTime) await actions.update(result.id, { billTime: originalEntry.billTime });
+                     const patch = {};
+                     if (originalEntry.billTime) patch.billTime = originalEntry.billTime;
+                     if (originalEntry.billNoPrefix) patch.billNoPrefix = originalEntry.billNoPrefix;
+                     if (Object.keys(patch).length > 0) await actions.update(result.id, patch);
+                     
                      if (originalEntry.meterReadings?.length > 0) await db.setSetting(`readings_${result.serviceNumber}`, originalEntry.meterReadings);
                    }
                  }
