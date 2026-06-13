@@ -222,31 +222,28 @@ export async function createBulkServices(entries, billdeskSession, onProgress) {
         continue;
       }
 
-      // Create skeleton first so UI can show it as loading
-      const service = await db.create({ serviceNumber: entry.number, label: entry.label, pinned: !!entry.pinned });
-      if (onProgress) await onProgress(done, entries.length);
-
+      // No more early skeleton creation to avoid "ERROR" cards on dashboard
       try {
         const { snapshot } = await apiPost('/services/validate', { serviceNumber: entry.number, billdeskSession });
 
         // FINAL GUARD: If both BillDesk and APSPDCL return nothing, reject it.
         if (!snapshot || snapshot.billDeskSource === 'UNKNOWN') {
-          await db.delete(service.id, true); // Cleanup skeleton
           results.push({ serviceNumber: entry.number, _error: 'Invalid APSPDCL service number' });
           done++;
           if (onProgress) await onProgress(done, entries.length);
           continue;
         }
 
+        // Now create with full snapshot data
+        const service = await db.create({ serviceNumber: entry.number, label: entry.label, pinned: !!entry.pinned });
         const updated = await db.update(service.id, { ...snapshotToPatch(snapshot, service), lastError: null });
+        
         results.push(updated);
         window.dispatchEvent(new Event('db-updated'));
         done++;
         if (onProgress) await onProgress(done, entries.length);
       } catch (err) {
-        await db.update(service.id, { lastError: err.message || 'Failed to add', lastStatus: 'ERROR' });
-        results.push({ serviceNumber: entry.number, id: service.id, _error: err.message || 'Failed to add' });
-        window.dispatchEvent(new Event('db-updated'));
+        results.push({ serviceNumber: entry.number, _error: err.message || 'Failed to add' });
         done++;
         if (onProgress) await onProgress(done, entries.length);
       }

@@ -63,14 +63,15 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
             onClick={toggleLanguage} 
             title={t('language')} 
             aria-label={t('language')}
-            style={{ padding: '0 8px' }}
+            disabled={refreshingAll}
+            style={{ padding: '0 8px', opacity: refreshingAll ? 0.6 : 1 }}
           >
             <FiGlobe size={15} />
             <span className="hide-mobile-sm" style={{ marginLeft: '4px' }}>{isTelugu ? 'English' : 'తెలుగు'}</span>
             <span className="show-mobile-sm" style={{ marginLeft: '4px', fontSize: '11px', fontWeight: '800' }}>{isTelugu ? 'En' : 'తె'}</span>
           </button>
 
-          <button className="btn btn--primary btn--sm" onClick={onAdd} aria-label={t('add_service')}>
+          <button className="btn btn--primary btn--sm" onClick={onAdd} disabled={refreshingAll} aria-label={t('add_service')} style={{ opacity: refreshingAll ? 0.6 : 1 }}>
             <FiPlus size={15} />
             <span style={{ marginLeft: '4px' }}>{t('add')}</span>
           </button>

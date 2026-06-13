@@ -477,6 +477,8 @@ export function ServiceCard({
                 onClick={(e) => { e.stopPropagation(); onCalculateBill?.(service); }}
                 title="Calculator"
                 aria-label="Calculator"
+                disabled={refreshing}
+                style={refreshing ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
                 <LuCalculator size={14} />
               </button>
@@ -484,8 +486,8 @@ export function ServiceCard({
                 className="btn btn--pay btn--sm" 
                 onClick={handlePayClick} 
                 aria-label={t('pay_now')}
-                disabled={isOffline}
-                style={isOffline ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                disabled={isOffline || refreshing}
+                style={(isOffline || refreshing) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
                 {t('pay_now')}
               </button>
@@ -496,6 +498,8 @@ export function ServiceCard({
                 className="btn btn--secondary btn--sm" 
                 onClick={(e) => { e.stopPropagation(); onShowQR?.(service); }}
                 aria-label={t('show_qr')}
+                disabled={refreshing}
+                style={refreshing ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >      
                 <BsQrCode size={14} /> <span className="hide-mobile-sm" style={{marginLeft:'4px'}}>QR</span>
               </button>
@@ -503,6 +507,8 @@ export function ServiceCard({
                 className="btn btn--secondary btn--sm" 
                 onClick={(e) => { e.stopPropagation(); onCalculateBill?.(service); }}
                 aria-label={t('calculate_next_bill')}
+                disabled={refreshing}
+                style={refreshing ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
                 <LuCalculator size={14} /> <span className="hide-mobile-sm" style={{marginLeft:'4px'}}>{t('calculate_next_bill')}</span>
               </button>

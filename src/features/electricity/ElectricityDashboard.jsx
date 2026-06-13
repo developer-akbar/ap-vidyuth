@@ -56,371 +56,39 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   const pendingDeepLink = useRef(null);
   const hasHiddenSplash = useRef(false);
 
-  useEffect(() => {
-    if (!loading && !hasHiddenSplash.current) {
-      hasHiddenSplash.current = true;
-      if (Capacitor.isNativePlatform()) {
-        SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {});
-      }
-    }
-  }, [loading]);
-
-  useEffect(() => {
-    const mainContainer = document.querySelector('.main');
-    if (!mainContainer) return;
-
-    const handleScroll = () => {
-      if (mainContainer.scrollTop > 50) {
-        mainContainer.classList.add('page--scrolled');
-      } else {
-        mainContainer.classList.remove('page--scrolled');
-      }
-    };
-
-    mainContainer.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainContainer.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const updateUnread = async () => {
-    const history = await db.getSetting('notification_history') || [];
-    const count = history.filter(n => !n.read).length;
-    setUnreadCount(count);
-    
-    // Update App Icon Badge
-    if (window.Capacitor?.isNativePlatform()) {
-      try {
-        const { Badge } = await import('@capawesome/capacitor-badge');
-        if (count > 0) {
-          await Badge.set({ count });
-        } else {
-          await Badge.clear();
-        }
-      } catch (e) {
-        console.warn('[badge] Failed to update badge', e);
-      }
-    }
-  };
-
-  // Expose to window for push listener
-  useEffect(() => {
-    window.updateUnread = updateUnread;
-    return () => { delete window.updateUnread; };
-  }, [services]);
-
-  const selfHealNotifications = async () => {
-    if (loading || services.length === 0) return;
-    
-    const history = await db.getSetting('notification_history') || [];
-    const processed = await db.getSetting('processed_notifications') || {}; // { serviceNumber: { amount, type } }
-    let historyUpdated = false;
-    let processedUpdated = false;
-
-    for (const svc of services) {
-      if (!svc.isPaid && svc.lastAmountDue > 0) {
-        const dueDate = svc.lastDueDate ? new Date(svc.lastDueDate) : null;
-        if (!dueDate) continue;
-
-        const now = new Date();
-        const diffDays = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
-
-        if (diffDays <= 4) {
-          const type = diffDays < 0 ? 'BILL_OVERDUE' : 'BILL_REMINDER';
-          const currentKey = `${svc.lastAmountDue}_${type}`;
-          
-          // Check if we have ALREADY processed this specific bill amount AND type
-          const alreadyProcessed = processed[svc.serviceNumber] === currentKey;
-          
-          if (!alreadyProcessed) {
-            // Also double check history just in case (standard check)
-            const inHistory = history.some(n => 
-              n.serviceNumber === svc.serviceNumber && 
-              n.body.includes(svc.lastAmountDue.toString()) &&
-              n.type === type
-            );
-
-            if (!inHistory) {
-              const title = diffDays < 0 ? 'Bill Overdue' : 'Bill Due Soon';
-              const body = diffDays < 0 
-                ? `Your bill of ₹${svc.lastAmountDue} for ${svc.serviceNumber} is overdue!`
-                : `Your bill of ₹${svc.lastAmountDue} for ${svc.serviceNumber} is due in ${diffDays} days.`;
-
-              await saveNotificationToHistory({
-                title,
-                body,
-                serviceNumber: svc.serviceNumber,
-                type,
-                read: false
-              });
-              
-              processed[svc.serviceNumber] = currentKey;
-              historyUpdated = true;
-              processedUpdated = true;
-            } else {
-              // It's in history but not in our processed log (maybe from a previous version)
-              processed[svc.serviceNumber] = currentKey;
-              processedUpdated = true;
-            }
-          }
-        }
-      }
-    }
-
-    if (processedUpdated) {
-      await db.setSetting('processed_notifications', processed);
-    }
-    if (historyUpdated) updateUnread();
-  };
-
-  useEffect(() => {
-    updateUnread();
-
-    const processDeepLink = async (sn) => {
-      if (!sn || loading) return false;
-      
-      const svc = services.find(s => s.serviceNumber === sn);
-      if (svc) {
-        console.log('[dashboard] Successfully matched service for deep link:', sn);
-        setInboxOpen(false);
-        setDialog({ open: false, service: null });
-        setAboutDialog({ open: false, service: null });
-        flashCard(svc.id);
-        if (window.history.replaceState) window.history.replaceState({}, '', '/');
-        return true;
-      } else {
-        console.log('[dashboard] Service not found, opening add dialog for:', sn);
-        setDialog({ open: true, service: null, initialServiceNumber: sn });
-        if (window.history.replaceState) window.history.replaceState({}, '', '/');
-        return true;
-      }
-    };
-
-    const handleNotif = (e) => {
-      console.log('[dashboard] Live notification signal received');
-      updateUnread();
-      const sn = e.detail?.serviceNumber;
-      if (sn) {
-        const svc = services.find(s => s.serviceNumber === sn);
-        if (svc) actions.refresh(svc.id).catch(() => {});
-      }
-    };
-
-    const handleDeepLinkSignal = (e) => {
-      const sn = e.detail?.serviceNumber;
-      console.log('[dashboard] Live deep-link signal received for:', sn);
-      if (sn) {
-        processDeepLink(sn).then(success => {
-          if (!success) {
-            console.log('[dashboard] Data not ready, deferring deep link for:', sn);
-            pendingDeepLink.current = sn;
-          }
-        });
-      }
-    };
-
-    const handleHttpsDeepLink = (e) => {
-      const sn = e.detail?.serviceNumber;
-      if (!sn) return;
-      if (!loading) {
-        processDeepLink(sn);
-      } else {
-        pendingDeepLink.current = sn;
-      }
-    };
-
-    const checkBootAction = async () => {
-      // Check web URL for service number
-      const path = window.location.pathname;
-      if (path.length > 1 && path !== '/privacy') {
-        // Handle shortcut deep links: /action/pay, /action/refresh, /action/add
-        if (path === '/action/pay' || path.includes('action/pay')) {
-          // Pay the pinned (or first) service with a DUE bill
-          const pinnedDue = services.find(s => s.pinned && s.lastStatus === 'DUE' && s.lastAmountDue > 0);
-          const firstDue = services.find(s => s.lastStatus === 'DUE' && s.lastAmountDue > 0);
-          const target = pinnedDue || firstDue;
-          if (target) {
-            handlePay(target);
-            if (window.history.replaceState) window.history.replaceState({}, '', '/');
-          }
-          return;
-        }
-        if (path === '/action/refresh' || path.includes('action/refresh')) {
-          handleRefreshAll();
-          if (window.history.replaceState) window.history.replaceState({}, '', '/');
-          return;
-        }
-        if (path === '/action/add' || path.includes('action/add')) {
-          setDialog({ open: true, service: null });
-          if (window.history.replaceState) window.history.replaceState({}, '', '/');
-          return;
-        }
-        const snFromPath = path.substring(1).replace(/[^0-9]/g, '');
-        if (snFromPath.length >= 13) {
-          console.log('[dashboard] Web deep link detected:', snFromPath);
-          pendingDeepLink.current = snFromPath;
-        }
-      }
-
-      const pending = await db.getSetting('pending_notification_action');
-      if (pending && pending.serviceNumber) {
-        if (Date.now() - pending.timestamp < 300000) {
-          console.log('[dashboard] Boot check: Processing pending action for:', pending.serviceNumber);
-          const success = await processDeepLink(pending.serviceNumber);
-          if (success) {
-            await db.setSetting('pending_notification_action', null);
-            pendingDeepLink.current = null;
-          } else {
-            pendingDeepLink.current = pending.serviceNumber;
-          }
-        } else {
-          console.log('[dashboard] Boot check: Expiring old action');
-          await db.setSetting('pending_notification_action', null);
-        }
-      } else if (pendingDeepLink.current) {
-         processDeepLink(pendingDeepLink.current);
-      }
-    };
-
-    // Listen for App State changes (Foreground/Background)
-    const appStateListener = CapApp.addListener('appStateChange', ({ isActive }) => {
-      if (isActive) {
-        console.log('[dashboard] App active, running sync');
-        updateUnread();
-        selfHealNotifications();
-      }
-    });
-
-    window.addEventListener('notification-received', handleNotif);
-    window.addEventListener('notification-deep-link', handleDeepLinkSignal);
-    window.addEventListener('deep-link-service', handleHttpsDeepLink);
-
-    // Android home-screen shortcut: "Pay Home"
-    const handleShortcutPay = () => {
-      const pinnedDue = services.find(s => s.pinned && s.lastStatus === 'DUE' && s.lastAmountDue > 0);
-      const firstDue  = services.find(s => s.lastStatus === 'DUE' && s.lastAmountDue > 0);
-      const target = pinnedDue || firstDue;
-      if (target) handlePay(target);
-    };
-    window.addEventListener('shortcut-pay-home', handleShortcutPay);
-    
-    if (!loading) {
-      if (pendingDeepLink.current) {
-        processDeepLink(pendingDeepLink.current);
-        pendingDeepLink.current = null;
-      }
-      checkBootAction();
-      if (services.length > 0) selfHealNotifications();
-    }
-
-    return () => {
-      appStateListener.then(h => h.remove());
-      window.removeEventListener('notification-received', handleNotif);
-      window.removeEventListener('notification-deep-link', handleDeepLinkSignal);
-      window.removeEventListener('deep-link-service', handleHttpsDeepLink);
-      window.removeEventListener('shortcut-pay-home', handleShortcutPay);
-    };
-  }, [loading, services]);
-
-  // Sync unread count when inbox closes or opens
-  useEffect(() => {
-    if (!isWeb) updateUnread();
-  }, [inboxOpen]);
-
-  const handleNotificationAction = (notification) => {
-    setInboxOpen(false);
-    if (notification.serviceNumber) {
-      const svc = services.find(s => s.serviceNumber === notification.serviceNumber);
-      if (svc) {
-        flashCard(svc.id);
-        if (notification.type === 'BILL_OVERDUE' || notification.type === 'BILL_REMINDER') {
-          setQrDialog({ open: true, service: svc });
-        } else {
-          setAboutDialog({ open: true, service: svc });
-        }
-      }
-    }
-  };
-
-  const toggleCardStyle = () => {
-    const nextStyle = cardStyle === 'classic' ? 'rich' : 'classic';
-    setCardStyle(nextStyle);
-    localStorage.setItem('appearance_card_style', nextStyle);
-  };
-
   const [aboutDialog, setAboutDialog] = useState({ open: false, service: null });
   const [calculator, setCalculator] = useState({ open: false, service: null });
   const [qrDialog, setQrDialog] = useState({ open: false, service: null });
   const [confirmState, setConfirmState] = useState({ open: false, title: '', description: '', isDanger: false, onConfirm: () => {} });
   const [refreshingAll, setRefreshingAll] = useState(false);
-  const [refreshProgress, setRefreshProgress] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false); 
   const [flashingId, setFlashingId] = useState(null);
   const ph = usePostHog();
 
   const [bulkResult, setBulkResult] = useState(null);
-  const [processingOverlay, setProcessingOverlay] = useState(null);
   const [autoBackupPrompt, setAutoBackupPrompt] = useState(false);
   const [notificationPrompt, setNotificationPrompt] = useState(false);
 
-  useEffect(() => {
-    if (!loading && services.length >= 5) {
-      Promise.all([
-        db.getSetting('has_seen_auto_backup_prompt'),
-        db.getSetting('auto_backup_prompt_snoozed_until')
-      ]).then(([seen, snoozedUntil]) => {
-        if (!seen) {
-          const now = Date.now();
-          if (!snoozedUntil || now > snoozedUntil) {
-            setAutoBackupPrompt(true);
-          }
-        }
-      });
+  // ── Core Internal Functions ───────────────────────────────────────────────
+  
+  const updateUnread = async () => {
+    const history = await db.getSetting('notification_history') || [];
+    const count = history.filter(n => !n.read).length;
+    setUnreadCount(count);
+    if (window.Capacitor?.isNativePlatform()) {
+      try {
+        const { Badge } = await import('@capawesome/capacitor-badge');
+        if (count > 0) await Badge.set({ count });
+        else await Badge.clear();
+      } catch (e) { console.warn('[badge] Sync failed', e); }
     }
-
-    if (!loading && services.length >= 1) {
-      db.getSetting('has_seen_notification_prompt').then(seen => {
-        if (!seen && Capacitor.getPlatform() !== 'web') {
-          import('@capacitor/push-notifications').then(({ PushNotifications }) => {
-             PushNotifications.checkPermissions().then(status => {
-                if (status.receive !== 'granted') {
-                   setNotificationPrompt(true);
-                }
-             });
-          });
-        }
-      });
-    }
-  }, [loading, services.length]);
+  };
 
   const trackBill = async (service, snapshot) => {
     if (!ph || !snapshot || !snapshot.billDate) return;
-    
     if (service.lastReportedBillDate !== snapshot.billDate) {
-      ph.capture('bill_refreshed', {
-        id: service.id,
-        circle: snapshot.circleName || service.circleName,
-        amount: Number(snapshot.amountDue || 0),
-        bill_date: snapshot.billDate
-      });
+      ph.capture('bill_refreshed', { id: service.id, circle: snapshot.circleName || service.circleName, amount: Number(snapshot.amountDue || 0), bill_date: snapshot.billDate });
       await actions.update(service.id, { lastReportedBillDate: snapshot.billDate });
-    }
-  };
-
-  const handleViewChange = (view) => {
-    setActiveView(view);
-    clearSelection();
-  };
-
-  const handleImportFromEmptyState = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setProcessingOverlay('Restoring Data...');
-    try {
-      await importBackupData(file, electricityContext, t, ph, () => {}, {
-        onProgress: (msg) => setProcessingOverlay(msg)
-      });
-    } finally {
-      setProcessingOverlay(null);
-      e.target.value = '';
     }
   };
 
@@ -433,151 +101,282 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
     setTimeout(() => setFlashingId(null), 4000);
   };
 
-  const [selectedIds, setSelectedIds] = useState(new Set());
-
-  const toggleSelect = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const handlePay = (service) => {
+    setConfirmState({
+      open: true,
+      title: 'Redirecting to BillDesk',
+      description: 'You will be redirected to the APSPDCL official website to pay your bill.',
+      isDanger: false,
+      onConfirm: async () => {
+        try { await navigator.clipboard.writeText(service.serviceNumber); toast.success('Copied'); } catch {}
+        window.open('https://payments.billdesk.com/MercOnline/SPDCLController', '_blank', 'noopener,noreferrer');
+      }
     });
   };
 
-  const visible = useMemo(() => filterServices(services, filters), [services, filters]);
-  const currentItems = activeView === 'active' ? visible : trash;
-  const allSelected = currentItems.length > 0 && selectedIds.size === currentItems.length;
+  const handleRefreshAll = async (options = { skipApi: false, quiet: false, automated: false }) => {
+    const currentServices = await actions.reload();
+    if (!currentServices.length) return;
 
-  const toggleSelectAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(currentItems.map(s => s.id)));
+    if (options.automated) {
+      const lastRefreshStr = await db.getSetting('last_auto_refresh_date');
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (lastRefreshStr === todayStr) return;
+      await db.setSetting('last_auto_refresh_date', todayStr);
+    }
+    
+    if (options.skipApi) return;
+    
+    setRefreshingAll(true);
+    const total = currentServices.length;
+    let done = 0;
+    let failed = 0;
+
+    window.dispatchEvent(new CustomEvent('global-progress', { detail: `Refreshing ${total} services...` }));
+
+    try {
+      for (const s of currentServices) {
+        try { await actions.refresh(s.id); } 
+        catch (e) { failed++; console.warn(`[refresh-all] Failed for ${s.serviceNumber}`, e); }
+        done++;
+        window.dispatchEvent(new CustomEvent('global-progress', { detail: `Refreshing ${done}/${total} services...` }));
+      }
+      if (!options.quiet) {
+        failed === 0 ? toast.success(`All refreshed`) : toast.error(`Refresh failed for ${failed} service(s)`);
+      }
+    } finally {
+      setRefreshingAll(false);
+      window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
     }
   };
 
+  const processDeepLink = async (sn) => {
+    if (!sn || loading) return false;
+    const svc = services.find(s => s.serviceNumber === sn);
+    if (svc) {
+      setInboxOpen(false); setDialog({ open: false, service: null }); setAboutDialog({ open: false, service: null });
+      flashCard(svc.id);
+      if (window.history.replaceState) window.history.replaceState({}, '', '/');
+      return true;
+    } else {
+      setDialog({ open: true, service: null, initialServiceNumber: sn });
+      if (window.history.replaceState) window.history.replaceState({}, '', '/');
+      return true;
+    }
+  };
+
+  const checkBootAction = async () => {
+    const path = window.location.pathname;
+    if (path.length > 1 && path !== '/privacy') {
+      if (path === '/action/pay' || path.includes('action/pay')) {
+        const pinnedDue = services.find(s => s.pinned && s.lastStatus === 'DUE' && s.lastAmountDue > 0);
+        const firstDue = services.find(s => s.lastStatus === 'DUE' && s.lastAmountDue > 0);
+        const target = pinnedDue || firstDue;
+        if (target) { handlePay(target); if (window.history.replaceState) window.history.replaceState({}, '', '/'); }
+        return;
+      }
+      if (path === '/action/refresh' || path.includes('action/refresh')) {
+        handleRefreshAll();
+        if (window.history.replaceState) window.history.replaceState({}, '', '/');
+        return;
+      }
+      if (path === '/action/add' || path.includes('action/add')) {
+        setDialog({ open: true, service: null });
+        if (window.history.replaceState) window.history.replaceState({}, '', '/');
+        return;
+      }
+      const snFromPath = path.substring(1).replace(/[^0-9]/g, '');
+      if (snFromPath.length >= 13) pendingDeepLink.current = snFromPath;
+    }
+    const pending = await db.getSetting('pending_notification_action');
+    if (pending && pending.serviceNumber) {
+      if (Date.now() - pending.timestamp < 300000) {
+        const success = await processDeepLink(pending.serviceNumber);
+        if (success) { await db.setSetting('pending_notification_action', null); pendingDeepLink.current = null; }
+        else pendingDeepLink.current = pending.serviceNumber;
+      } else await db.setSetting('pending_notification_action', null);
+    } else if (pendingDeepLink.current) processDeepLink(pendingDeepLink.current);
+  };
+
+  const handleNotif = (e) => {
+    updateUnread();
+    const sn = e.detail?.serviceNumber;
+    if (sn) {
+      const svc = services.find(s => s.serviceNumber === sn);
+      if (svc) actions.refresh(svc.id).catch(() => {});
+    }
+  };
+
+  const handleDeepLinkSignal = (e) => {
+    const sn = e.detail?.serviceNumber;
+    if (sn) processDeepLink(sn).then(success => { if (!success) pendingDeepLink.current = sn; });
+  };
+
+  const handleHttpsDeepLink = (e) => {
+    const sn = e.detail?.serviceNumber;
+    if (!sn) return;
+    if (!loading) processDeepLink(sn); else pendingDeepLink.current = sn;
+  };
+
+  const handleShortcutPay = () => {
+    const pinnedDue = services.find(s => s.pinned && s.lastStatus === 'DUE' && s.lastAmountDue > 0);
+    const firstDue  = services.find(s => s.lastStatus === 'DUE' && s.lastAmountDue > 0);
+    const target = pinnedDue || firstDue;
+    if (target) handlePay(target);
+  };
+
+  const selfHealNotifications = async () => {
+    if (loading || services.length === 0) return;
+    const history = await db.getSetting('notification_history') || [];
+    const processed = await db.getSetting('processed_notifications') || {}; 
+    let historyUpdated = false;
+    let processedUpdated = false;
+
+    for (const svc of services) {
+      if (!svc.isPaid && svc.lastAmountDue > 0) {
+        const dueDate = svc.lastDueDate ? new Date(svc.lastDueDate) : null;
+        if (!dueDate) continue;
+        const now = new Date();
+        const diffDays = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 4) {
+          const type = diffDays < 0 ? 'BILL_OVERDUE' : 'BILL_REMINDER';
+          const currentKey = `${svc.lastAmountDue}_${type}`;
+          if (processed[svc.serviceNumber] !== currentKey) {
+            const inHistory = history.some(n => n.serviceNumber === svc.serviceNumber && n.body.includes(svc.lastAmountDue.toString()) && n.type === type);
+            if (!inHistory) {
+              const title = diffDays < 0 ? 'Bill Overdue' : 'Bill Due Soon';
+              const body = diffDays < 0 ? `Your bill of ₹${svc.lastAmountDue} for ${svc.serviceNumber} is overdue!` : `Your bill of ₹${svc.lastAmountDue} for ${svc.serviceNumber} is due in ${diffDays} days.`;
+              await saveNotificationToHistory({ title, body, serviceNumber: svc.serviceNumber, type, read: false });
+              processed[svc.serviceNumber] = currentKey; historyUpdated = true; processedUpdated = true;
+            } else { processed[svc.serviceNumber] = currentKey; processedUpdated = true; }
+          }
+        }
+      }
+    }
+    if (processedUpdated) await db.setSetting('processed_notifications', processed);
+    if (historyUpdated) updateUnread();
+  };
+
+  // ── Effects ───────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!loading && !hasHiddenSplash.current) {
+      hasHiddenSplash.current = true;
+      if (Capacitor.isNativePlatform()) SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {});
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    const mainContainer = document.querySelector('.main');
+    if (!mainContainer) return;
+    const handleScroll = () => {
+      if (mainContainer.scrollTop > 50) mainContainer.classList.add('page--scrolled');
+      else mainContainer.classList.remove('page--scrolled');
+    };
+    mainContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => mainContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    updateUnread();
+    const appStateListener = CapApp.addListener('appStateChange', ({ isActive }) => { if (isActive) { updateUnread(); selfHealNotifications(); } });
+    window.addEventListener('notification-received', handleNotif);
+    window.addEventListener('notification-deep-link', handleDeepLinkSignal);
+    window.addEventListener('deep-link-service', handleHttpsDeepLink);
+    window.addEventListener('shortcut-pay-home', handleShortcutPay);
+    return () => {
+      appStateListener.then(h => h.remove());
+      window.removeEventListener('notification-received', handleNotif);
+      window.removeEventListener('notification-deep-link', handleDeepLinkSignal);
+      window.removeEventListener('deep-link-service', handleHttpsDeepLink);
+      window.removeEventListener('shortcut-pay-home', handleShortcutPay);
+    };
+  }, [loading]); 
+
+  useEffect(() => {
+    const init = async () => {
+      await handleRefreshAll({ automated: true, quiet: true });
+      if (pendingDeepLink.current) { processDeepLink(pendingDeepLink.current); pendingDeepLink.current = null; }
+      checkBootAction();
+      if (services.length > 0) selfHealNotifications();
+    };
+    if (!loading) init();
+  }, [loading]);
+
+  useEffect(() => { if (!isWeb) updateUnread(); }, [inboxOpen]);
+
+  // ── Interaction Handlers ──────────────────────────────────────────────────
+
+  const handleNotificationAction = (notification) => {
+    setInboxOpen(false);
+    if (notification.serviceNumber) {
+      const svc = services.find(s => s.serviceNumber === notification.serviceNumber);
+      if (svc) {
+        flashCard(svc.id);
+        if (notification.type === 'BILL_OVERDUE' || notification.type === 'BILL_REMINDER') setQrDialog({ open: true, service: svc });
+        else setAboutDialog({ open: true, service: svc });
+      }
+    }
+  };
+
+  const toggleCardStyle = () => {
+    const nextStyle = cardStyle === 'classic' ? 'rich' : 'classic';
+    setCardStyle(nextStyle);
+    localStorage.setItem('appearance_card_style', nextStyle);
+  };
+
+  const handleViewChange = (view) => { setActiveView(view); clearSelection(); };
+
+  const handleImportFromEmptyState = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    window.dispatchEvent(new CustomEvent('global-progress', { detail: 'Restoring Data...' }));
+    try { await importBackupData(file, electricityContext, t, ph, () => {}, { onProgress: (msg) => window.dispatchEvent(new CustomEvent('global-progress', { detail: msg })) }); } 
+    finally { window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); e.target.value = ''; }
+  };
+
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const toggleSelect = (id) => { setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
+  const visible = useMemo(() => filterServices(services, filters), [services, filters]);
+  const currentItems = activeView === 'active' ? visible : trash;
+  const allSelected = currentItems.length > 0 && selectedIds.size === currentItems.length;
+  const toggleSelectAll = () => { if (allSelected) setSelectedIds(new Set()); else setSelectedIds(new Set(currentItems.map(s => s.id))); };
   const clearSelection = () => setSelectedIds(new Set());
 
   const handleCopySelected = async () => {
     const selectedServices = currentItems.filter(s => selectedIds.has(s.id));
     if (selectedServices.length === 0) return;
-    
-    const text = selectedServices.map(s => {
-      const name = s.label || s.customerName || t('untitled');
-      return `${name}:${s.serviceNumber}`;
-    }).join(', ');
-
-    try {
-      await navigator.clipboard.writeText(text);
-      const msg = selectedServices.length === 1 ? 'Copied 1 service' : `Copied ${selectedServices.length} services`;
-      toast.success(t('copied_count', msg));
-    } catch (e) {
-      toast.error('Failed to copy');
-    }
+    const text = selectedServices.map(s => { const name = s.label || s.customerName || t('untitled'); return `${name}:${s.serviceNumber}`; }).join(', ');
+    try { await navigator.clipboard.writeText(text); toast.success(t('copied_count', `Copied ${selectedServices.length} services`)); } catch (e) { toast.error('Failed to copy'); }
   };
 
   const handleShareSelected = async () => {
     const selectedServices = currentItems.filter(s => selectedIds.has(s.id));
     if (selectedServices.length === 0) return;
-
     const monthYear = new Date().toLocaleString('en-IN', { month: 'short', year: 'numeric' });
-    const sortedServices = [...selectedServices].sort((a, b) => (b.lastAmountDue || 0) - (a.lastAmountDue || 0));
-    
-    const items = sortedServices.map(s => ({
-      name: s.label || s.customerName || t('untitled'),
-      amount: s.lastAmountDue || 0,
-      units: s.lastBilledUnits || 0
-    }));
-
-    const text = `⚡ *Electricity Bill — ${monthYear}*\n\n` +
-                 generatePlainShareTable(items) + `\n\n` +
-                 `https://ap-vidyuth.vercel.app\n` +
-                 `_Shared via AP Vidyuth_`;
-
-    if (Capacitor.getPlatform() !== 'web') {
-      try {
-        await Share.share({
-          title: 'Electricity Bill Summary',
-          text: text,
-          dialogTitle: 'Share Summary'
-        });
-        return;
-      } catch (err) {
-        console.warn('[share] Native share failed', err);
-      }
-    }
-
-    if (navigator.share && navigator.canShare && navigator.canShare({ text })) {
-      try {
-        await navigator.share({ title: 'Electricity Bill Summary', text });
-        return;
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Summary copied!');
-    } catch {
-      toast.error('Sharing failed');
-    }
+    const items = [...selectedServices].sort((a, b) => (b.lastAmountDue || 0) - (a.lastAmountDue || 0)).map(s => ({ name: s.label || s.customerName || t('untitled'), amount: s.lastAmountDue || 0, units: s.lastBilledUnits || 0 }));
+    const text = `⚡ *Electricity Bill — ${monthYear}*\n\n` + generatePlainShareTable(items) + `\n\n` + `https://ap-vidyuth.vercel.app\n` + `_Shared via AP Vidyuth_`;
+    if (Capacitor.getPlatform() !== 'web') { try { await Share.share({ title: 'Electricity Bill Summary', text: text, dialogTitle: 'Share Summary' }); return; } catch (err) {} }
+    if (navigator.share && navigator.canShare && navigator.canShare({ text })) { try { await navigator.share({ title: 'Electricity Bill Summary', text }); return; } catch (err) {} }
+    try { await navigator.clipboard.writeText(text); toast.success('Summary copied!'); } catch { toast.error('Sharing failed'); }
   };
 
   useEffect(() => {
-    clearSelection();
-  }, [activeView]);
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        if (inboxOpen) {
-          setInboxOpen(false);
-        } else if (selectedIds.size > 0) {
-          clearSelection();
-        } else if (bulkResult) {
-          setBulkResult(null);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const handleKeyDown = (e) => { if (e.key === 'Escape') { if (inboxOpen) setInboxOpen(false); else if (selectedIds.size > 0) clearSelection(); else if (bulkResult) setBulkResult(null); } };
+    window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedIds, bulkResult, inboxOpen]);
 
   useEffect(() => {
     const handleBack = (e) => {
       if (e.detail?.handled) return;
-
       if (dialog.open || aboutDialog.open || calculator.open || qrDialog.open || confirmState.open || bulkResult || inboxOpen) {
-        setDialog({ open: false, service: null });
-        setAboutDialog({ open: false, service: null });
-        setCalculator({ open: false, service: null });
-        setQrDialog({ open: false, service: null });
-        setConfirmState(prev => ({ ...prev, open: false }));
-        setBulkResult(null);
-        setInboxOpen(false);
-        if (e.detail) e.detail.handled = true;
-        return;
+        setDialog({ open: false, service: null }); setAboutDialog({ open: false, service: null }); setCalculator({ open: false, service: null }); setQrDialog({ open: false, service: null }); setConfirmState(prev => ({ ...prev, open: false })); setBulkResult(null); setInboxOpen(false);
+        if (e.detail) e.detail.handled = true; return;
       }
-
-      // Check for Custom Event detail from App.jsx about appliance calculator
-      // Actually, it's better to handle it in App.jsx as I already did.
-
-
-      if (selectedIds.size > 0) {
-        clearSelection();
-        if (e.detail) e.detail.handled = true;
-        return;
-      }
-
-      if (activeView === 'trash') {
-        setActiveView('active');
-        if (e.detail) e.detail.handled = true;
-        return;
-      }
+      if (selectedIds.size > 0) { clearSelection(); if (e.detail) e.detail.handled = true; return; }
+      if (activeView === 'trash') { setActiveView('active'); if (e.detail) e.detail.handled = true; return; }
     };
-    window.addEventListener('app-back-button', handleBack);
-    return () => window.removeEventListener('app-back-button', handleBack);
+    window.addEventListener('app-back-button', handleBack); return () => window.removeEventListener('app-back-button', handleBack);
   }, [selectedIds, dialog.open, aboutDialog.open, calculator.open, qrDialog.open, confirmState.open, bulkResult, inboxOpen]);
 
   const [pullDistance, setPullDistance] = useState(0);
@@ -589,324 +388,121 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   useEffect(() => {
     const container = document.querySelector('.main');
     if (!container) return;
-
-    const handleTouchStart = (e) => {
-      if (container.scrollTop <= 0) {
-        touchStart.current = e.touches[0].pageY;
-        isPulling.current = true;
-      } else {
-        isPulling.current = false;
-      }
-    };
-
-    const handleTouchMove = (e) => {
-      if (!isPulling.current || isRefreshing) return;
-      const currentY = e.touches[0].pageY;
-      const diff = currentY - touchStart.current;
-
-      if (diff > 0) {
-        const dist = Math.min(diff * 0.4, pullThreshold + 20);
-        setPullDistance(dist);
-        if (dist > 10) {
-           if (e.cancelable) e.preventDefault();
-        }
-      }
-    };
-
+    const handleTouchStart = (e) => { if (container.scrollTop <= 0) { touchStart.current = e.touches[0].pageY; isPulling.current = true; } else isPulling.current = false; };
+    const handleTouchMove = (e) => { if (!isPulling.current || isRefreshing) return; const currentY = e.touches[0].pageY; const diff = currentY - touchStart.current; if (diff > 0) { const dist = Math.min(diff * 0.4, pullThreshold + 20); setPullDistance(dist); if (dist > 10 && e.cancelable) e.preventDefault(); } };
     const handleTouchEnd = async () => {
       if (!isPulling.current || isRefreshing) return;
       const finalDist = pullDistance;
       isPulling.current = false;
-
       if (finalDist >= pullThreshold) {
         setPullDistance(70);
         setIsRefreshing(true);
         try {
-          await actions.reload();
-          await handleRefreshAll();
-        } catch (e) {
-          console.error('[PTR] Refresh process failed', e);
-        } finally {
+          await handleRefreshAll({ quiet: true });
+        } catch (e) {}
+        finally {
           setTimeout(() => {
             setIsRefreshing(false);
             setPullDistance(0);
           }, 500);
         }
-      } else {
-        setPullDistance(0);
-      }
+      } else setPullDistance(0);
     };
-
     container.addEventListener('touchstart', handleTouchStart, { passive: true });
     container.addEventListener('touchmove', handleTouchMove, { passive: false });
     container.addEventListener('touchend', handleTouchEnd);
-
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', handleTouchMove);
-      container.removeEventListener('touchend', handleTouchEnd);
-    };
+    return () => { container.removeEventListener('touchstart', handleTouchStart); container.removeEventListener('touchmove', handleTouchMove); container.removeEventListener('touchend', handleTouchEnd); };
   }, [pullDistance, isRefreshing, actions]);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 700);
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 700);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
+  useEffect(() => { const handleResize = () => setIsMobile(window.innerWidth <= 700); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
   const useAccordion = isMobile ? visible.length > 1 : visible.length > 3;
-
-  const handleCalculateBill = (service) => {
-    setCalculator({ open: true, service });
-  };
 
   async function submitService(payload) {
     if (payload.isBulk) {
       const { entries } = payload;
       if (ph) ph.capture('bulk_add_started', { count: entries.length });
-      setProcessingOverlay(`Validating ${entries.length} services...`);
+      setIsProcessing(true);
+      window.dispatchEvent(new CustomEvent('global-progress', { detail: `Validating ${entries.length} services...` }));
       const results = { succeeded: [], failed: [], alreadyExists: [], inTrash: [] };
-
       for (const entry of entries) {
         const sn = entry.number;
         const inActive = services.find(s => s.serviceNumber === sn);
         const inTrash = trash.find(t => t.serviceNumber === sn);
-        
         if (inActive) { results.alreadyExists.push(sn); continue; }
         if (inTrash) { results.inTrash.push(sn); continue; }
-
         try {
           await actions.add({ isBulk: false, serviceNumber: sn, label: entry.label, pinned: !!entry.pinned });
           results.succeeded.push(sn);
-          setProcessingOverlay(`Added ${results.succeeded.length}/${entries.length}...`);
+          window.dispatchEvent(new CustomEvent('global-progress', { detail: `Added ${results.succeeded.length}/${entries.length}...` }));
         } catch (e) {
-          if (e?.message === 'CANCELLED') {
-            setProcessingOverlay(null);
-            setBulkResult(results);
-            return;
-          }
+          if (e?.message === 'CANCELLED') { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); setBulkResult(results); return; }
           results.failed.push({ number: sn, error: e?.message || 'Unknown error' });
         }
       }
-      setProcessingOverlay(null);
-      setBulkResult(results);
-      if (activeView !== 'active') setActiveView('active');
-      return;
+      setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
+      setBulkResult(results); if (activeView !== 'active') setActiveView('active'); return;
     }
-
     if (dialog.service) {
-      setProcessingOverlay(t('saving', 'Saving...'));
-      try {
-        await actions.update(dialog.service.id, { label: payload.label });
-        toast.success('Updated');
-      } catch(e) {
-        toast.error(`Update failed: ${e?.message || 'Unknown error'}`);
-      } finally {
-        setProcessingOverlay(null);
-      }
+      setIsProcessing(true); window.dispatchEvent(new CustomEvent('global-progress', { detail: t('saving', 'Saving...') }));
+      try { await actions.update(dialog.service.id, { label: payload.label }); toast.success('Updated'); } catch(e) { toast.error(`Update failed: ${e?.message || 'Unknown error'}`); }
+      finally { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); }
     } else {
       const inTrash = trash.find(t => t.serviceNumber === payload.serviceNumber);
       if (inTrash) {
-        setConfirmState({
-          open: true,
-          title: 'Restore from Trash?',
-          description: 'This service is currently in the Trash.\n\nWould you like to restore it instead of adding a new one?',
-          isDanger: false,
+        setConfirmState({ open: true, title: 'Restore from Trash?', description: 'This service is currently in the Trash.\n\nWould you like to restore it instead of adding a new one?', isDanger: false,
           onConfirm: async () => {
-            setProcessingOverlay(t('saving', 'Restoring...'));
-            try {
-              await actions.restore(inTrash.id);
-              toast.success('Restored');
-              setDialog({ open: false, service: null });
-              handleViewChange('active');
-              flashCard(inTrash.id);
-            } catch(e) {
-              toast.error(`Restore failed: ${e?.message || 'Unknown error'}`);
-            } finally {
-              setProcessingOverlay(null);
-            }
+            setIsProcessing(true); window.dispatchEvent(new CustomEvent('global-progress', { detail: t('saving', 'Restoring...') }));
+            try { await actions.restore(inTrash.id); toast.success('Restored'); setDialog({ open: false, service: null }); handleViewChange('active'); flashCard(inTrash.id); }
+            catch(e) { toast.error(`Restore failed: ${e?.message || 'Unknown error'}`); }
+            finally { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); }
           }
-        });
-        return;
+        }); return;
       }
-      
       const inActive = services.find(s => s.serviceNumber === payload.serviceNumber);
       if (inActive) { toast.error('Service number already exists.'); return; }
-
-      setProcessingOverlay('Validating and fetching bill...');
-      try {
-        const newService = await actions.add(payload);
-        toast.success('Service added');
-        setDialog({ open: false, service: null });
-        handleViewChange('active');
-        if (newService?.id) flashCard(newService.id);
-      } catch (e) {
-        if (e?.message !== 'CANCELLED') toast.error(`Add failed: ${e?.message || 'Unknown error'}`);
-        throw e;
-      } finally {
-        setProcessingOverlay(null);
-      }
+      setIsProcessing(true); window.dispatchEvent(new CustomEvent('global-progress', { detail: 'Validating and fetching bill...' }));
+      try { const newService = await actions.add(payload); toast.success('Service added'); setDialog({ open: false, service: null }); handleViewChange('active'); if (newService?.id) flashCard(newService.id); }
+      catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Add failed: ${e?.message || 'Unknown error'}`); throw e; }
+      finally { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); }
     }
   }
 
-  async function handleRefreshAll(options = { skipApi: false, quiet: false }) {
-    const currentServices = await actions.reload();
-    if (!currentServices.length || options.skipApi) return;
-    
-    if (!options.quiet) {
-      setRefreshingAll(true);
-      setProcessingOverlay('Refreshing all services...');
-    }
-
-    try {
-      const summary = await actions.refreshAll((done, tot) => {
-        if (!options.quiet) setProcessingOverlay(`Refreshing ${done} of ${tot} services...`);
-      });
-      if (summary && !options.quiet) {
-        summary.failed === 0 ? toast.success(`All refreshed`) : toast.error(`Refresh failed for ${summary.failed} service(s)`);
-      }
-    } finally {
-      if (!options.quiet) {
-        setRefreshingAll(false);
-        setProcessingOverlay(null);
-      }
-    }
-  }
-
-  function handlePay(service) {
-    setConfirmState({
-      open: true,
-      title: 'Redirecting to BillDesk',
-      description: 'You will be redirected to the APSPDCL official website to pay your bill.',
-      isDanger: false,
+  const handleBulkAction = async (action) => {
+    const ids = Array.from(selectedIds); if (ids.length === 0) return;
+    const actionText = action === 'trash' ? 'move to trash' : action === 'restore' ? 'restore' : 'permanently delete';
+    const isDanger = action === 'trash' || action === 'purge';
+    setConfirmState({ open: true, title: `${action.charAt(0).toUpperCase() + action.slice(1)} ${ids.length} services?`, description: `Are you sure you want to ${actionText} the selected services?`, isDanger,
       onConfirm: async () => {
-        try { await navigator.clipboard.writeText(service.serviceNumber); toast.success('Copied'); } catch {}
-        window.open('https://payments.billdesk.com/MercOnline/SPDCLController', '_blank', 'noopener,noreferrer');
+        const tst = toast.loading(`${action.charAt(0).toUpperCase() + action.slice(1)}ing...`);
+        try {
+          if (action === 'trash') await actions.bulkRemove(ids); else if (action === 'restore') await actions.bulkRestore(ids); else if (action === 'purge') await actions.bulkPurge(ids);
+          toast.success(`Action completed`, { id: tst }); clearSelection(); if (action === 'restore' && activeView !== 'active') setActiveView('active');
+        } catch (e) { toast.error(`Action failed`, { id: tst }); }
       }
     });
-  }
+  };
 
-  async function handleShare(service) {
-    const isPaid = service.isPaid;
-    const name = service.customerName || service.label || 'Consumer';
-    const sn = service.serviceNumber;
-    const amount = isPaid ? (service.paidAmount || service.lastAmountDue || 0) : service.lastAmountDue;
-    const date = isPaid ? service.paidDate : service.lastDueDate;
-    const url = `https://ap-vidyuth.vercel.app/${sn}`;
-    
-    let text = '';
-    if (isPaid) {
-      text = `⚡ *Electricity Bill — Payment Receipt*\n\n` +
-             `*Service:* ${name}\n` +
-             `*SC No:* ${sn}\n` +
-             `*Amount Paid:* ${formatIndianCurrency(amount)}\n` +
-             `*Paid On:* ${formatShareDate(date)}\n` +
-             `*Status:* ✅ Successfully Paid\n\n` +
-             `${url}\n` +
-             `_Shared via AP Vidyuth_`;
-    } else {
-      text = `⚡ *Electricity Bill — Amount Due*\n\n` +
-             `*Service:* ${name}\n` +
-             `*SC No:* ${sn}\n` +
-             `*Amount Due:* ${formatIndianCurrency(amount)}\n` +
-             `*Due Date:* ${formatShareDate(date)}\n` +
-             `*Status:* ⏳ Payment Pending\n\n` +
-             `Late payment may attract additional charges.\n\n` +
-             `${url}\n` +
-             `_Shared via AP Vidyuth_`;
-    }
+  const handleShare = async (service) => {
+    const isPaid = service.isPaid; const name = service.customerName || service.label || 'Consumer'; const sn = service.serviceNumber; const amount = isPaid ? (service.paidAmount || service.lastAmountDue || 0) : service.lastAmountDue; const date = isPaid ? service.paidDate : service.lastDueDate; const url = `https://ap-vidyuth.vercel.app/${sn}`;
+    let text = isPaid ? `⚡ *Electricity Bill — Payment Receipt*\n\n*Service:* ${name}\n*SC No:* ${sn}\n*Amount Paid:* ${formatIndianCurrency(amount)}\n*Paid On:* ${formatShareDate(date)}\n*Status:* ✅ Successfully Paid\n\n${url}\n_Shared via AP Vidyuth_` : `⚡ *Electricity Bill — Amount Due*\n\n*Service:* ${name}\n*SC No:* ${sn}\n*Amount Due:* ${formatIndianCurrency(amount)}\n*Due Date:* ${formatShareDate(date)}\n*Status:* ⏳ Payment Pending\n\nLate payment may attract additional charges.\n\n${url}\n_Shared via AP Vidyuth_`;
+    if (Capacitor.getPlatform() !== 'web') { try { await Share.share({ title: 'Electricity Bill Status', text, dialogTitle: 'Share Bill Update' }); return; } catch (err) {} }
+    if (navigator.share && navigator.canShare && navigator.canShare({ text })) { try { await navigator.share({ title: 'Electricity Bill Status', text }); return; } catch (err) {} }
+    try { await navigator.clipboard.writeText(text); toast.success('Copied to clipboard. You can now paste and share.'); } catch { toast.error('Sharing failed'); }
+  };
 
-    // Try native share first (Capacitor)
-    if (Capacitor.getPlatform() !== 'web') {
-      try {
-        await Share.share({
-          title: 'Electricity Bill Status',
-          text: text,
-          dialogTitle: 'Share Bill Update'
-        });
-        return;
-      } catch (err) {
-        console.warn('[share] Native share failed', err);
-      }
-    }
+  const handleShareMonthlyReport = async (service) => {
+    const insights = service.insights; if (!insights) { toast.error('Not enough data to generate report yet'); return; }
+    const name = service.customerName || service.label || 'Consumer'; const sn = service.serviceNumber; const trend = insights.vsLastMonth; const trendText = trend ? `${trend.unitsPct > 0 ? '📈 +' : '📉 '}${Math.round(Math.abs(trend.unitsPct))}% vs last month` : ''; const url = `https://ap-vidyuth.vercel.app/${sn}`; const monthYear = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    let text = `📊 *Electricity Usage — ${monthYear}*\n\n*Service:* ${name} (${sn})\n*Units Used:* ${service.lastBilledUnits || 0} units  ${trendText}\n*Amount:* ${formatIndianCurrency(service.lastAmountDue || service.billAmount)}\n\n*Insights:*\n- Avg monthly spend: ${formatIndianCurrency(insights.avgAmount)}\n- Highest on record: ${formatIndianCurrency(insights.maxAmount)}\n- Cost per unit: ₹${Number(insights.avgCostPerUnit || 0).toFixed(2)}\n`;
+    if (insights.predictedNextBill) text += `\n*Next bill estimate:* ~${formatIndianCurrency(insights.predictedNextBill)}\n`;
+    text += `\n${url}\n_Shared via AP Vidyuth_`;
+    if (Capacitor.getPlatform() !== 'web') { try { await Share.share({ title: 'Monthly Electricity Report', text, dialogTitle: 'Share Report' }); return; } catch (err) {} }
+    if (navigator.share && navigator.canShare && navigator.canShare({ text })) { try { await navigator.share({ title: 'Monthly Electricity Report', text }); return; } catch (err) {} }
+    try { await navigator.clipboard.writeText(text); toast.success('Report copied to clipboard. You can now paste and share.'); } catch { toast.error('Copy failed'); }
+  };
 
-    // Web fallback
-    if (navigator.share && navigator.canShare && navigator.canShare({ text })) {
-      try {
-        await navigator.share({ title: 'Electricity Bill Status', text });
-        return;
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-      }
-    }
-
-    // Clipboard fallback
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Copied to clipboard. You can now paste and share.');
-    } catch {
-      toast.error('Sharing failed');
-    }
-  }
-
-  async function handleShareMonthlyReport(service) {
-    const insights = service.insights;
-    if (!insights) { toast.error('Not enough data to generate report yet'); return; }
-    
-    const name = service.customerName || service.label || 'Consumer';
-    const sn = service.serviceNumber;
-    const trend = insights.vsLastMonth;
-    const trendText = trend ? `${trend.unitsPct > 0 ? '📈 +' : '📉 '}${Math.round(Math.abs(trend.unitsPct))}% vs last month` : '';
-    const url = `https://ap-vidyuth.vercel.app/${sn}`;
-    const monthYear = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
-
-    let text = `📊 *Electricity Usage — ${monthYear}*\n\n` +
-               `*Service:* ${name} (${sn})\n` +
-               `*Units Used:* ${service.lastBilledUnits || 0} units  ${trendText}\n` +
-               `*Amount:* ${formatIndianCurrency(service.lastAmountDue || service.billAmount)}\n\n` +
-               `*Insights:*\n` +
-               `- Avg monthly spend: ${formatIndianCurrency(insights.avgAmount)}\n` +
-               `- Highest on record: ${formatIndianCurrency(insights.maxAmount)}\n` +
-               `- Cost per unit: ₹${Number(insights.avgCostPerUnit || 0).toFixed(2)}\n`;
-
-    if (insights.predictedNextBill) {
-      text += `\n*Next bill estimate:* ~${formatIndianCurrency(insights.predictedNextBill)}\n`;
-    }
-
-    text += `\n${url}\n` +
-            `_Shared via AP Vidyuth_`;
-
-    if (Capacitor.getPlatform() !== 'web') {
-      try {
-        await Share.share({
-          title: 'Monthly Electricity Report',
-          text: text,
-          dialogTitle: 'Share Report'
-        });
-        return;
-      } catch (err) {
-        console.warn('[share] Report share failed', err);
-      }
-    }
-
-    if (navigator.share && navigator.canShare && navigator.canShare({ text })) {
-      try {
-        await navigator.share({ title: 'Monthly Electricity Report', text });
-        return;
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-      }
-    }
-
-    // Fallback to clipboard
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Report copied to clipboard. You can now paste and share.');
-    } catch {
-      toast.error('Copy failed');
-    }
-  }
+  const refreshingAny = refreshingAll || isProcessing || refreshingIds.size > 0;
 
   return (
     <div className="page">
@@ -930,7 +526,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
             {activeView === 'active' ? (
               <button className="btn btn--danger btn--sm" onClick={() => handleBulkAction('trash')}><FiTrash2 size={16} />{!isMobile && <span style={{ marginLeft: '4px' }}>Trash</span>}</button>
             ) : (
-              <><button className="btn btn--ghost btn--sm" onClick={() => handleBulkAction('restore')}><Loader size={16} />{!isMobile && <span style={{ marginLeft: '4px' }}>Restore</span>}</button><button className="btn btn--danger btn--sm" onClick={() => handleBulkAction('purge')}><FiTrash2 size={13} />{!isMobile && <span style={{ marginLeft: '4px' }}>Purge</span>}</button></>
+              <><button className="btn btn--ghost btn--sm" onClick={() => handleBulkAction('restore')}><FiRefreshCw size={16} />{!isMobile && <span style={{ marginLeft: '4px' }}>Restore</span>}</button><button className="btn btn--danger btn--sm" onClick={() => handleBulkAction('purge')}><FiTrash2 size={13} />{!isMobile && <span style={{ marginLeft: '4px' }}>Purge</span>}</button></>
             )}
             <button className="btn btn--ghost btn--sm" onClick={clearSelection} style={{ marginLeft: '4px' }}>Cancel</button>
           </div>
@@ -957,35 +553,29 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
             )}
           </div>
         </div>
-        {refreshProgress && <div className="refresh-progress"><Loader size={12} /> {refreshProgress.done} / {refreshProgress.total}</div>}
       </header>
 
       <SummaryBar services={services} />
-      
-      {activeView === 'active' && services.length > 0 && !loading && (
-        <DailyTip />
-      )}
+      {activeView === 'active' && services.length > 0 && !loading && <DailyTip />}
 
-      <Toolbar filters={filters} onFiltersChange={setFilters} onAdd={() => setDialog({ open: true, service: null })} onRefreshAll={handleRefreshAll} refreshingAll={refreshingAll} activeView={activeView} onViewChange={handleViewChange} trashCount={trash.length} hasServices={services.length > 0 && !loading} services={services} cardStyle={cardStyle} onToggleCardStyle={toggleCardStyle} />
+      <Toolbar filters={filters} onFiltersChange={setFilters} onAdd={() => setDialog({ open: true, service: null })} onRefreshAll={() => handleRefreshAll()} refreshingAll={refreshingAny} activeView={activeView} onViewChange={handleViewChange} trashCount={trash.length} hasServices={services.length > 0 && !loading} services={services} cardStyle={cardStyle} onToggleCardStyle={toggleCardStyle} />
 
       <NotificationInbox open={inboxOpen} onClose={() => setInboxOpen(false)} onAction={handleNotificationAction} />
+      <ConfirmDialog open={confirmState.open} title={confirmState.title} description={confirmState.description} isDanger={confirmState.isDanger} onClose={() => setConfirmState(prev => ({ ...prev, open: false }))} onConfirm={confirmState.onConfirm} />
 
       {activeView === 'active' && (
         <>{loading ? <div className="state-box"><Loader size={22} /><p>{t('loading_services')}</p></div> : visible.length === 0 ? <div className="state-box"><FiZap size={28} /><h3>{t('no_services_found')}</h3><p>{services.length === 0 ? t('add_first_service') : t('no_results_filter')}</p>{services.length === 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}><button className="btn btn--primary" onClick={() => setDialog({ open: true, service: null })}>{t('add_service')}</button><div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}><span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Have a backup file?</span><input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".json" onChange={handleImportFromEmptyState} /><button className="btn btn--ghost btn--sm" onClick={() => fileInputRef.current?.click()}><FiUpload size={14} /> Restore Data</button></div></div>}</div> : 
         visible.length > 50 ? (
-          <Virtuoso
-            useWindowScroll
-            data={visible}
-            itemContent={(index, s) => (
+          <Virtuoso useWindowScroll data={visible} itemContent={(index, s) => (
               <div style={{ paddingBottom: '16px' }}>
-                <ServiceCard key={s.id} id={`service-${s.id}`} service={s} useAccordion={useAccordion} cardStyle={cardStyle} refreshing={refreshingIds.has(s.id)} isFlashing={flashingId === s.id} selected={selectedIds.has(s.id)} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRefresh={async () => { setProcessingOverlay('Refreshing bill...'); try { const updated = await actions.refresh(s.id); toast.success('Refreshed'); if (updated) await trackBill(s, updated); } catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Refresh failed`); } finally { setProcessingOverlay(null); } }} onEdit={() => setDialog({ open: true, service: s })} onAbout={() => setAboutDialog({ open: true, service: s })} onDelete={() => { setConfirmState({ open: true, title: 'Move to Trash?', description: 'This service will be moved to the Trash.', isDanger: true, onConfirm: async () => { const tst = toast.loading('Moving to trash…'); try { await actions.remove(s.id); toast.success('Moved to trash', { id: tst }); clearSelection(); } catch (e) { toast.error(`Failed to move`, { id: tst }); } } }); }} onTogglePin={() => actions.update(s.id, { pinned: !s.pinned })} onCalculateBill={(svc) => handleCalculateBill(svc)} onShowQR={(svc) => setQrDialog({ open: true, service: svc })} onPay={() => handlePay(s)} onShare={() => handleShare(s)} onShareReport={() => handleShareMonthlyReport(s)} />
+                <ServiceCard key={s.id} id={`service-${s.id}`} service={s} useAccordion={useAccordion} cardStyle={cardStyle} refreshing={refreshingIds.has(s.id) || refreshingAny} isFlashing={flashingId === s.id} selected={selectedIds.has(s.id)} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRefresh={async () => { window.dispatchEvent(new CustomEvent('global-progress', { detail: 'Refreshing bill...' })); try { const updated = await actions.refresh(s.id); toast.success('Refreshed'); if (updated) await trackBill(s, updated); } catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Refresh failed`); } finally { window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); } }} onEdit={() => setDialog({ open: true, service: s })} onAbout={() => setAboutDialog({ open: true, service: s })} onDelete={() => { setConfirmState({ open: true, title: 'Move to Trash?', description: 'This service will be moved to the Trash.', isDanger: true, onConfirm: async () => { const tst = toast.loading('Moving to trash…'); try { await actions.remove(s.id); toast.success('Moved to trash', { id: tst }); clearSelection(); } catch (e) { toast.error(`Failed to move`, { id: tst }); } } }); }} onTogglePin={() => actions.update(s.id, { pinned: !s.pinned })} onCalculateBill={(svc) => handleCalculateBill(svc)} onShowQR={(svc) => setQrDialog({ open: true, service: svc })} onPay={() => handlePay(s)} onShare={() => handleShare(s)} onShareReport={() => handleShareMonthlyReport(s)} />
               </div>
             )}
           />
         ) : (
           <div className="grid">
             {visible.map(s => (
-              <ServiceCard key={s.id} id={`service-${s.id}`} service={s} useAccordion={useAccordion} cardStyle={cardStyle} refreshing={refreshingIds.has(s.id)} isFlashing={flashingId === s.id} selected={selectedIds.has(s.id)} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRefresh={async () => { setProcessingOverlay('Refreshing bill...'); try { const updated = await actions.refresh(s.id); toast.success('Refreshed'); if (updated) await trackBill(s, updated); } catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Refresh failed`); } finally { setProcessingOverlay(null); } }} onEdit={() => setDialog({ open: true, service: s })} onAbout={() => setAboutDialog({ open: true, service: s })} onDelete={() => { setConfirmState({ open: true, title: 'Move to Trash?', description: 'This service will be moved to the Trash.', isDanger: true, onConfirm: async () => { const tst = toast.loading('Moving to trash…'); try { await actions.remove(s.id); toast.success('Moved to trash', { id: tst }); clearSelection(); } catch (e) { toast.error(`Failed to move`, { id: tst }); } } }); }} onTogglePin={() => actions.update(s.id, { pinned: !s.pinned })} onCalculateBill={(svc) => handleCalculateBill(svc)} onShowQR={(svc) => setQrDialog({ open: true, service: svc })} onPay={() => handlePay(s)} onShare={() => handleShare(s)} onShareReport={() => handleShareMonthlyReport(s)} />
+              <ServiceCard key={s.id} id={`service-${s.id}`} service={s} useAccordion={useAccordion} cardStyle={cardStyle} refreshing={refreshingIds.has(s.id) || refreshingAny} isFlashing={flashingId === s.id} selected={selectedIds.has(s.id)} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRefresh={async () => { window.dispatchEvent(new CustomEvent('global-progress', { detail: 'Refreshing bill...' })); try { const updated = await actions.refresh(s.id); toast.success('Refreshed'); if (updated) await trackBill(s, updated); } catch (e) { if (e?.message !== 'CANCELLED') toast.error(`Refresh failed`); } finally { window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); } }} onEdit={() => setDialog({ open: true, service: s })} onAbout={() => setAboutDialog({ open: true, service: s })} onDelete={() => { setConfirmState({ open: true, title: 'Move to Trash?', description: 'This service will be moved to the Trash.', isDanger: true, onConfirm: async () => { const tst = toast.loading('Moving to trash…'); try { await actions.remove(s.id); toast.success('Moved to trash', { id: tst }); clearSelection(); } catch (e) { toast.error(`Failed to move`, { id: tst }); } } }); }} onTogglePin={() => actions.update(s.id, { pinned: !s.pinned })} onCalculateBill={(svc) => handleCalculateBill(svc)} onShowQR={(svc) => setQrDialog({ open: true, service: svc })} onPay={() => handlePay(s)} onShare={() => handleShare(s)} onShareReport={() => handleShareMonthlyReport(s)} />
             ))}
           </div>
         )
@@ -999,105 +589,11 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       <Suspense fallback={null}>
         <BillCalculator open={calculator.open} service={calculator.service} onClose={() => setCalculator({ open: false, service: null })} />
       </Suspense>
-      <QRCodeDialog 
-        open={qrDialog.open} 
-        service={qrDialog.service} 
-        onClose={() => setQrDialog({ open: false, service: null })} 
-        onSave={async (id, patch) => {
-          await actions.update(id, patch);
-          setQrDialog(prev => ({ ...prev, service: { ...prev.service, ...patch } }));
-        }}
-      />
-      {bulkResult && createPortal(
-        <div className="overlay overlay--center" onClick={() => setBulkResult(null)}>
-          <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw' }}>
-            <h2 className="dialog__title">Bulk Add Results</h2>
-            <div className="dialog__body" style={{ maxHeight: '60vh', overflowY: 'auto', marginTop: '12px' }}>
-              {bulkResult.succeeded.length > 0 && (
-                <div style={{ marginBottom: '12px' }}>
-                  <p style={{ color: 'var(--green)', fontWeight: '700', fontSize: '13px' }}>✅ Added ({bulkResult.succeeded.length})</p>
-                  <p className="mono-sm" style={{ color: 'var(--text-2)' }}>{bulkResult.succeeded.join(', ')}</p>
-                </div>
-              )}
-              {bulkResult.inTrash.length > 0 && (
-                <div style={{ marginBottom: '12px' }}>
-                  <p style={{ color: 'var(--amber)', fontWeight: '700', fontSize: '13px' }}>⚠️ Skipped ({bulkResult.inTrash.length})</p>
-                  <p className="mono-sm" style={{ color: 'var(--text-2)' }}>{bulkResult.inTrash.join(', ')}</p>
-                </div>
-              )}
-              {bulkResult.alreadyExists.length > 0 && (
-                <div style={{ marginBottom: '12px' }}>
-                  <p style={{ color: 'var(--text-3)', fontWeight: '700', fontSize: '13px' }}>ℹ️ Already Active ({bulkResult.alreadyExists.length})</p>
-                </div>
-              )}
-              {bulkResult.failed.length > 0 && (
-                <div style={{ marginBottom: '12px' }}>
-                  <p style={{ color: 'var(--red)', fontWeight: '700', fontSize: '13px' }}>❌ Failed ({bulkResult.failed.length})</p>
-                  {bulkResult.failed.map((f, i) => (
-                    <p key={i} className="mono-sm" style={{ color: 'var(--text-2)' }}>{f.number}: {f.error}</p>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="dialog__footer">
-              <button className="btn btn--primary" onClick={() => setBulkResult(null)} style={{ width: '100%' }}>Got it</button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <QRCodeDialog open={qrDialog.open} service={qrDialog.service} onClose={() => setQrDialog({ open: false, service: null })} onSave={async (id, patch) => { await actions.update(id, patch); setQrDialog(prev => ({ ...prev, service: { ...prev.service, ...patch } })); }} />
+      {bulkResult && createPortal(<div className="overlay overlay--center" onClick={() => setBulkResult(null)}><div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw' }}><h2 className="dialog__title">Bulk Add Results</h2><div className="dialog__body" style={{ maxHeight: '60vh', overflowY: 'auto', marginTop: '12px' }}>{bulkResult.succeeded.length > 0 && (<div style={{ marginBottom: '12px' }}><p style={{ color: 'var(--green)', fontWeight: '700', fontSize: '13px' }}>✅ Added ({bulkResult.succeeded.length})</p><p className="mono-sm" style={{ color: 'var(--text-2)' }}>{bulkResult.succeeded.join(', ')}</p></div>)}{bulkResult.inTrash.length > 0 && (<div style={{ marginBottom: '12px' }}><p style={{ color: 'var(--amber)', fontWeight: '700', fontSize: '13px' }}>⚠️ Skipped ({bulkResult.inTrash.length})</p><p className="mono-sm" style={{ color: 'var(--text-2)' }}>{bulkResult.inTrash.join(', ')}</p></div>)}{bulkResult.alreadyExists.length > 0 && (<div style={{ marginBottom: '12px' }}><p style={{ color: 'var(--text-3)', fontWeight: '700', fontSize: '13px' }}>ℹ️ Already Active ({bulkResult.alreadyExists.length})</p></div>)}{bulkResult.failed.length > 0 && (<div style={{ marginBottom: '12px' }}><p style={{ color: 'var(--red)', fontWeight: '700', fontSize: '13px' }}>❌ Failed ({bulkResult.failed.length})</p>{bulkResult.failed.map((f, i) => (<p key={i} className="mono-sm" style={{ color: 'var(--text-2)' }}>{f.number}: {f.error}</p>))}</div>)}</div><div className="dialog__footer"><button className="btn btn--primary" onClick={() => setBulkResult(null)} style={{ width: '100%' }}>Got it</button></div></div></div>, document.body)}
       
-      {processingOverlay && createPortal(
-        <div style={{ position: 'fixed', inset: 0, zIndex: 150000, background: 'rgba(0,0,0,0.15)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div style={{ background: 'var(--bg-2)', padding: '40px 24px', borderRadius: '28px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border-hi)', textAlign: 'center', width: '100%', maxWidth: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-            <Loader size={44} />
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 6px', color: 'var(--text-1)', letterSpacing: '-0.02em' }}>{processingOverlay}</h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-1)', opacity: 0.7, margin: 0, fontWeight: '600' }}>Please wait, this might take a moment...</p>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      <ConfirmDialog open={confirmState.open} title={confirmState.title} description={confirmState.description} isDanger={confirmState.isDanger} onClose={() => setConfirmState(prev => ({ ...prev, open: false }))} onConfirm={confirmState.onConfirm} />
-      
-      <ConfirmDialog 
-        open={autoBackupPrompt} 
-        title="Backup Recommended" 
-        description="You have saved a lot of services! We recommend taking a backup of your data so you don't lose it if you change devices. Would you like to go to Data Management now?" 
-        isDanger={false} 
-        confirmText="Go to Backup"
-        cancelText="Not Now"
-        onClose={() => {
-          setAutoBackupPrompt(false);
-          // Snooze for 7 days
-          db.setSetting('auto_backup_prompt_snoozed_until', Date.now() + 7 * 24 * 60 * 60 * 1000);
-        }} 
-        onConfirm={() => {
-          setAutoBackupPrompt(false);
-          db.setSetting('has_seen_auto_backup_prompt', true);
-          window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'settings' } }));
-        }} 
-      />
-
-      <ConfirmDialog 
-        open={notificationPrompt} 
-        title="Get Bill Alerts" 
-        description="We'll notify you when a new bill is generated or if a due date is approaching. Turn on notifications?" 
-        isDanger={false} 
-        confirmText="Enable Alerts"
-        cancelText="Maybe Later"
-        onClose={() => {
-          setNotificationPrompt(false);
-          db.setSetting('has_seen_notification_prompt', true);
-        }} 
-        onConfirm={() => {
-          setNotificationPrompt(false);
-          db.setSetting('has_seen_notification_prompt', true);
-          import('./utils/notifications.js').then(m => m.setupPushNotifications(true));
-        }} 
-      />
+      <ConfirmDialog open={autoBackupPrompt} title="Backup Recommended" description="You have saved a lot of services! We recommend taking a backup of your data so you don't lose it if you change devices. Would you like to go to Data Management now?" isDanger={false} confirmText="Go to Backup" cancelText="Not Now" onClose={() => { setAutoBackupPrompt(false); db.setSetting('auto_backup_prompt_snoozed_until', Date.now() + 7 * 24 * 60 * 60 * 1000); }} onConfirm={() => { setAutoBackupPrompt(false); db.setSetting('has_seen_auto_backup_prompt', true); window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'settings' } })); }} />
+      <ConfirmDialog open={notificationPrompt} title="Get Bill Alerts" description="We'll notify you when a new bill is generated or if a due date is approaching. Turn on notifications?" isDanger={false} confirmText="Enable Alerts" cancelText="Maybe Later" onClose={() => { setNotificationPrompt(false); db.setSetting('has_seen_notification_prompt', true); }} onConfirm={() => { setNotificationPrompt(false); db.setSetting('has_seen_notification_prompt', true); import('./utils/notifications.js').then(m => m.setupPushNotifications(true)); }} />
     </div>
   );
 }
