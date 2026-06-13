@@ -82,6 +82,46 @@ export function isValidServiceNumber(value) {
   return /^\d{13}$/.test(String(value || '').trim());
 }
 
+export const formatIndianCurrency = (amount) =>
+  `₹${Math.round(amount || 0).toLocaleString('en-IN')}`;
+
+export const formatShareDate = (dateStr) => {
+  if (!dateStr) return 'N/A';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  // produces "14 Jun 2026"
+};
+
+export function generatePlainShareTable(items) {
+  if (!items || items.length === 0) return '';
+  
+  // Calculate column widths for better alignment
+  const maxNameLen = Math.max(...items.map(i => i.name.length), 5);
+  const maxAmtStrLen = Math.max(...items.map(i => formatIndianCurrency(i.amount).length), 8);
+  const maxUnitsStrLen = Math.max(...items.map(i => String(i.units).length), 3);
+  
+  let totalAmount = 0;
+  let totalUnits = 0;
+  
+  const rows = items.map(item => {
+    const amtVal = Number(item.amount || 0);
+    const unitVal = Number(item.units || 0);
+    totalAmount += amtVal;
+    totalUnits += unitVal;
+    
+    const name = item.name.padEnd(maxNameLen, ' ');
+    const amt = formatIndianCurrency(amtVal).padStart(maxAmtStrLen, ' ');
+    const units = String(unitVal).padStart(maxUnitsStrLen, ' ');
+    return `${name}   ${amt} · ${units} units`;
+  });
+
+  // Divider based on actual row width
+  const divider = '─'.repeat(maxNameLen + maxAmtStrLen + maxUnitsStrLen + 12);
+  const totalRow = `${'Total'.padEnd(maxNameLen, ' ')}   ${formatIndianCurrency(totalAmount).padStart(maxAmtStrLen, ' ')} · ${String(totalUnits).padStart(maxUnitsStrLen, ' ')} units`;
+
+  return [...rows, divider, totalRow].join('\n');
+}
+
 export function generateShareTable(items) {
   if (!items || items.length === 0) return '';
   
