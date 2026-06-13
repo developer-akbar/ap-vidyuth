@@ -75,8 +75,8 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_POSTHOG_KEY) {
 
 const NAV = [
   { id: 'electricity', icon: FiZap },
-  { id: 'appliances',  icon: FiMonitor },
   { id: 'home',        icon: FiGrid },
+  { id: 'appliances',  icon: FiMonitor },
   { id: 'settings',    icon: FiSettings },
 ];
 

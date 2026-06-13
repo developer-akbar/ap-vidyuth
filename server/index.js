@@ -695,7 +695,7 @@ async function buildSnapshot(serviceNumber, billdeskSession) {
   const pastAmounts  = trendMonths.map((m) => m.billAmount);
   const pastUnits    = trendMonths.map((m) => m.billedUnits);
   const historicalAmounts = hasCurrentMonthBillData ? pastAmounts.slice(0, -1) : pastAmounts;
-  const historicalUnits   = hasCurrentMonthBillData ? pastUnits.slice(0, -1) : pastUnits;
+  const historicalUnits   = pastUnits; // Include current month as per user request for insights accuracy
 
   function avg(arr) { return arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0; }
   function max(arr) { return arr.length ? Math.max(...arr) : 0; }
