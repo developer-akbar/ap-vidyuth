@@ -355,7 +355,7 @@ function BudgetRollup({ budgets, activeServices }) {
 }
 
 // ─── Service Comparison Row ──────────────────────────────────────────────────
-function ComparisonRow({ r, service, currentYear, maxAmt }) {
+function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
   const [expanded, setExpanded] = useState(false);
   const rowRef = useRef(null);
 
@@ -406,7 +406,9 @@ function ComparisonRow({ r, service, currentYear, maxAmt }) {
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{r.name}</p>
+                <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>
+                  {r.name} {isLowest && <span title="Lowest bill this month">🏆</span>}
+                </p>
                 <FiChevronDown style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-3)', fontSize: '0.75rem' }} />
               </div>
               <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>{r.serviceNumber}</span>
@@ -508,6 +510,7 @@ function MonthComparison({ activeServices, currentYear }) {
   if (rows.length === 0) return null;
 
   const maxAmt = Math.max(...rows.map(r => r.currAmt), 1);
+  const minAmt = Math.min(...rows.map(r => r.currAmt).filter(a => a > 0));
 
   return (
     <div className="scard" style={{ padding: '14px 16px', marginBottom: 16 }}>
@@ -519,7 +522,7 @@ function MonthComparison({ activeServices, currentYear }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {rows.map(r => (
-          <ComparisonRow key={r.id} r={r} service={r.service} currentYear={currentYear} maxAmt={maxAmt} />
+          <ComparisonRow key={r.id} r={r} service={r.service} currentYear={currentYear} maxAmt={maxAmt} isLowest={r.currAmt === minAmt && r.currAmt > 0} />
         ))}
       </div>
     </div>
@@ -557,10 +560,14 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
         if (b.isPaid && b.paidDate && b.dueDate && new Date(b.paidDate) <= new Date(b.dueDate)) onTimePaid++;
       });
 
-      const rate = svcUnits > 0 ? svcAmt / svcUnits : null;
-      if (rate !== null) {
-        if (rate < bestRate  && svcUnits > 0) { bestRate  = rate;  bestService  = s.label || s.customerName || s.serviceNumber; }
-        if (rate > worstRate && svcUnits > 0) { worstRate = rate; worstService = s.label || s.customerName || s.serviceNumber; }
+      // Most efficient connection ranking:
+      const isDomestic = (s.serviceNumber || '').startsWith('5') || (s.serviceNumber || '').startsWith('12') || (s.serviceNumber || '').startsWith('11');
+      if (isDomestic && svcUnits > 0) {
+        const avgUnits = svcUnits / 12; 
+        if (avgUnits < bestRate) {
+          bestRate = avgUnits;
+          bestService = s.label || s.customerName || s.serviceNumber;
+        }
       }
     });
 
@@ -639,8 +646,13 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
           borderTop: 'none',
           borderRadius: hideToggle ? 0 : '0 0 var(--radius-sm) var(--radius-sm)',
         }}>
-          {/* 4-stat grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+          {/* Responsive stats grid */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
+            gap: 10, 
+            marginBottom: 14 
+          }}>
             {[
               { label: 'Total Spent',    val: formatInr(data.totalSpent),                          color: 'var(--primary)' },
               { label: 'Total Units',    val: `${data.totalUnits.toLocaleString('en-IN')} u`,       color: 'var(--text-1)' },
@@ -653,27 +665,33 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
                 {sub && <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', margin: '2px 0 0' }}>{sub}</p>}
               </div>
             ))}
-          </div>
 
-          {/* On-time payment score */}
-          {data.totalBills > 0 && (
-            <div style={{
-              padding: '10px 12px', marginBottom: 12,
-              background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <div>
-                <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 2px' }}>On-time Payment Rate</p>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-2)', margin: 0 }}>{data.onTimePaid} of {data.totalBills} bills paid before due date</p>
-              </div>
-              <span style={{
-                fontSize: '1.125rem', fontWeight: 800,
-                color: data.onTimePaid / data.totalBills >= 0.8 ? 'var(--green)' : 'var(--amber)',
+            {/* On-time payment score - Slide into space if available, else new row */}
+            {data.totalBills > 0 && (
+              <div style={{
+                padding: '10px 12px',
+                background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                gridColumn: '1 / -1', // Default to full width
+                // At widths where 3 columns fit (approx 460px+ container), or 2 columns fit exactly,
+                // we want it to span only what's needed or remaining.
+                // However, 'auto-fill' with a spanning item can be tricky.
+                // Reverting to a more flexible spanning strategy:
+                flex: '1 1 140px',
               }}>
-                {Math.round((data.onTimePaid / data.totalBills) * 100)}%
-              </span>
-            </div>
-          )}
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 2px' }}>On-time Payment Rate</p>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-2)', margin: 0 }}>{data.onTimePaid} of {data.totalBills} bills paid before due date</p>
+                </div>
+                <span style={{
+                  fontSize: '1.125rem', fontWeight: 800, marginLeft: 12,
+                  color: data.onTimePaid / data.totalBills >= 0.8 ? 'var(--green)' : 'var(--amber)',
+                }}>
+                  {Math.round((data.onTimePaid / data.totalBills) * 100)}%
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Efficiency callout */}
           {data.bestService && activeServices.length > 1 && (
@@ -731,9 +749,8 @@ function ServiceTrendChart({ service }) {
   const [view, setView] = useState('amount');
 
   const { chartData, avg12, avg6 } = useMemo(() => {
+    // Mirror the backend index.js trendData logic for perfect sync
     const data = (service.trendData || [])
-      .sort((a, b) => a.month.localeCompare(b.month))
-      .slice(-12)
       .map(td => ({
         month: td.month,
         label: fmtMoKey(td.month),
@@ -743,9 +760,11 @@ function ServiceTrendChart({ service }) {
     
     const calculateAvg = (arr, key) => arr.length ? Math.round(arr.reduce((s, d) => s + d[key], 0) / arr.length) : 0;
 
+    // Use full trendData for 12m average (backend usually sends up to 18 months, we slice 12)
+    const data12 = data.slice(-12);
     const avg12 = {
-      amount: calculateAvg(data, 'amount'),
-      units: calculateAvg(data, 'units')
+      amount: calculateAvg(data12, 'amount'),
+      units: calculateAvg(data12, 'units')
     };
 
     const data6 = data.slice(-6);
@@ -754,7 +773,7 @@ function ServiceTrendChart({ service }) {
       units: calculateAvg(data6, 'units')
     };
 
-    return { chartData: data, avg12, avg6 };
+    return { chartData: data12, avg12, avg6 };
   }, [service.trendData]);
 
   if (chartData.length < 2) return <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', textAlign: 'center', padding: '20px 0' }}>Not enough data for trend</p>;

@@ -125,21 +125,31 @@ export function ServiceCard({
 
   const currentYearTotalPaid = useMemo(() => {
     if (!service.billHistory?.length) return null;
-    const currentYear = new Date().getFullYear();
-    const paymentsThisYear = service.billHistory.filter(ph => new Date(ph.billDate).getFullYear() === currentYear);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    // Only consider bills from the current year up to the current month
+    const paymentsThisYear = service.billHistory.filter(ph => {
+      const d = new Date(ph.billDate);
+      return d.getFullYear() === currentYear && d.getMonth() <= currentMonth;
+    });
     
     if (!paymentsThisYear.length) return null;
 
     const total = paymentsThisYear.reduce((sum, ph) => sum + Number(ph.billAmount || 0), 0);
     
-    // Find the latest month
-    const months = paymentsThisYear.map(ph => new Date(ph.billDate).getMonth());
-    const maxMonthIndex = Math.max(...months);
-    const maxMonthName = new Date(currentYear, maxMonthIndex).toLocaleString('en-IN', { month: 'short' });
+    // Determine the end month for the label
+    // Use the latest bill month from history for this year.
+    let endMonthName = '—';
+    if (paymentsThisYear.length > 0) {
+      const sorted = [...paymentsThisYear].sort((a, b) => new Date(b.billDate) - new Date(a.billDate));
+      endMonthName = new Date(sorted[0].billDate).toLocaleString('en-IN', { month: 'short' });
+    }
 
     return {
       total,
-      label: `Jan - ${maxMonthName} ${currentYear}`
+      label: `Jan - ${endMonthName} ${currentYear}`
     };
   }, [service.billHistory]);
 
