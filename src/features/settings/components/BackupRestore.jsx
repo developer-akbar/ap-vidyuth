@@ -35,6 +35,7 @@ export function BackupRestore({ electricityContext }) {
         customerName: s.customerName,
         pinned: s.pinned,
         billTime: s.billTime,
+        billNoPrefix: s.billNoPrefix,
         meterReadings: readings
       };
     }));
@@ -45,7 +46,7 @@ export function BackupRestore({ electricityContext }) {
         version: 2,
         theme: localStorage.getItem('theme') || 'light',
         language: localStorage.getItem('i18nextLng') || 'en',
-        appliances: await db.getSetting('saved_appliances') || []
+        appliances: await db.getSetting('saved_appliances_v2') || await db.getSetting('saved_appliances') || []
       },
       ...servicesData
     ];
@@ -236,6 +237,7 @@ export function BackupRestore({ electricityContext }) {
           
           // Clear some specific settings
           await db.setSetting('saved_appliances', []);
+          await db.setSetting('saved_appliances_v2', []);
           await db.setSetting('notification_history', []);
           
           toast.success('All data wiped successfully', { id: toastId });
