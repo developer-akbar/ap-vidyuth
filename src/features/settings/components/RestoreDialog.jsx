@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FiAlertTriangle, FiX } from 'react-icons/fi';
+import { SERVICE_CAP } from '../../../shared/utils/index.js';
 
 export function RestoreDialog({ open, previewCount, hasData, onClose, onConfirm }) {
   // Prevent scrolling when open
@@ -52,6 +53,11 @@ export function RestoreDialog({ open, previewCount, hasData, onClose, onConfirm 
           <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-1)' }}>
             <strong>Preview:</strong> This backup contains <b>{previewCount}</b> valid services.
           </p>
+          {previewCount > SERVICE_CAP && (
+            <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--amber)', fontWeight: '600' }}>
+              Note: Only the first {SERVICE_CAP} services will be restored due to the current limit.
+            </p>
+          )}
         </div>
 
         {hasData ? (

@@ -1,5 +1,6 @@
 import { db } from '../db/storage.js';
 import toast from 'react-hot-toast';
+import { SERVICE_CAP } from './index.js';
 
 export async function importBackupData(file, { services, trash, actions }, t, ph, onComplete, options = {}) {
   const { wipeFirst = false, onProgress } = options;
@@ -101,12 +102,12 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
 
           if (inActive || inTrash) {
             skipCount++;
+            // ... (rest of logic for updates)
             if (inActive) {
               const patch = {};
               if (entry.label && !inActive.label) patch.label = entry.label;
               if (entry.pinned) patch.pinned = true;
               
-              // Only restore month-specific data if it's from the current period
               if (isCurrentPeriod) {
                 if (entry.billTime) patch.billTime = entry.billTime;
                 if (entry.billNoPrefix) patch.billNoPrefix = entry.billNoPrefix;
@@ -117,15 +118,22 @@ export async function importBackupData(file, { services, trash, actions }, t, ph
               }
             }
             if (entry.meterReadings && entry.meterReadings.length > 0) {
-              // Handle meter readings: Filter for freshness
               const freshReadings = entry.meterReadings.filter(r => new Date(r.date).getTime() > readingCutoff);
               if (freshReadings.length > 0) {
                 await db.setSetting(`readings_${sn}`, freshReadings);
               }
             }
           } else {
+            // Check cap before adding new
+            if (services.length + toAdd.length >= SERVICE_CAP) {
+               continue; 
+            }
             toAdd.push({ number: sn, label: entry.label, pinned: !!entry.pinned, entryData: entry });
           }
+        }
+
+        if (validEntries.length > (skipCount + toAdd.length)) {
+           toast.error(`Service limit reached (${SERVICE_CAP}). Some services from backup were skipped.`);
         }
 
         let successCount = 0;

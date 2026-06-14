@@ -364,3 +364,7 @@ export async function bulkDeletePermanently(ids) {
   const tasks = ids.map(id => () => deletePermanently(id));
   return runWithConcurrency(tasks, 4);
 }
+
+export async function validateCoupon(code) {
+  return apiPost('/validate-coupon', { code });
+}

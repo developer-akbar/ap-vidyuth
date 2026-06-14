@@ -21,6 +21,7 @@ import {
   restoreService,
   shouldAutoRefresh,
   updateService,
+  validateCoupon as validateCouponApi,
 } from '../api/servicesApi.js';
 import { getValidSession } from '../utils/billdeskSession.jsx';
 import { syncPushTokenWithServer } from '../utils/notifications.js';
@@ -32,12 +33,13 @@ const initialState = {
   trash: [],
   loading: true,
   refreshingIds: new Set(),
+  isPro: false,
 };
 
 function reducer(state, action) {
   switch (action.type) {
     case 'LOAD':
-      return { ...state, services: action.services, trash: action.trash, loading: false };
+      return { ...state, services: action.services, trash: action.trash, isPro: action.isPro, loading: false };
 
     case 'REFRESHING_ADD': {
       const next = new Set(state.refreshingIds);
@@ -66,8 +68,13 @@ export function useElectricityServices() {
   // ── Reload from local DB ────────────────────────────────────────────────────
   const reload = useCallback(async () => {
     try {
-      const [services, trash] = await Promise.all([listServices(), listTrash()]);
-      dispatch({ type: 'LOAD', services, trash });
+      const { db } = await import('../../../shared/db/storage.js');
+      const [services, trash, isPro] = await Promise.all([
+        listServices(), 
+        listTrash(),
+        db.getSetting('is_pro')
+      ]);
+      dispatch({ type: 'LOAD', services, trash, isPro: !!isPro });
       
       // Sync push notifications state with server
       syncPushTokenWithServer().catch(err => console.error("Push sync failed", err));
@@ -75,7 +82,7 @@ export function useElectricityServices() {
       return services; // return so auto-refresh can inspect them
     } catch (e) {
       console.error("[useElectricityServices] Failed to load services:", e);
-      dispatch({ type: 'LOAD', services: [], trash: [] });
+      dispatch({ type: 'LOAD', services: [], trash: [], isPro: false });
       return [];
     }
   }, []);
@@ -218,6 +225,11 @@ export function useElectricityServices() {
     await reload();
   }, [reload]);
 
+  const bulkRemove = useCallback(async (ids) => {
+    await bulkMoveToTrash(ids);
+    await reload();
+  }, [reload]);
+
   // ── actions.restore ─────────────────────────────────────────────────────────
   // PUT /services/:id/restore
   const restore = useCallback(async (id) => {
@@ -242,13 +254,18 @@ export function useElectricityServices() {
     await reload();
   }, [reload]);
 
-  const bulkRemove = useCallback(async (ids) => {
-    await bulkMoveToTrash(ids);
-    await reload();
+  const validateCoupon = useCallback(async (code) => {
+    const res = await validateCouponApi(code);
+    if (res.ok) {
+       const { db } = await import('../../../shared/db/storage.js');
+       await db.setSetting('is_pro', true);
+       await reload();
+    }
+    return res;
   }, [reload]);
 
   return {
     ...state,
-    actions: { reload, add, refresh, refreshAll, update, remove, bulkRemove, restore, bulkRestore, purge, bulkPurge },
+    actions: { reload, add, refresh, refreshAll, update, remove, bulkRemove, restore, bulkRestore, purge, bulkPurge, validateCoupon },
   };
-}
+  }

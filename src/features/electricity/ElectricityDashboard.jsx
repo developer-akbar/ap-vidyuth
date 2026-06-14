@@ -19,13 +19,15 @@ import {
   generateShareTable, 
   formatIndianCurrency, 
   formatShareDate, 
-  generatePlainShareTable 
+  generatePlainShareTable,
+  SERVICE_CAP
 } from '../../shared/utils/index.js';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog.jsx';
 import { Loader } from '../../shared/components/Loader.jsx';
 import { useTranslation } from 'react-i18next';
 import { usePostHog } from '@posthog/react';
 import { HelpFooter } from './components/CalculationSettings.jsx';
+import { ServiceCapModal, MandatoryCleanupModal } from './components/ServiceCapModals.jsx';
 
 import { NotificationInbox, saveNotificationToHistory } from './components/NotificationInbox.jsx';
 import { db } from '../../shared/db/storage.js';
@@ -44,7 +46,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   const { isOffline } = useNetwork({
     onReconnect: () => toast.success(t('back_online'), { duration: 2000 })
   });
-  const { services, trash, loading, refreshingIds, actions } = electricityContext;
+  const { services, trash, loading, refreshingIds, actions, isPro } = electricityContext;
   const [filters, setFilters] = useState({ query: '', status: '', sort: 'amount' });
   const [cardStyle, setCardStyle] = useState(localStorage.getItem('appearance_card_style') || 'classic'); 
   const [activeView, setActiveView] = useState('active');
@@ -68,6 +70,9 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   const [bulkResult, setBulkResult] = useState(null);
   const [autoBackupPrompt, setAutoBackupPrompt] = useState(false);
   const [notificationPrompt, setNotificationPrompt] = useState(false);
+
+  const [capModalOpen, setCapModalOpen] = useState(false);
+  const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
 
   // ── Core Internal Functions ───────────────────────────────────────────────
   
@@ -159,6 +164,11 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       if (window.history.replaceState) window.history.replaceState({}, '', '/');
       return true;
     } else {
+      if (services.length >= SERVICE_CAP && !isPro) {
+        setCapModalOpen(true);
+        if (window.history.replaceState) window.history.replaceState({}, '', '/');
+        return false;
+      }
       setDialog({ open: true, service: null, initialServiceNumber: sn });
       if (window.history.replaceState) window.history.replaceState({}, '', '/');
       return true;
@@ -299,6 +309,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       if (pendingDeepLink.current) { processDeepLink(pendingDeepLink.current); pendingDeepLink.current = null; }
       checkBootAction();
       if (services.length > 0) selfHealNotifications();
+      if (services.length > SERVICE_CAP && !isPro) setCleanupModalOpen(true);
     };
     if (!loading) init();
   }, [loading]);
@@ -421,11 +432,21 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   async function submitService(payload) {
     if (payload.isBulk) {
       const { entries } = payload;
-      if (ph) ph.capture('bulk_add_started', { count: entries.length });
+      const remaining = SERVICE_CAP - services.length;
+      if (remaining <= 0) {
+        setCapModalOpen(true);
+        return;
+      }
+      const toAdd = entries.slice(0, remaining);
+      if (entries.length > remaining) {
+        toast.error(`Only ${remaining} more service(s) can be added (Limit: ${SERVICE_CAP})`);
+      }
+
+      if (ph) ph.capture('bulk_add_started', { count: toAdd.length });
       setIsProcessing(true);
-      window.dispatchEvent(new CustomEvent('global-progress', { detail: `Validating ${entries.length} services...` }));
+      window.dispatchEvent(new CustomEvent('global-progress', { detail: `Validating ${toAdd.length} services...` }));
       const results = { succeeded: [], failed: [], alreadyExists: [], inTrash: [] };
-      for (const entry of entries) {
+      for (const entry of toAdd) {
         const sn = entry.number;
         const inActive = services.find(s => s.serviceNumber === sn);
         const inTrash = trash.find(t => t.serviceNumber === sn);
@@ -434,7 +455,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
         try {
           await actions.add({ isBulk: false, serviceNumber: sn, label: entry.label, pinned: !!entry.pinned });
           results.succeeded.push(sn);
-          window.dispatchEvent(new CustomEvent('global-progress', { detail: `Added ${results.succeeded.length}/${entries.length}...` }));
+          window.dispatchEvent(new CustomEvent('global-progress', { detail: `Added ${results.succeeded.length}/${toAdd.length}...` }));
         } catch (e) {
           if (e?.message === 'CANCELLED') { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); setBulkResult(results); return; }
           results.failed.push({ number: sn, error: e?.message || 'Unknown error' });
@@ -448,6 +469,10 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       try { await actions.update(dialog.service.id, { label: payload.label }); toast.success('Updated'); } catch(e) { toast.error(`Update failed: ${e?.message || 'Unknown error'}`); }
       finally { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); }
     } else {
+      if (services.length >= SERVICE_CAP && !isPro) {
+        setCapModalOpen(true);
+        return;
+      }
       const inTrash = trash.find(t => t.serviceNumber === payload.serviceNumber);
       if (inTrash) {
         setConfirmState({ open: true, title: 'Restore from Trash?', description: 'This service is currently in the Trash.\n\nWould you like to restore it instead of adding a new one?', isDanger: false,
@@ -472,6 +497,12 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
     const ids = Array.from(selectedIds); if (ids.length === 0) return;
     const actionText = action === 'trash' ? 'move to trash' : action === 'restore' ? 'restore' : 'permanently delete';
     const isDanger = action === 'trash' || action === 'purge';
+
+    if (action === 'restore' && (services.length + ids.length) > SERVICE_CAP && !isPro) {
+      setCapModalOpen(true);
+      return;
+    }
+
     setConfirmState({ open: true, title: `${action.charAt(0).toUpperCase() + action.slice(1)} ${ids.length} services?`, description: `Are you sure you want to ${actionText} the selected services?`, isDanger,
       onConfirm: async () => {
         const tst = toast.loading(`${action.charAt(0).toUpperCase() + action.slice(1)}ing...`);
@@ -562,7 +593,11 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       <SummaryBar services={services} />
       {activeView === 'active' && services.length > 0 && !loading && <DailyTip />}
 
-      <Toolbar filters={filters} onFiltersChange={setFilters} onAdd={() => setDialog({ open: true, service: null })} onRefreshAll={() => handleRefreshAll()} refreshingAll={refreshingAny} activeView={activeView} onViewChange={handleViewChange} trashCount={trash.length} hasServices={services.length > 0 && !loading} services={services} cardStyle={cardStyle} onToggleCardStyle={toggleCardStyle} />
+      <Toolbar filters={filters} onFiltersChange={setFilters} onAdd={() => {
+        if (services.length >= SERVICE_CAP && !isPro) setCapModalOpen(true);
+        else setDialog({ open: true, service: null });
+      }}
+ onRefreshAll={() => handleRefreshAll()} refreshingAll={refreshingAny} activeView={activeView} onViewChange={handleViewChange} trashCount={trash.length} hasServices={services.length > 0 && !loading} services={services} cardStyle={cardStyle} onToggleCardStyle={toggleCardStyle} />
 
       <NotificationInbox open={inboxOpen} onClose={() => setInboxOpen(false)} onAction={handleNotificationAction} />
       <ConfirmDialog open={confirmState.open} title={confirmState.title} description={confirmState.description} isDanger={confirmState.isDanger} onClose={() => setConfirmState(prev => ({ ...prev, open: false }))} onConfirm={confirmState.onConfirm} />
@@ -586,7 +621,13 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
         }</>
       )}
 
-      {activeView === 'trash' && <TrashView services={trash} selectedIds={selectedIds} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRestore={id => { setConfirmState({ open: true, title: 'Restore service?', description: 'This service will be restored.', isDanger: false, onConfirm: async () => { const tst = toast.loading('Restoring…'); try { await actions.restore(id); toast.success('Restored', { id: tst }); clearSelection(); handleViewChange('active'); flashCard(id); } catch (e) { toast.error(`Restore failed`, { id: tst }); } } }); }} onDeletePermanent={id => { setConfirmState({ open: true, title: 'Delete permanently?', description: 'This action cannot be undone.', isDanger: true, onConfirm: () => toast.promise(actions.purge(id), { loading: 'Deleting…', success: () => { clearSelection(); return 'Deleted permanently'; }, error: 'Delete failed' }) }); }} />}
+      {activeView === 'trash' && <TrashView services={trash} selectedIds={selectedIds} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRestore={id => { 
+        if (services.length >= SERVICE_CAP && !isPro) {
+          setCapModalOpen(true);
+          return;
+        }
+        setConfirmState({ open: true, title: 'Restore service?', description: 'This service will be restored.', isDanger: false, onConfirm: async () => { const tst = toast.loading('Restoring…'); try { await actions.restore(id); toast.success('Restored', { id: tst }); clearSelection(); handleViewChange('active'); flashCard(id); } catch (e) { toast.error(`Restore failed`, { id: tst }); } } }); 
+      }} onDeletePermanent={id => { setConfirmState({ open: true, title: 'Delete permanently?', description: 'This action cannot be undone.', isDanger: true, onConfirm: () => toast.promise(actions.purge(id), { loading: 'Deleting…', success: () => { clearSelection(); return 'Deleted permanently'; }, error: 'Delete failed' }) }); }} />}
 
       <ServiceDialog open={dialog.open} service={dialog.service} initialServiceNumber={dialog.initialServiceNumber} services={services} onClose={() => setDialog({ open: false, service: null })} onSubmit={submitService} />
       <ServiceAboutDialog open={aboutDialog.open} service={aboutDialog.service} onClose={() => setAboutDialog({ open: false, service: null })} />
@@ -598,6 +639,23 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       
       <ConfirmDialog open={autoBackupPrompt} title="Backup Recommended" description="You have saved a lot of services! We recommend taking a backup of your data so you don't lose it if you change devices. Would you like to go to Data Management now?" isDanger={false} confirmText="Go to Backup" cancelText="Not Now" onClose={() => { setAutoBackupPrompt(false); db.setSetting('auto_backup_prompt_snoozed_until', Date.now() + 7 * 24 * 60 * 60 * 1000); }} onConfirm={() => { setAutoBackupPrompt(false); db.setSetting('has_seen_auto_backup_prompt', true); window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'settings' } })); }} />
       <ConfirmDialog open={notificationPrompt} title="Get Bill Alerts" description="We'll notify you when a new bill is generated or if a due date is approaching. Turn on notifications?" isDanger={false} confirmText="Enable Alerts" cancelText="Maybe Later" onClose={() => { setNotificationPrompt(false); db.setSetting('has_seen_notification_prompt', true); }} onConfirm={() => { setNotificationPrompt(false); db.setSetting('has_seen_notification_prompt', true); import('./utils/notifications.js').then(m => m.setupPushNotifications(true)); }} />
+
+      <ServiceCapModal open={capModalOpen} onClose={() => setCapModalOpen(false)} />
+      {cleanupModalOpen && (
+        <MandatoryCleanupModal 
+          services={services} 
+          onConfirm={async (keepIds, deleteIds) => {
+            const tst = toast.loading('Cleaning up...');
+            try {
+              await actions.bulkRemove(deleteIds);
+              setCleanupModalOpen(false);
+              toast.success('Cleaned up!', { id: tst });
+            } catch (e) {
+              toast.error('Cleanup failed', { id: tst });
+            }
+          }} 
+        />
+      )}
     </div>
   );
 }
