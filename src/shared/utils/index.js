@@ -150,3 +150,22 @@ export function generateShareTable(items) {
 }
 
 export const SERVICE_CAP = Number(import.meta.env.VITE_SERVICE_CAP) || 4;
+
+/**
+ * Gets a unique device identifier.
+ */
+export async function getDeviceId() {
+  try {
+    const { Device } = await import('@capacitor/device');
+    const info = await Device.getId();
+    return info.identifier;
+  } catch (e) {
+    // Fallback for web or if plugin fails: Use a persistent UUID
+    let id = localStorage.getItem('ap_vidyuth_device_id');
+    if (!id) {
+      id = 'WEB_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('ap_vidyuth_device_id', id);
+    }
+    return id;
+  }
+}

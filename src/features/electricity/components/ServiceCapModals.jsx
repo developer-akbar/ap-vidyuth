@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { FiAlertCircle, FiCheck, FiMail, FiTrash2, FiZap, FiStar } from 'react-icons/fi';
-import { SERVICE_CAP } from '../../../shared/utils/index.js';
+import { SERVICE_CAP, getDeviceId } from '../../../shared/utils/index.js';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
@@ -36,9 +36,10 @@ export function ServiceCapModal({ open, onClose }) {
     }
   };
 
-  const handleContactDeveloper = () => {
+  const handleContactDeveloper = async () => {
+    const deviceId = await getDeviceId();
     const subject = encodeURIComponent('Request for Extended Service Access - AP Vidyuth');
-    const body = encodeURIComponent('Hi Akbar,\n\nI would like to request extended access to track more than 4 services in the AP Vidyuth app. Please share coupon code.\n\n[Optional: Enter your reason here]');
+    const body = encodeURIComponent(`Hi Akbar,\n\nI would like to request extended access to track more than 4 services in the AP Vidyuth app. Please share coupon code.\n\nDevice ID: ${deviceId}\n\n[Optional: Enter your reason here]`);
     window.location.href = `mailto:mail.akbarmulla@gmail.com?subject=${subject}&body=${body}`;
   };
 
@@ -89,6 +90,13 @@ export function ServiceCapModal({ open, onClose }) {
           <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
             {validating ? 'Validating...' : t('apply_coupon', 'Apply Coupon')}
           </button>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: '600' }}>OR</span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+          </div>
+
           <button className="btn" style={{ width: '100%', background: 'var(--blue)', color: 'white' }} onClick={handleContactDeveloper} disabled={validating}>
             <FiMail size={16} style={{ marginRight: '8px' }} /> {t('contact_developer', 'Contact Developer')}
           </button>
@@ -165,9 +173,10 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
     }
   };
 
-  const handleContactDeveloper = () => {
+  const handleContactDeveloper = async () => {
+    const deviceId = await getDeviceId();
     const subject = encodeURIComponent('Request for Extended Service Access - AP Vidyuth');
-    const body = encodeURIComponent('Hi Akbar,\n\nI would like to request extended access to track more than 4 services in the AP Vidyuth app. Please share coupon code.\n\n[Optional: Enter your reason here]');
+    const body = encodeURIComponent(`Hi Akbar,\n\nI would like to request extended access to track more than 4 services in the AP Vidyuth app. Please share coupon code.\n\nDevice ID: ${deviceId}\n\n[Optional: Enter your reason here]`);
     window.location.href = `mailto:mail.akbarmulla@gmail.com?subject=${subject}&body=${body}`;
   };
 
