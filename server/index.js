@@ -1188,14 +1188,14 @@ app.post('/api/validate-coupon', (req, res) => {
   const validCode = process.env.AP_VIDYUTH_SERVICE_COUPON;
   const allowedDevices = (process.env.ALLOWED_DEVICE_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
   
-  // 1. Device Whitelist Bypass
+  // 1. Device Whitelist Bypass (Works even if code is empty)
   if (deviceId && allowedDevices.includes(deviceId)) {
     return res.json({ ok: true, message: 'Pro Access Granted (Device Whitelisted)' });
   }
 
   // 2. Master Coupon Validation
-  if (!validCode) {
-    return res.status(503).json({ ok: false, error: 'Coupon system not configured' });
+  if (!validCode || !code) {
+    return res.status(code ? 503 : 401).json({ ok: false, error: code ? 'Coupon system not configured' : 'Valid Coupon Code or Whitelisted Device Required' });
   }
 
   const normalizedInput = String(code || '').trim().toUpperCase();
