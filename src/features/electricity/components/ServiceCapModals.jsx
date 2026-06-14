@@ -87,7 +87,7 @@ export function ServiceCapModal({ open, onClose }) {
           </div>
         </div>
         <div className="dialog__footer" style={{ flexDirection: 'column', gap: '8px' }}>
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
+          <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating}>
             {validating ? 'Validating...' : t('apply_coupon', 'Apply Coupon')}
           </button>
           

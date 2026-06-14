@@ -69,12 +69,30 @@ export function useElectricityServices() {
   const reload = useCallback(async () => {
     try {
       const { db } = await import('../../../shared/db/storage.js');
-      const [services, trash, isPro] = await Promise.all([
+      const [services, trash, isProValue] = await Promise.all([
         listServices(), 
         listTrash(),
         db.getSetting('is_pro')
       ]);
-      dispatch({ type: 'LOAD', services, trash, isPro: !!isPro });
+
+      let isPro = !!isProValue;
+
+      // Silent whitelist check if not already Pro
+      if (!isPro) {
+        try {
+          const { validateCoupon } = await import('../api/servicesApi.js');
+          const res = await validateCoupon(''); // Check device whitelist with empty code
+          if (res.ok) {
+            const { isSecurePro } = await import('../utils/billing.js');
+            await db.setSetting('is_pro', isSecurePro('WHITELISTED'));
+            isPro = true;
+          }
+        } catch (e) {
+          // Silently fail, it's just a background check
+        }
+      }
+
+      dispatch({ type: 'LOAD', services, trash, isPro });
       
       // Sync push notifications state with server
       syncPushTokenWithServer().catch(err => console.error("Push sync failed", err));
