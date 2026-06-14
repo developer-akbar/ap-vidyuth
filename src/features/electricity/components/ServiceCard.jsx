@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import {
   FiCopy, FiExternalLink, FiMoreVertical,
   FiEdit2, FiTrash2, FiChevronDown, FiTrendingUp, FiTrendingDown,
-  FiCalendar, FiCheckCircle, FiAlertTriangle, FiZap, FiInfo, FiClock, FiAlertCircle, FiShare2, FiFileText, FiXCircle
+  FiCalendar, FiCheckCircle, FiAlertTriangle, FiZap, FiInfo, FiClock, FiAlertCircle, FiShare2, FiFileText, FiXCircle, FiPlus
 } from 'react-icons/fi';
 import { LuCalculator } from 'react-icons/lu';
 import { BsPin, BsPinFill, BsQrCode } from 'react-icons/bs';
@@ -23,28 +23,6 @@ import { db } from '../../../shared/db/storage.js';
 const TrendChart = lazy(() => import('./TrendChart.jsx').then(m => ({ default: m.TrendChart })));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-function MeterLogBadge({ serviceNumber }) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    const update = async () => {
-      const v = await db.getSetting(`readings_${serviceNumber}`);
-      if (Array.isArray(v)) {
-        const cutoff = Date.now() - 35 * 24 * 60 * 60 * 1000;
-        const recent = v.filter(r => new Date(r.date).getTime() > cutoff);
-        setCount(recent.length);
-      } else {
-        setCount(0);
-      }
-    };
-    update();
-    const interval = setInterval(update, 3000);
-    return () => clearInterval(interval);
-  }, [serviceNumber]);
-
-  if (count === 0) return null;
-  return <>{count}</>;
-}
 
 function TrendBadge({ value, unit = '', percent }) {
   if (value == null) return null;
@@ -79,7 +57,7 @@ function Section({ title, badge, defaultOpen = false, children, isExpanded }) {
       <button className="acc__head" onClick={() => setOpen(v => !v)}>
         <span className="acc__title">{title}</span>
         <div className="acc__right">
-          {typeof badge === 'string' || typeof badge === 'number' ? <span className="acc__badge">{badge}</span> : badge}
+          {(typeof badge === 'string' || typeof badge === 'number') ? <span className="acc__badge">{badge}</span> : badge}
           <FiChevronDown size={14} className="acc__chevron" />
         </div>
       </button>
@@ -103,6 +81,23 @@ export function ServiceCard({
   const longPressTimer = useRef(null);
   const headUpdateRef = useRef(null);
   const metricsUpdateRef = useRef(null);
+
+  const [meterLogCount, setMeterLogCount] = useState(0);
+
+  useEffect(() => {
+    const update = async () => {
+      const v = await db.getSetting(`readings_${service.serviceNumber}`);
+      if (Array.isArray(v)) {
+        const cutoff = Date.now() - 35 * 24 * 60 * 60 * 1000;
+        setMeterLogCount(v.filter(r => new Date(r.date).getTime() > cutoff).length);
+      } else {
+        setMeterLogCount(0);
+      }
+    };
+    update();
+    const interval = setInterval(update, 5000);
+    return () => clearInterval(interval);
+  }, [service.serviceNumber]);
 
   useEffect(() => {
     setIsExpanded(!useAccordion);
@@ -596,7 +591,7 @@ export function ServiceCard({
                    <div className="receipt-row" style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed var(--border-md)' }}>
                       <span className="receipt-row__label">Effective Rate (This Month)</span>
                       <b className="receipt-row__val">₹{((service.lastAmountDue || service.paidAmount || 0) / service.lastBilledUnits).toFixed(2)}/u</b>
-                   </div>
+                 </div>
                  )}
 
                  <button 
@@ -647,7 +642,7 @@ export function ServiceCard({
           <Section 
             title="Meter Reading Log" 
             isExpanded={isExpanded}
-            badge={<MeterLogBadge serviceNumber={service.serviceNumber} />}
+            badge={meterLogCount > 0 ? meterLogCount : null}
           >
             <div style={{ padding: '0 10px 10px' }}>
               <MeterReadingLog service={service} />
