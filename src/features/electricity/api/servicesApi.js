@@ -366,5 +366,7 @@ export async function bulkDeletePermanently(ids) {
 }
 
 export async function validateCoupon(code) {
-  return apiPost('/validate-coupon', { code });
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/validate-coupon', { code, deviceId });
 }
