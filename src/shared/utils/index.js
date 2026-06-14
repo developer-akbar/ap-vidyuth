@@ -148,3 +148,5 @@ export function generateShareTable(items) {
   table += '```';
   return table;
 }
+
+export const SERVICE_CAP = Number(import.meta.env.VITE_SERVICE_CAP) || 4;

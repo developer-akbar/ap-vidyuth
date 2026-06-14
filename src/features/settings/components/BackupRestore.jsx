@@ -5,10 +5,11 @@ import { SettingsItem } from './SettingsItem.jsx';
 import { db } from '../../../shared/db/storage.js';
 import toast from 'react-hot-toast';
 import { usePostHog } from '@posthog/react';
-import { importBackupData } from '../../../shared/utils/backupRestore.js';
+import { importBackupData, parseBackupFile } from '../../../shared/utils/backupRestore.js';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog.jsx';
 import { RestoreDialog } from './RestoreDialog.jsx';
 import { ExportDialog } from './ExportDialog.jsx';
+import { ServiceSelectionModal } from '../../electricity/components/ServiceCapModals.jsx';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
@@ -16,12 +17,13 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 export function BackupRestore({ electricityContext }) {
   const { t } = useTranslation();
   const context = electricityContext;
-  const { services, trash, actions } = context;
+  const { services, trash, actions, isPro } = context;
   const fileInputRef = useRef(null);
   const ph = usePostHog();
   const [isImporting, setIsImporting] = useState(false);
   const [confirmState, setConfirmState] = useState({ open: false, title: '', description: '', isDanger: false, onConfirm: () => {} });
-  const [restoreState, setRestoreState] = useState({ open: false, file: null });
+  const [restoreState, setRestoreState] = useState({ open: false, file: null, entries: [], meta: null });
+  const [selectionModal, setSelectionModal] = useState({ open: false, entries: [], meta: null });
   const [exportState, setExportState] = useState({ open: false, blob: null, filename: '', activeCount: 0 });
 
   const prepareExport = async () => {
@@ -173,10 +175,10 @@ export function BackupRestore({ electricityContext }) {
     }
   };
 
-  const executeRestore = async (file, wipeFirst) => {
+  const executeRestore = async (selectedEntries, meta, wipeFirst) => {
     setIsImporting(true);
     try {
-      await importBackupData(file, context, t, ph, () => {
+      await importBackupData(selectedEntries, meta, context, t, ph, () => {
         window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'electricity' } }));
       }, { wipeFirst });
     } finally {
@@ -189,36 +191,15 @@ export function BackupRestore({ electricityContext }) {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Read file for preview
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const rawData = JSON.parse(event.target.result);
-        let entries = [];
-        if (Array.isArray(rawData)) {
-           entries = rawData.filter(item => !item._meta).map(item => ({
-             ...item,
-             serviceNumber: item.serviceNumber || item.number
-           }));
-        } else if (rawData.version === 2 || rawData.services) {
-           entries = rawData.services || [];
-        } else if (rawData['ap-vidyuth-services'] || rawData['my-dashboard-services']) {
-           entries = rawData['ap-vidyuth-services'] || rawData['my-dashboard-services'] || [];
-        } else {
-           const anyArrayKey = Object.keys(rawData).find(k => Array.isArray(rawData[k]) && rawData[k].length > 0 && (rawData[k][0].serviceNumber || rawData[k][0].number));
-           if (anyArrayKey) entries = rawData[anyArrayKey];
-        }
-        
-        const validEntries = entries.filter(e => e.serviceNumber && e.serviceNumber.length === 13);
-        const hasData = services.length > 0 || trash.length > 0;
-        
-        setRestoreState({ open: true, file, previewCount: validEntries.length, hasData });
-      } catch (err) {
-        toast.error('Invalid backup file');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    };
-    reader.readAsText(file);
+    try {
+      const { entries, meta } = await parseBackupFile(file);
+      const validEntries = entries.filter(e => e.serviceNumber && e.serviceNumber.length === 13);
+      const hasData = services.length > 0 || trash.length > 0;
+      setRestoreState({ open: true, file, previewCount: validEntries.length, hasData, entries: validEntries, meta });
+    } catch (err) {
+      toast.error('Invalid backup file');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleWipeData = () => {
@@ -296,10 +277,21 @@ export function BackupRestore({ electricityContext }) {
       />
       <RestoreDialog
         open={restoreState.open}
-        onClose={() => setRestoreState({ open: false, file: null })}
+        onClose={() => setRestoreState({ open: false, file: null, entries: [], meta: null })}
+        previewCount={restoreState.previewCount}
+        hasData={restoreState.hasData}
         onConfirm={() => {
-          if (restoreState.file) executeRestore(restoreState.file, true);
+          setSelectionModal({ open: true, entries: restoreState.entries, meta: restoreState.meta });
         }}
+      />
+      <ServiceSelectionModal
+        open={selectionModal.open}
+        entries={selectionModal.entries}
+        isPro={isPro}
+        currentCount={0} 
+        title="Select Services to Restore"
+        onClose={() => setSelectionModal({ open: false, entries: [], meta: null })}
+        onConfirm={(toImport) => executeRestore(toImport, selectionModal.meta, true)}
       />
       <ExportDialog
         open={exportState.open}

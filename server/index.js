@@ -1183,6 +1183,21 @@ app.get('/api/notifications/check', async (req, res) => {
   }
 });
 
+app.post('/api/validate-coupon', (req, res) => {
+  const { code } = req.body || {};
+  const validCode = process.env.AP_VIDYUTH_SERVICE_COUPON;
+  
+  if (!validCode) {
+    return res.status(503).json({ ok: false, error: 'Coupon system not configured' });
+  }
+
+  if (code === validCode) {
+    res.json({ ok: true, message: 'Pro Access Granted' });
+  } else {
+    res.status(401).json({ ok: false, error: 'Invalid Coupon Code' });
+  }
+});
+
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 app.use((_req, res) => res.status(404).json({ ok: false, error: 'Not found' }));
 app.use((err, _req, res, _next) => res.status(500).json({ ok: false, error: 'Internal error' }));

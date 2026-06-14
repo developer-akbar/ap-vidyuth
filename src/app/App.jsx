@@ -66,7 +66,7 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_POSTHOG_KEY) {
   posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
     api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com',
     person_profiles: 'identified_only',
-    capture_pageview: false, 
+    capture_pageview: false,
     autocapture: false,
     disable_session_recording: true,
     disable_surveys: true,
@@ -75,9 +75,9 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_POSTHOG_KEY) {
 
 const NAV = [
   { id: 'electricity', icon: FiZap },
-  { id: 'home',        icon: FiGrid },
-  { id: 'appliances',  icon: FiMonitor },
-  { id: 'settings',    icon: FiSettings },
+  { id: 'home', icon: FiGrid },
+  { id: 'appliances', icon: FiMonitor },
+  { id: 'settings', icon: FiSettings },
 ];
 
 function AppContent() {
@@ -159,8 +159,16 @@ function AppContent() {
 
   useEffect(() => {
     const handleProgress = (e) => setGlobalProgress(e.detail);
+    const handleNavigate = (e) => {
+      const { page } = e.detail || {};
+      if (page) setActivePage(page);
+    };
     window.addEventListener('global-progress', handleProgress);
-    return () => window.removeEventListener('global-progress', handleProgress);
+    window.addEventListener('app-navigate', handleNavigate);
+    return () => {
+      window.removeEventListener('global-progress', handleProgress);
+      window.removeEventListener('app-navigate', handleNavigate);
+    };
   }, []);
 
   useEffect(() => {
@@ -170,7 +178,7 @@ function AppContent() {
         activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }
       document.documentElement.setAttribute('data-theme', activeTheme);
-      
+
       if (Capacitor.isNativePlatform()) {
         const isDark = activeTheme === 'dark';
         StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
@@ -192,7 +200,7 @@ function AppContent() {
     if (!Capacitor.isNativePlatform()) return;
     try {
       await Haptics.impact({ style });
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -234,7 +242,7 @@ function AppContent() {
             setActivePage('electricity');
           }
         }
-      } catch {}
+      } catch { }
     };
     const urlHandler = CapApp.addListener('appUrlOpen', handleUrlOpen);
 
@@ -278,7 +286,7 @@ function AppContent() {
       capHandler.then(h => h.remove());
       window.removeEventListener('popstate', popHandler);
     };
-  }, []); 
+  }, []);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -293,7 +301,7 @@ function AppContent() {
 
   useEffect(() => {
     if (window.history.state !== 'nav') {
-       window.history.pushState('nav', '');
+      window.history.pushState('nav', '');
     }
   }, [activePage]);
 
@@ -386,6 +394,9 @@ function AppContent() {
           <div className="sidebar__brand">
             <div className="sidebar__logo"><FiGrid size={16} /></div>
             <span>AP Vidyuth</span>
+            {electricityContext.isPro && (
+              <div style={{ marginLeft: 'auto', background: 'var(--primary)', color: '#fff', fontSize: '9px', padding: '1px 5px', borderRadius: '4px', fontWeight: '900' }}>PRO</div>
+            )}
           </div>
           <nav className="sidebar__nav">
             {NAV.map(({ id, icon: Icon }) => (
@@ -415,7 +426,14 @@ function AppContent() {
               {activePage === 'settings' && (
                 <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
                   <div className="page__header page__header--sticky">
-                    <div><h2 className="page__title">{t('settings')}</h2></div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <h2 className="page__title">{t('settings')}</h2>
+                      {electricityContext.isPro && (
+                        <div style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--primary)' }}>
+                          <FiZap size={14} fill="currentColor" /> PRO
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ marginBottom: '24px' }}>

@@ -64,7 +64,7 @@
   "payment_history": "Payment History",
   "trash_empty": "Trash is empty",
   "deleted_services_here": "Deleted services appear here",
-  "restore": "Restore",
+  "restore": "Restore Data",
   "deleted": "Deleted",
   "energy_charges": "Energy Charges",
   "fixed_charges": "Fixed Charges",
@@ -189,5 +189,16 @@
   "enter_valid_reading": "Enter a valid reading",
   "history_unavailable": "APSPDCL payment history is unavailable for this service number",
   "no_records_found": "No payment records found",
-  "back_online": "Back online"
-}
+  "back_online": "Back online",
+  "service_limit_reached": "Service Limit Reached",
+  "service_limit_desc": "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or contact the developer for extended access.",
+  "enter_coupon_code": "Enter Coupon Code",
+  "apply_coupon": "Apply Coupon",
+  "invalid_coupon": "Invalid Coupon Code",
+  "service_limit_update": "Service Limit Update",
+  "service_limit_cleanup_desc": "To ensure the best experience for everyone, we've introduced a limit of {{cap}} services per user. Please choose the {{cap}} services you'd like to keep. The others will be moved to the Trash.",
+  "keep_selected_trash_others": "Keep Selected & Trash Others",
+  "get_extended_access": "Get Extended Access",
+  "coupon_hint": "Have a coupon code? Contact the developer.",
+  "restore_limit_note": "Note: Only the first {{cap}} services will be restored due to the current limit."
+  }
