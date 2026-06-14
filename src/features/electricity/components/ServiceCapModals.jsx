@@ -90,6 +90,13 @@ export function ServiceCapModal({ open, onClose }) {
           <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
             {validating ? 'Validating...' : t('apply_coupon', 'Apply Coupon')}
           </button>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: '600' }}>OR</span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+          </div>
+
           <button className="btn" style={{ width: '100%', background: 'var(--blue)', color: 'white' }} onClick={handleContactDeveloper} disabled={validating}>
             <FiMail size={16} style={{ marginRight: '8px' }} /> {t('contact_developer', 'Contact Developer')}
           </button>
