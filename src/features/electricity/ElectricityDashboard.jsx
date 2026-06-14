@@ -478,9 +478,13 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   async function submitService(payload) {
     if (payload.isBulk) {
       const { entries } = payload;
+      if (isPro) {
+        executeBulkAdd(entries);
+        return;
+      }
       const totalAfter = services.length + entries.length;
       
-      if (totalAfter > SERVICE_CAP && !isPro) {
+      if (totalAfter > SERVICE_CAP) {
         setSelectionModal({ open: true, entries, type: 'bulk' });
         return;
       }
@@ -598,6 +602,9 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
             <p className="page__eyebrow"><FiZap size={12} /> APSPDCL</p>
             <div className="page__title-wrap" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h1 className="page__title" style={{ margin: 0 }}>AP Vidyuth</h1>
+              {isPro && (
+                <span style={{ background: 'var(--primary)', color: '#fff', fontSize: '10px', padding: '2px 8px', borderRadius: '12px', fontWeight: '900', letterSpacing: '0.5px' }}>PRO</span>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>

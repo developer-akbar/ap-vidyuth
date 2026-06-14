@@ -280,8 +280,13 @@ export function BackupRestore({ electricityContext }) {
         onClose={() => setRestoreState({ open: false, file: null, entries: [], meta: null })}
         previewCount={restoreState.previewCount}
         hasData={restoreState.hasData}
+        electricityContext={electricityContext}
         onConfirm={() => {
-          setSelectionModal({ open: true, entries: restoreState.entries, meta: restoreState.meta });
+          if (isPro) {
+            executeRestore(restoreState.entries, restoreState.meta, true);
+          } else {
+            setSelectionModal({ open: true, entries: restoreState.entries, meta: restoreState.meta });
+          }
         }}
       />
       <ServiceSelectionModal
