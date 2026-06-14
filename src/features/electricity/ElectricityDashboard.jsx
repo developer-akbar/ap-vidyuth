@@ -398,7 +398,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
         setPullDistance(70);
         setIsRefreshing(true);
         try {
-          await handleRefreshAll({ quiet: true });
+          await actions.reload();
         } catch (e) {}
         finally {
           setTimeout(() => {
@@ -481,6 +481,10 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
         } catch (e) { toast.error(`Action failed`, { id: tst }); }
       }
     });
+  };
+
+  const handleCalculateBill = (service) => {
+    setCalculator({ open: true, service });
   };
 
   const handleShare = async (service) => {

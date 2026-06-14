@@ -41,12 +41,12 @@ export function ServiceAboutDialog({ open, service, onClose }) {
   const info = [
     { label: t('unique_service_number'), value: service.serviceNumber },
     { label: t('customer_name'), value: service.customerName },
+    { label: t('category'), value: service.category },
+    { label: t('current_load'), value: service.ctrLoad },
     { label: t('division_code'), value: service.divisionCode },
     { label: t('division_name'), value: service.divisionName },
     { label: t('circle_name'), value: service.circleName },
     { label: t('section_name'), value: service.sectionName },
-    { label: t('category'), value: service.category },
-    { label: t('current_load'), value: service.ctrLoad },
   ];
 
   return createPortal(

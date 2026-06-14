@@ -17,11 +17,34 @@ import { MeterReadingLog } from './MeterReadingLog.jsx';
 import { CostSplitTracker } from './CostSplitTracker.jsx';
 
 import { useNetwork } from '../../../shared/hooks/useNetwork.js';
+import { db } from '../../../shared/db/storage.js';
 
 // ── Lazy Components ──────────────────────────────────────────────────────────
 const TrendChart = lazy(() => import('./TrendChart.jsx').then(m => ({ default: m.TrendChart })));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+function MeterLogBadge({ serviceNumber }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const update = async () => {
+      const v = await db.getSetting(`readings_${serviceNumber}`);
+      if (Array.isArray(v)) {
+        const cutoff = Date.now() - 35 * 24 * 60 * 60 * 1000;
+        const recent = v.filter(r => new Date(r.date).getTime() > cutoff);
+        setCount(recent.length);
+      } else {
+        setCount(0);
+      }
+    };
+    update();
+    const interval = setInterval(update, 3000);
+    return () => clearInterval(interval);
+  }, [serviceNumber]);
+
+  if (count === 0) return null;
+  return <>{count}</>;
+}
 
 function TrendBadge({ value, unit = '', percent }) {
   if (value == null) return null;
@@ -56,7 +79,7 @@ function Section({ title, badge, defaultOpen = false, children, isExpanded }) {
       <button className="acc__head" onClick={() => setOpen(v => !v)}>
         <span className="acc__title">{title}</span>
         <div className="acc__right">
-          {badge && <span className="acc__badge">{badge}</span>}
+          {typeof badge === 'string' || typeof badge === 'number' ? <span className="acc__badge">{badge}</span> : badge}
           <FiChevronDown size={14} className="acc__chevron" />
         </div>
       </button>
@@ -620,17 +643,21 @@ export function ServiceCard({
             )}
           </Section>
 
+          {/* ── Meter Reading Log (Feature 7) ── */}
+          <Section 
+            title="Meter Reading Log" 
+            isExpanded={isExpanded}
+            badge={<MeterLogBadge serviceNumber={service.serviceNumber} />}
+          >
+            <div style={{ padding: '0 10px 10px' }}>
+              <MeterReadingLog service={service} />
+            </div>
+          </Section>
+
           {/* ── Budget Goal (Feature 3) ── */}
           <Section title="Budget Goal" isExpanded={isExpanded}>
             <div style={{ padding: '0 10px 10px' }}>
               <BudgetGoal service={service} />
-            </div>
-          </Section>
-
-          {/* ── Meter Reading Log (Feature 7) ── */}
-          <Section title="Meter Reading Log" isExpanded={isExpanded}>
-            <div style={{ padding: '0 10px 10px' }}>
-              <MeterReadingLog service={service} />
             </div>
           </Section>
 
@@ -857,4 +884,3 @@ function PaymentsPanel({ service, t }) {
     </div>
   );
 }
-

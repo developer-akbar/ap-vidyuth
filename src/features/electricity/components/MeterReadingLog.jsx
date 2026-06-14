@@ -131,10 +131,15 @@ export function MeterReadingLog({ service }) {
           <FiZap size={13} style={{ color: 'var(--primary)' }} /> {t('meter_reading_log')}
         </div>
         <button
-          className="icon-btn-micro"
           onClick={() => setAdding(v => !v)}
           title={t('log')}
-          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--primary)' }}
+          style={{ 
+            display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', 
+            color: 'var(--primary)', background: 'transparent', border: 'none', 
+            padding: '4px 8px', borderRadius: '4px', cursor: 'pointer',
+            transition: 'background 0.2s'
+          }}
+          className="hover-bg"
         >
           <FiPlus size={12} /> {t('log')}
         </button>

@@ -139,6 +139,24 @@ function AppContent() {
   const [globalProgress, setGlobalProgress] = useState(null);
   const electricityContext = useElectricityServices();
 
+  const [meterLogCount, setMeterLogCount] = useState(0);
+
+  useEffect(() => {
+    const updateCount = async () => {
+      const activeServices = electricityContext.services.filter(s => !s.isDeleted);
+      let total = 0;
+      for (const s of activeServices) {
+        const key = `readings_${s.serviceNumber}`;
+        const v = await db.getSetting(key);
+        if (Array.isArray(v)) total += v.length;
+      }
+      setMeterLogCount(total);
+    };
+    updateCount();
+    const interval = setInterval(updateCount, 10000);
+    return () => clearInterval(interval);
+  }, [electricityContext.services]);
+
   useEffect(() => {
     const handleProgress = (e) => setGlobalProgress(e.detail);
     window.addEventListener('global-progress', handleProgress);
@@ -377,8 +395,20 @@ function AppContent() {
                 onClick={() => handleNavClick(id)}
                 aria-label={t(id)}
               >
-                <Icon size={17} />
-                {t(id)}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                  <Icon size={17} />
+                  {t(id)}
+                </div>
+                {id === 'home' && meterLogCount > 0 && (
+                  <span style={{ 
+                    fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '10px',
+                    background: activePage === 'home' ? '#fff' : 'var(--primary)',
+                    color: activePage === 'home' ? 'var(--primary)' : '#fff',
+                    marginLeft: '8px'
+                  }}>
+                    {meterLogCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
