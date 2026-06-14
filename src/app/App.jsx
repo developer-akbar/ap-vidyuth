@@ -68,8 +68,8 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_POSTHOG_KEY) {
     person_profiles: 'identified_only',
     capture_pageview: false, 
     autocapture: false,
-    disable_session_recording: true, // Disable heavy recording script
-    disable_surveys: true,           // Disable heavy surveys script
+    disable_session_recording: true,
+    disable_surveys: true,
   });
 }
 
@@ -87,8 +87,6 @@ function AppContent() {
     }
     return 'electricity';
   });
-  // Use localStorage as the synchronous fast-path for initial render to prevent theme flashing.
-  // The actual source of truth for backups remains db.getSetting/db.setSetting.
   const [theme, setTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') || 'system';
@@ -103,7 +101,6 @@ function AppContent() {
   });
 
   useEffect(() => {
-    // Sync DB values to state on boot just in case localStorage was cleared
     Promise.all([
       db.getSetting('theme'),
       db.getSetting('density')
@@ -142,13 +139,30 @@ function AppContent() {
   const [globalProgress, setGlobalProgress] = useState(null);
   const electricityContext = useElectricityServices();
 
+  const [meterLogCount, setMeterLogCount] = useState(0);
+
+  useEffect(() => {
+    const updateCount = async () => {
+      const activeServices = electricityContext.services.filter(s => !s.isDeleted);
+      let total = 0;
+      for (const s of activeServices) {
+        const key = `readings_${s.serviceNumber}`;
+        const v = await db.getSetting(key);
+        if (Array.isArray(v)) total += v.length;
+      }
+      setMeterLogCount(total);
+    };
+    updateCount();
+    const interval = setInterval(updateCount, 10000);
+    return () => clearInterval(interval);
+  }, [electricityContext.services]);
+
   useEffect(() => {
     const handleProgress = (e) => setGlobalProgress(e.detail);
     window.addEventListener('global-progress', handleProgress);
     return () => window.removeEventListener('global-progress', handleProgress);
   }, []);
 
-  // Theme Sync (Standard #12)
   useEffect(() => {
     const applyTheme = (t) => {
       let activeTheme = t;
@@ -178,9 +192,7 @@ function AppContent() {
     if (!Capacitor.isNativePlatform()) return;
     try {
       await Haptics.impact({ style });
-    } catch {
-      // ignore haptic failures on unsupported platforms
-    }
+    } catch {}
   };
 
   useEffect(() => {
@@ -192,7 +204,6 @@ function AppContent() {
   const activePageRef = useRef(activePage);
   useEffect(() => { activePageRef.current = activePage; }, [activePage]);
 
-  // ── Capacitor Back Button & App Links ──────────────────────────────────────
   useEffect(() => {
     const handleUrlOpen = (event) => {
       const url = event.url;
@@ -267,7 +278,7 @@ function AppContent() {
       capHandler.then(h => h.remove());
       window.removeEventListener('popstate', popHandler);
     };
-  }, []); // Stable listener
+  }, []); 
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -293,26 +304,15 @@ function AppContent() {
 
   const handleNavClick = async (id) => {
     await triggerHaptic();
-
     if (activePage === id) {
-      // If clicking the currently active tab, smooth scroll to top
       const mainEl = document.querySelector('.main');
-      if (mainEl) {
-        mainEl.scrollTo({ top: 0, behavior: 'smooth' });
-      }
+      if (mainEl) mainEl.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-
-    // Save current scroll before switching
     const mainEl = document.querySelector('.main');
     if (mainEl) scrollPositions.current[activePage] = mainEl.scrollTop;
-
-    if (id === 'settings') {
-      setActivePage('settings');
-      return;
-    }
-
-    setActivePage(id);
+    if (id === 'settings') setActivePage('settings');
+    else setActivePage(id);
   };
 
   useEffect(() => {
@@ -323,16 +323,11 @@ function AppContent() {
   }, [activePage]);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) {
-      setShowInstallBanner(false);
-      return;
-    }
-
+    if (!deferredPrompt) { setShowInstallBanner(false); return; }
     deferredPrompt.prompt();
     const choiceResult = await deferredPrompt.userChoice;
     setShowInstallBanner(false);
     setDeferredPrompt(null);
-
     if (choiceResult.outcome === 'accepted') {
       localStorage.setItem('pwa_installed', 'true');
       toast.success('App installed successfully');
@@ -351,263 +346,163 @@ function AppContent() {
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event) => {
-      // Don't show if already in standalone mode
       if (window.matchMedia('(display-mode: standalone)').matches) return;
-      
-      // Don't show if user already installed
       if (localStorage.getItem('pwa_installed') === 'true') return;
-
-      // Check snooze
       const snoozedUntil = localStorage.getItem('pwa_install_snoozed_until');
       if (snoozedUntil && Date.now() < parseInt(snoozedUntil)) return;
-
       event.preventDefault();
       setDeferredPrompt(event);
       setShowInstallBanner(true);
     };
-
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
   return (
-    <div className={`shell ${density === 'compact' ? 'shell--compact' : ''}`}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', overflow: 'hidden' }}>
       {isOffline && (
-        <div style={{ background: 'var(--amber)', color: '#000', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+        <div style={{ flexShrink: 0, width: '100%', background: 'var(--amber)', color: '#000', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
           <FiWifiOff size={16} />
           You're offline — showing cached data
         </div>
       )}
       {globalProgress && (
-        <div style={{ background: 'var(--blue-dim)', borderBottom: '1px solid var(--blue)', color: 'var(--blue)', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+        <div style={{ flexShrink: 0, width: '100%', background: 'var(--blue-dim)', borderBottom: '1px solid var(--blue)', color: 'var(--blue)', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
           <Loader size={16} />
           {globalProgress}
         </div>
       )}
-      {showInstallBanner && (
-        <div className="install-banner">
-          <span className="install-banner__text">Add AP Vidyuth to your home screen for quick access?</span>
-          <div className="install-banner__actions">
-            <button className="btn btn--white" onClick={handleInstallClick} aria-label="Install app">Yes</button>
-            <button className="btn btn--outline-white" onClick={handleDismissBanner} aria-label="Dismiss install banner">Not now</button>
+      <div className={`shell ${density === 'compact' ? 'shell--compact' : ''}`} style={{ flex: 1, minHeight: 0 }}>
+        {showInstallBanner && (
+          <div className="install-banner">
+            <span className="install-banner__text">Add AP Vidyuth to your home screen for quick access?</span>
+            <div className="install-banner__actions">
+              <button className="btn btn--white" onClick={handleInstallClick} aria-label="Install app">Yes</button>
+              <button className="btn btn--outline-white" onClick={handleDismissBanner} aria-label="Dismiss install banner">Not now</button>
+            </div>
           </div>
-        </div>
-      )}
-      <aside className="sidebar">
-        <div className="sidebar__brand">
-          <div className="sidebar__logo"><FiGrid size={16} /></div>
-          <span>AP Vidyuth</span>
-        </div>
-        <nav className="sidebar__nav">
+        )}
+        <aside className="sidebar">
+          <div className="sidebar__brand">
+            <div className="sidebar__logo"><FiGrid size={16} /></div>
+            <span>AP Vidyuth</span>
+          </div>
+          <nav className="sidebar__nav">
+            {NAV.map(({ id, icon: Icon }) => (
+              <button
+                key={id}
+                className={`sidebar__item ${activePage === id ? 'sidebar__item--active' : ''}`}
+                onClick={() => handleNavClick(id)}
+                aria-label={t(id)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                  <Icon size={17} />
+                  {t(id)}
+                </div>
+                {id === 'home' && meterLogCount > 0 && (
+                  <span style={{ 
+                    fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '10px',
+                    background: activePage === 'home' ? '#fff' : 'var(--primary)',
+                    color: activePage === 'home' ? 'var(--primary)' : '#fff',
+                    marginLeft: '8px'
+                  }}>
+                    {meterLogCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar__footer">{`v${__APP_VERSION__}`}</div>
+        </aside>
+
+        <ErrorBoundary>
+          <main className="main">
+            <Suspense fallback={<PageLoader />}>
+              {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} electricityContext={electricityContext} />}
+              {activePage === 'calculation-settings' && <CalculationSettings onBack={() => setActivePage('settings')} />}
+              {activePage === 'prefix-migration' && <PrefixMigration onBack={() => setActivePage('settings')} />}
+              {activePage === 'appliances' && <ApplianceCalculator onBack={() => setActivePage('electricity')} />}
+              {activePage === 'home' && <OverviewTab electricityContext={electricityContext} />}
+              {activePage === 'privacy' && <PrivacyPolicy onBack={() => setActivePage('settings')} />}
+              {activePage === 'settings' && (
+                <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
+                  <div className="page__header page__header--sticky">
+                    <div><h2 className="page__title">{t('settings')}</h2></div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ marginBottom: '24px' }}>
+                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tools & Utilities</h3>
+                      <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                        <SettingsItem icon={FiShuffle} label={t('prefix_migration')} description="Batch update service prefixes" onClick={() => setActivePage('prefix-migration')} color="var(--blue)" />
+                        <SettingsItem icon={FiActivity} label="Slab Configuration" description="Configure billing rates & slabs" onClick={() => setActivePage('calculation-settings')} color="var(--orange)" />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '24px' }}>
+                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Preferences</h3>
+                      <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div className="settings-item__icon" style={{ color: 'var(--primary)' }}><FiLayout size={18} /></div><span style={{ fontSize: '15px', fontWeight: '600' }}>{t('theme')}</span></div>
+                          <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
+                            <button className={`seg__btn ${theme === 'system' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('system')}>Auto</button>
+                            <button className={`seg__btn ${theme === 'dark' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('dark')}>{t('dark')}</button>
+                            <button className={`seg__btn ${theme === 'light' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('light')}>{t('light')}</button>
+                          </div>
+                        </div>
+                        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div className="settings-item__icon" style={{ color: 'var(--violet)' }}><FiLayers size={18} /></div><span style={{ fontSize: '15px', fontWeight: '600' }}>Display Density</span></div>
+                          <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
+                            <button className={`seg__btn ${density === 'comfortable' ? 'seg__btn--active' : ''}`} onClick={() => handleDensityChange('comfortable')}>Default</button>
+                            <button className={`seg__btn ${density === 'compact' ? 'seg__btn--active' : ''}`} onClick={() => handleDensityChange('compact')}>Compact</button>
+                          </div>
+                        </div>
+                        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div className="settings-item__icon" style={{ color: 'var(--green)' }}><FiGlobe size={18} /></div><span style={{ fontSize: '15px', fontWeight: '600' }}>{t('language')}</span></div>
+                          <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
+                            <button className={`seg__btn ${i18n.language === 'en' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('en')}>EN</button>
+                            <button className={`seg__btn ${i18n.language === 'te' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('te')}>తెలుగు</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '24px' }}>
+                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Data Management</h3>
+                      <div className="scard" style={{ padding: '0', overflow: 'hidden' }}><BackupRestore electricityContext={electricityContext} /></div>
+                    </div>
+                    {Capacitor.getPlatform() !== 'web' && (
+                      <div style={{ marginBottom: '24px' }}>
+                        <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>System</h3>
+                        <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                          <SettingsItem icon={FiBell} label="Notifications" description="Sync push notification token" onClick={async () => { const success = await syncPushTokenWithServer(null, true); if (success) toast.success('Notifications synced!'); }} color="var(--purple)" />
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Support & Legal</h3>
+                      <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                        <SettingsItem icon={FiMail} label={t('contact_developer')} description="Report bugs or suggest features" onClick={() => window.location.href = "mailto:mail.akbarmulla@gmail.com?subject=AP Vidyuth App Feedback"} color="var(--primary)" />
+                        <SettingsItem icon={FiShield} label="Privacy Policy" description="How we handle your data" onClick={() => setActivePage('privacy')} color="var(--text-2)" />
+                      </div>
+                    </div>
+                  </div>
+                  <footer className="dev-footer" style={{ marginTop: '20px', paddingBottom: '32px', textAlign: 'center' }}>
+                    <p className="dev-footer__name">{t('developed_by')} Akbar</p>
+                    <span className="dev-footer__tag">{`v${__APP_VERSION__}`}</span>
+                  </footer>
+                </div>
+              )}
+            </Suspense>
+          </main>
+        </ErrorBoundary>
+        <nav className="bottom-nav">
           {NAV.map(({ id, icon: Icon }) => (
-            <button
-              key={id}
-              className={`sidebar__item ${activePage === id ? 'sidebar__item--active' : ''}`}
-              onClick={() => handleNavClick(id)}
-              aria-label={t(id)}
-            >
-              <Icon size={17} />
-              {t(id)}
+            <button key={id} className={`bottom-nav__item ${activePage === id || (id === 'settings' && ['prefix-migration', 'calculation-settings', 'privacy'].includes(activePage)) ? 'bottom-nav__item--active' : ''}`} onClick={() => handleNavClick(id)} aria-label={t(id)}>
+              <Icon size={20} /><span>{t(id)}</span>
             </button>
           ))}
         </nav>
-        <div className="sidebar__footer">{`v${__APP_VERSION__}`}</div>
-      </aside>
-
-      <ErrorBoundary>
-        <main className="main">
-          <Suspense fallback={<PageLoader />}>
-            {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} electricityContext={electricityContext} />}
-            {activePage === 'calculation-settings' && <CalculationSettings onBack={() => setActivePage('settings')} />}
-            {activePage === 'prefix-migration' && <PrefixMigration onBack={() => setActivePage('settings')} />}
-            {activePage === 'appliances' && <ApplianceCalculator onBack={() => setActivePage('electricity')} />}
-            {activePage === 'home' && <OverviewTab electricityContext={electricityContext} />}
-            {activePage === 'privacy' && (
-              <PrivacyPolicy onBack={() => setActivePage('settings')} />
-            )}
-            {activePage === 'settings' && (
-              <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
-                <div className="page__header page__header--sticky">
-                  <div>
-                    <h2 className="page__title">{t('settings')}</h2>
-                  </div>
-                </div>
-
-                <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Tools & Utilities
-                    </h3>
-                    <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                      <SettingsItem 
-                        icon={FiShuffle} 
-                        label={t('prefix_migration')} 
-                        description="Batch update service prefixes"
-                        onClick={() => setActivePage('prefix-migration')}
-                        color="var(--blue)"
-                      />
-                      <SettingsItem 
-                        icon={FiActivity} 
-                        label="Slab Configuration" 
-                        description="Configure billing rates & slabs"
-                        onClick={() => setActivePage('calculation-settings')}
-                        color="var(--orange)"
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Preferences
-                    </h3>
-                    <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div className="settings-item__icon" style={{ color: 'var(--primary)' }}>
-                            <FiLayout size={18} />
-                          </div>
-                          <span style={{ fontSize: '15px', fontWeight: '600' }}>{t('theme')}</span>
-                        </div>
-                        <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
-                          <button className={`seg__btn ${theme === 'system' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('system')}>Auto</button>
-                          <button className={`seg__btn ${theme === 'dark' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('dark')}>{t('dark')}</button>
-                          <button className={`seg__btn ${theme === 'light' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('light')}>{t('light')}</button>
-                        </div>
-                      </div>
-
-                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div className="settings-item__icon" style={{ color: 'var(--violet)' }}>
-                            <FiLayers size={18} />
-                          </div>
-                          <span style={{ fontSize: '15px', fontWeight: '600' }}>Display Density</span>
-                        </div>
-                        <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
-                          <button className={`seg__btn ${density === 'comfortable' ? 'seg__btn--active' : ''}`} onClick={() => handleDensityChange('comfortable')}>Default</button>
-                          <button className={`seg__btn ${density === 'compact' ? 'seg__btn--active' : ''}`} onClick={() => handleDensityChange('compact')}>Compact</button>
-                        </div>
-                      </div>
-
-                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div className="settings-item__icon" style={{ color: 'var(--green)' }}>
-                            <FiGlobe size={18} />
-                          </div>
-                          <span style={{ fontSize: '15px', fontWeight: '600' }}>{t('language')}</span>
-                        </div>
-                        <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
-                          <button className={`seg__btn ${i18n.language === 'en' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('en')}>EN</button>
-                          <button className={`seg__btn ${i18n.language === 'te' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('te')}>తెలుగు</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Data Management
-                    </h3>
-                    <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                      <BackupRestore electricityContext={electricityContext} />
-                    </div>
-                  </div>
-
-                  {Capacitor.getPlatform() !== 'web' && (
-                    <div style={{ marginBottom: '24px' }}>
-                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        System
-                      </h3>
-                      <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                        <SettingsItem 
-                          icon={FiBell} 
-                          label="Notifications" 
-                          description="Sync push notification token"
-                          onClick={async () => {
-                            const success = await syncPushTokenWithServer(null, true);
-                            if (success) toast.success('Notifications synced!');
-                          }}
-                          color="var(--purple)"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Support & Legal
-                    </h3>
-                    <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                      <SettingsItem 
-                        icon={FiMail} 
-                        label={t('contact_developer')} 
-                        description="Report bugs or suggest features"
-                        onClick={() => window.location.href = "mailto:mail.akbarmulla@gmail.com?subject=AP Vidyuth App Feedback"}
-                        color="var(--primary)"
-                      />
-                      <SettingsItem 
-                        icon={FiShield} 
-                        label="Privacy Policy" 
-                        description="How we handle your data"
-                        onClick={() => setActivePage('privacy')}
-                        color="var(--text-2)"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <footer className="dev-footer" style={{ marginTop: '20px', paddingBottom: '32px', textAlign: 'center' }}>
-                  <p className="dev-footer__name">{t('developed_by')} Akbar</p>
-                  <span className="dev-footer__tag">{`v${__APP_VERSION__}`}</span>
-                </footer>
-              </div>
-            )}
-          </Suspense>
-        </main>
-      </ErrorBoundary>
-
-      <nav className="bottom-nav">
-        {NAV.map(({ id, icon: Icon }) => (
-          <button
-            key={id}
-            className={`bottom-nav__item ${
-              activePage === id ||
-              (id === 'settings' && ['prefix-migration', 'calculation-settings', 'privacy'].includes(activePage))
-                ? 'bottom-nav__item--active'
-                : ''
-            }`}
-            onClick={() => handleNavClick(id)}
-            aria-label={t(id)}
-          >
-            <Icon size={20} />
-            <span>{t(id)}</span>
-          </button>
-        ))}
-      </nav>
-
-      <Toaster
-        position="bottom-center"
-        visibleToasts={1}
-        containerClassName="toast-container"
-        containerStyle={{ zIndex: 200000 }}
-        toastOptions={{
-          success: { duration: 2000 },
-          error:   { duration: 4000 },
-          duration: 3000, // default for info/loading
-          style: {
-            background: 'var(--surface-2)',
-            color: 'var(--text-1)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            fontSize: '13px',
-            fontWeight: '500',
-            fontFamily: 'var(--font)',
-            boxShadow: 'var(--shadow-lg)',
-          },
-        }}
-      />
-      
-      <Analytics />
-      <SpeedInsights />
+        <Toaster position="bottom-center" visibleToasts={1} containerClassName="toast-container" containerStyle={{ zIndex: 200000 }} toastOptions={{ success: { duration: 2000 }, error: { duration: 4000 }, duration: 3000, style: { background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '13px', fontWeight: '500', fontFamily: 'var(--font)', boxShadow: 'var(--shadow-lg)' } }} />
+        <Analytics /><SpeedInsights />
+      </div>
     </div>
   );
 }

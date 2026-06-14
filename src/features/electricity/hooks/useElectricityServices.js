@@ -91,32 +91,14 @@ export function useElectricityServices() {
 
     (async () => {
       try {
-        // 1. Ensure DB is fully connected
+        // Ensure DB is fully connected
         const { db } = await import('../../../shared/db/storage.js');
         await db.init();
 
-        // 2. Load initial data
-        const services = await reload();
-        
-        // 3. Optional auto-refresh logic
-        if (!navigator.onLine) return; // Don't even try if offline
-
-        const stale = services.filter(shouldAutoRefresh);
-        if (stale.length === 0) return;
-
-        const session = await getValidSession(stale[0].serviceNumber);
-        if (!session) return; 
-
-        stale.forEach(s => dispatch({ type: 'REFRESHING_ADD', id: s.id }));
-        try {
-          await refreshAllServices(undefined, session);
-        } finally {
-          stale.forEach(s => dispatch({ type: 'REFRESHING_REMOVE', id: s.id }));
-          await reload();
-        }
+        // Load initial data from local DB
+        await reload();
       } catch (e) {
         console.error("[useElectricityServices] Mount boot failed:", e);
-        // Ensure loading state is cleared
         dispatch({ type: 'LOAD', services: [], trash: [], loading: false });
       }
     })();

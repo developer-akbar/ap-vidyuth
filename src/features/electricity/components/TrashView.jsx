@@ -83,7 +83,7 @@ export function TrashView({ services, onRestore, onDeletePermanent, selectedIds,
               <small>{t('deleted')} {formatDate(s.deletedAt)}</small>
             </div>
             <div className="trash-item__actions">
-              <button className="btn btn--ghost btn--xs" onClick={(e) => { e.stopPropagation(); onRestore(s.id); }}><Loader size={12} /> {t('restore')}</button>
+              <button className="btn btn--ghost btn--xs" onClick={(e) => { e.stopPropagation(); onRestore(s.id); }}><FiRefreshCw size={12} style={{ marginRight: '4px' }} /> {t('restore')}</button>
               <button className="btn btn--danger btn--xs" onClick={(e) => { e.stopPropagation(); onDeletePermanent(s.id); }}><FiTrash2 size={12} /></button>
             </div>
           </div>

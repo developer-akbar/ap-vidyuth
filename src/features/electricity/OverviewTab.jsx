@@ -390,9 +390,7 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
       }, 150);
     }
   }, [expanded]);
-
-  const isDomestic = (service.serviceNumber || '').startsWith('5') || (service.serviceNumber || '').startsWith('12') || (service.serviceNumber || '').startsWith('11');
-  const serviceType = isDomestic ? 'LT-I' : 'LT-II';
+  
 
   return (
     <div ref={rowRef} style={{ 
@@ -427,7 +425,7 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
                 <span style={{ 
                   fontSize: '0.6rem', fontWeight: 700, padding: '1px 5px', borderRadius: 4, 
                   background: 'var(--surface-3)', color: 'var(--text-3)', letterSpacing: '0.02em' 
-                }}>{serviceType}</span>
+                }}>{service.category}</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
@@ -532,6 +530,7 @@ function MonthComparison({ activeServices, currentYear }) {
         currAmt, prevAmt, currUnits, prevUnits,
         amtDelta, unitsDelta,
         status: s.lastStatus,
+        category: s.category,
         service: s, // keep ref
       };
     }).filter(r => r.currAmt > 0 || r.currUnits > 0);
@@ -591,7 +590,7 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
       });
 
       // Most efficient connection ranking:
-      const isDomestic = (s.serviceNumber || '').startsWith('5') || (s.serviceNumber || '').startsWith('12') || (s.serviceNumber || '').startsWith('11');
+      const isDomestic = s.category === 'LT1';
       if (isDomestic && svcUnits > 0) {
         const avgUnits = svcUnits / 12; 
         if (avgUnits < bestRate) {

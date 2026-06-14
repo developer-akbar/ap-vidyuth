@@ -95,7 +95,7 @@ export function ServiceDialog({ open, service, initialServiceNumber, onClose, on
     if (open) { 
       setLabel(service?.label || ''); 
       setServiceNumber(service?.serviceNumber || initialServiceNumber || ''); 
-      setIsBulk(false);
+      // Removed setIsBulk(false) to prevent overriding user interaction
       setBulkInput('');
       setShowPrefixes(false);
       
