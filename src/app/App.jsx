@@ -395,20 +395,8 @@ function AppContent() {
                 onClick={() => handleNavClick(id)}
                 aria-label={t(id)}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                  <Icon size={17} />
-                  {t(id)}
-                </div>
-                {id === 'home' && meterLogCount > 0 && (
-                  <span style={{ 
-                    fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '10px',
-                    background: activePage === 'home' ? '#fff' : 'var(--primary)',
-                    color: activePage === 'home' ? 'var(--primary)' : '#fff',
-                    marginLeft: '8px'
-                  }}>
-                    {meterLogCount}
-                  </span>
-                )}
+                <Icon size={17} />
+                {t(id)}
               </button>
             ))}
           </nav>
