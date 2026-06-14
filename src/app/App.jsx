@@ -159,8 +159,16 @@ function AppContent() {
 
   useEffect(() => {
     const handleProgress = (e) => setGlobalProgress(e.detail);
+    const handleNavigate = (e) => {
+      const { page } = e.detail || {};
+      if (page) setActivePage(page);
+    };
     window.addEventListener('global-progress', handleProgress);
-    return () => window.removeEventListener('global-progress', handleProgress);
+    window.addEventListener('app-navigate', handleNavigate);
+    return () => {
+      window.removeEventListener('global-progress', handleProgress);
+      window.removeEventListener('app-navigate', handleNavigate);
+    };
   }, []);
 
   useEffect(() => {

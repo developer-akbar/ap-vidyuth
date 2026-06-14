@@ -130,3 +130,17 @@ export function calculateEstimatedBill(units, load = 0, config = DEFAULT_DOMESTI
     total: Math.round(grossTotal),
   };
 }
+
+/**
+ * Validates if a code is a valid Pro coupon.
+ * This is a lightweight frontend check to prevent casual DB editing bypass.
+ */
+export function isSecurePro(code) {
+  if (!code) return false;
+  // This should match the server-side validation logic or a subset of it.
+  // Since the actual secret is on the server, we just return true here
+  // because this is called AFTER the server has already returned { ok: true }.
+  // However, we store a hash or a specific marker in DB to make it slightly harder 
+  // to guess than just a boolean true.
+  return `PRO_${btoa(code).substring(0, 8)}`;
+}

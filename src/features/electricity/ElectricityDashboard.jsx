@@ -27,11 +27,11 @@ import { Loader } from '../../shared/components/Loader.jsx';
 import { useTranslation } from 'react-i18next';
 import { usePostHog } from '@posthog/react';
 import { HelpFooter } from './components/CalculationSettings.jsx';
-import { ServiceCapModal, MandatoryCleanupModal } from './components/ServiceCapModals.jsx';
+import { ServiceCapModal, MandatoryCleanupModal, ServiceSelectionModal } from './components/ServiceCapModals.jsx';
 
 import { NotificationInbox, saveNotificationToHistory } from './components/NotificationInbox.jsx';
 import { db } from '../../shared/db/storage.js';
-import { importBackupData } from '../../shared/utils/backupRestore.js';
+import { importBackupData, parseBackupFile } from '../../shared/utils/backupRestore.js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { Share } from '@capacitor/share';
@@ -73,6 +73,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
 
   const [capModalOpen, setCapModalOpen] = useState(false);
   const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
+  const [selectionModal, setSelectionModal] = useState({ open: false, entries: [], meta: null, type: 'restore' });
 
   // ── Core Internal Functions ───────────────────────────────────────────────
   
@@ -309,10 +310,15 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       if (pendingDeepLink.current) { processDeepLink(pendingDeepLink.current); pendingDeepLink.current = null; }
       checkBootAction();
       if (services.length > 0) selfHealNotifications();
-      if (services.length > SERVICE_CAP && !isPro) setCleanupModalOpen(true);
     };
     if (!loading) init();
   }, [loading]);
+
+  useEffect(() => {
+    if (!loading && services.length > SERVICE_CAP && !isPro) {
+      setCleanupModalOpen(true);
+    }
+  }, [loading, services.length, isPro]);
 
   useEffect(() => { if (!isWeb) updateUnread(); }, [inboxOpen]);
 
@@ -341,9 +347,49 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   const handleImportFromEmptyState = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    try {
+      const { entries, meta } = await parseBackupFile(file);
+      setSelectionModal({ open: true, entries, meta, type: 'restore' });
+    } catch (err) {
+      toast.error('Failed to read backup file');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const executeBulkAdd = async (toAdd) => {
+    if (ph) ph.capture('bulk_add_started', { count: toAdd.length });
+    setIsProcessing(true);
+    window.dispatchEvent(new CustomEvent('global-progress', { detail: `Validating ${toAdd.length} services...` }));
+    const results = { succeeded: [], failed: [], alreadyExists: [], inTrash: [] };
+    for (const entry of toAdd) {
+      const sn = entry.number;
+      const inActive = services.find(s => s.serviceNumber === sn);
+      const inTrash = trash.find(t => t.serviceNumber === sn);
+      if (inActive) { results.alreadyExists.push(sn); continue; }
+      if (inTrash) { results.inTrash.push(sn); continue; }
+      try {
+        await actions.add({ isBulk: false, serviceNumber: sn, label: entry.label, pinned: !!entry.pinned });
+        results.succeeded.push(sn);
+        window.dispatchEvent(new CustomEvent('global-progress', { detail: `Added ${results.succeeded.length}/${toAdd.length}...` }));
+      } catch (e) {
+        if (e?.message === 'CANCELLED') { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); setBulkResult(results); return; }
+        results.failed.push({ number: sn, error: e?.message || 'Unknown error' });
+      }
+    }
+    setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
+    setBulkResult(results); if (activeView !== 'active') setActiveView('active');
+  };
+
+  const executeImport = async (selectedEntries, meta) => {
     window.dispatchEvent(new CustomEvent('global-progress', { detail: 'Restoring Data...' }));
-    try { await importBackupData(file, electricityContext, t, ph, () => {}, { onProgress: (msg) => window.dispatchEvent(new CustomEvent('global-progress', { detail: msg })) }); } 
-    finally { window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); e.target.value = ''; }
+    try {
+      await importBackupData(selectedEntries, meta, { ...electricityContext, isPro }, t, ph, () => {}, { 
+        onProgress: (msg) => window.dispatchEvent(new CustomEvent('global-progress', { detail: msg })) 
+      });
+    } finally {
+      window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
+    }
   };
 
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -432,37 +478,15 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   async function submitService(payload) {
     if (payload.isBulk) {
       const { entries } = payload;
-      const remaining = SERVICE_CAP - services.length;
-      if (remaining <= 0) {
-        setCapModalOpen(true);
+      const totalAfter = services.length + entries.length;
+      
+      if (totalAfter > SERVICE_CAP && !isPro) {
+        setSelectionModal({ open: true, entries, type: 'bulk' });
         return;
       }
-      const toAdd = entries.slice(0, remaining);
-      if (entries.length > remaining) {
-        toast.error(`Only ${remaining} more service(s) can be added (Limit: ${SERVICE_CAP})`);
-      }
-
-      if (ph) ph.capture('bulk_add_started', { count: toAdd.length });
-      setIsProcessing(true);
-      window.dispatchEvent(new CustomEvent('global-progress', { detail: `Validating ${toAdd.length} services...` }));
-      const results = { succeeded: [], failed: [], alreadyExists: [], inTrash: [] };
-      for (const entry of toAdd) {
-        const sn = entry.number;
-        const inActive = services.find(s => s.serviceNumber === sn);
-        const inTrash = trash.find(t => t.serviceNumber === sn);
-        if (inActive) { results.alreadyExists.push(sn); continue; }
-        if (inTrash) { results.inTrash.push(sn); continue; }
-        try {
-          await actions.add({ isBulk: false, serviceNumber: sn, label: entry.label, pinned: !!entry.pinned });
-          results.succeeded.push(sn);
-          window.dispatchEvent(new CustomEvent('global-progress', { detail: `Added ${results.succeeded.length}/${toAdd.length}...` }));
-        } catch (e) {
-          if (e?.message === 'CANCELLED') { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); setBulkResult(results); return; }
-          results.failed.push({ number: sn, error: e?.message || 'Unknown error' });
-        }
-      }
-      setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null }));
-      setBulkResult(results); if (activeView !== 'active') setActiveView('active'); return;
+      
+      executeBulkAdd(entries);
+      return;
     }
     if (dialog.service) {
       setIsProcessing(true); window.dispatchEvent(new CustomEvent('global-progress', { detail: t('saving', 'Saving...') }));
@@ -656,6 +680,22 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
           }} 
         />
       )}
+
+      <ServiceSelectionModal 
+        open={selectionModal.open}
+        entries={selectionModal.entries}
+        isPro={isPro}
+        currentCount={services.length}
+        title={selectionModal.type === 'bulk' ? 'Select Services to Add' : 'Select Services to Restore'}
+        onClose={() => setSelectionModal({ open: false, entries: [], meta: null, type: 'restore' })}
+        onConfirm={(selected) => {
+          if (selectionModal.type === 'bulk') {
+            executeBulkAdd(selected);
+          } else {
+            executeImport(selected, selectionModal.meta);
+          }
+        }}
+      />
     </div>
   );
 }

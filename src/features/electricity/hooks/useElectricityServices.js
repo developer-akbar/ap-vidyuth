@@ -258,7 +258,8 @@ export function useElectricityServices() {
     const res = await validateCouponApi(code);
     if (res.ok) {
        const { db } = await import('../../../shared/db/storage.js');
-       await db.setSetting('is_pro', true);
+       const { isSecurePro } = await import('../utils/billing.js');
+       await db.setSetting('is_pro', isSecurePro(code));
        await reload();
     }
     return res;
@@ -266,6 +267,7 @@ export function useElectricityServices() {
 
   return {
     ...state,
+    isPro: state.isPro,
     actions: { reload, add, refresh, refreshAll, update, remove, bulkRemove, restore, bulkRestore, purge, bulkPurge, validateCoupon },
   };
   }
