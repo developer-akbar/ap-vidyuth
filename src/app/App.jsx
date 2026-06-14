@@ -15,6 +15,8 @@ import { PrivacyPolicy } from '../features/settings/PrivacyPolicy.jsx';
 import { PrefixMigration } from '../features/settings/components/PrefixMigration.jsx';
 import { SettingsItem } from '../features/settings/components/SettingsItem.jsx';
 import { BackupRestore } from '../features/settings/components/BackupRestore.jsx';
+import { ServiceCapModal } from '../features/electricity/components/ServiceCapModals.jsx';
+import { ConfirmDialog } from '../shared/components/ConfirmDialog.jsx';
 import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -140,6 +142,22 @@ function AppContent() {
   const electricityContext = useElectricityServices();
 
   const [meterLogCount, setMeterLogCount] = useState(0);
+  const [capModalOpen, setCapModalOpen] = useState(false);
+  const [confirmState, setConfirmState] = useState({ open: false, title: '', description: '', isDanger: false, onConfirm: () => {} });
+
+  const handleWithdrawPro = async () => {
+    setConfirmState({
+      open: true,
+      title: 'Withdraw Pro Access?',
+      description: 'Are you sure you want to withdraw your Pro subscription? You will be limited to 4 services again.',
+      isDanger: true,
+      onConfirm: async () => {
+        await db.setSetting('is_pro', null);
+        await electricityContext.actions.reload();
+        toast.success('Pro access withdrawn');
+      }
+    });
+  };
 
   useEffect(() => {
     const updateCount = async () => {
@@ -434,6 +452,28 @@ function AppContent() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ marginBottom: '24px' }}>
+                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account & Subscription</h3>
+                      <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                        {!electricityContext.isPro ? (
+                          <SettingsItem 
+                            icon={FiZap} 
+                            label="Get Pro Access" 
+                            description="Unlock unlimited services & premium features" 
+                            onClick={() => setCapModalOpen(true)} 
+                            color="var(--primary)" 
+                          />
+                        ) : (
+                          <SettingsItem 
+                            icon={FiZap} 
+                            label="Withdraw Subscription" 
+                            description="Cancel your Pro access and return to standard" 
+                            onClick={handleWithdrawPro} 
+                            color="var(--text-3)" 
+                          />
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '24px' }}>
                       <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tools & Utilities</h3>
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
                         <SettingsItem icon={FiShuffle} label={t('prefix_migration')} description="Batch update service prefixes" onClick={() => setActivePage('prefix-migration')} color="var(--blue)" />
@@ -505,6 +545,16 @@ function AppContent() {
         </nav>
         <Toaster position="bottom-center" visibleToasts={1} containerClassName="toast-container" containerStyle={{ zIndex: 200000 }} toastOptions={{ success: { duration: 2000 }, error: { duration: 4000 }, duration: 3000, style: { background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '13px', fontWeight: '500', fontFamily: 'var(--font)', boxShadow: 'var(--shadow-lg)' } }} />
         <Analytics /><SpeedInsights />
+
+        <ServiceCapModal open={capModalOpen} onClose={() => setCapModalOpen(false)} />
+        <ConfirmDialog 
+          open={confirmState.open} 
+          title={confirmState.title} 
+          description={confirmState.description} 
+          isDanger={confirmState.isDanger} 
+          onClose={() => setConfirmState(prev => ({ ...prev, open: false }))} 
+          onConfirm={confirmState.onConfirm} 
+        />
       </div>
     </div>
   );
