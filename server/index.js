@@ -1187,13 +1187,23 @@ app.post('/api/validate-coupon', (req, res) => {
   const { code } = req.body || {};
   const validCode = process.env.AP_VIDYUTH_SERVICE_COUPON;
   
+  console.log(`[api] Coupon validation request: input="${code}"`);
+  
   if (!validCode) {
+    console.error('[api] CRITICAL: AP_VIDYUTH_SERVICE_COUPON env var is missing');
     return res.status(503).json({ ok: false, error: 'Coupon system not configured' });
   }
 
-  if (code === validCode) {
+  const normalizedInput = String(code || '').trim().toUpperCase();
+  const normalizedValid = String(validCode).trim().toUpperCase();
+
+  console.log(`[api] Check: "${normalizedInput}" === "${normalizedValid}"`);
+
+  if (normalizedInput === normalizedValid) {
+    console.log('[api] SUCCESS: Coupon code matches.');
     res.json({ ok: true, message: 'Pro Access Granted' });
   } else {
+    console.warn('[api] FAILED: Coupon code does not match.');
     res.status(401).json({ ok: false, error: 'Invalid Coupon Code' });
   }
 });

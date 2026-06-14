@@ -394,9 +394,6 @@ function AppContent() {
           <div className="sidebar__brand">
             <div className="sidebar__logo"><FiGrid size={16} /></div>
             <span>AP Vidyuth</span>
-            {electricityContext.isPro && (
-              <div style={{ marginLeft: 'auto', background: 'var(--primary)', color: '#fff', fontSize: '9px', padding: '1px 5px', borderRadius: '4px', fontWeight: '900' }}>PRO</div>
-            )}
           </div>
           <nav className="sidebar__nav">
             {NAV.map(({ id, icon: Icon }) => (

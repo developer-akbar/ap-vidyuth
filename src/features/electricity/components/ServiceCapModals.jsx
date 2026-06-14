@@ -17,17 +17,15 @@ export function ServiceCapModal({ open, onClose }) {
     if (!coupon.trim()) return;
     setValidating(true);
     try {
+      const normalizedCoupon = String(coupon).trim().toUpperCase();
       const { validateCoupon } = await import('../api/servicesApi.js');
-      const res = await validateCoupon(coupon);
+      const res = await validateCoupon(normalizedCoupon);
       if (res.ok) {
         const { db } = await import('../../../shared/db/storage.js');
         const { isSecurePro } = await import('../utils/billing.js');
-        await db.setSetting('is_pro', isSecurePro(coupon));
+        await db.setSetting('is_pro', isSecurePro(normalizedCoupon));
         setIsSuccess(true);
-        toast.success('Pro Access Granted! You can now track unlimited services.');
-        setTimeout(() => {
-          window.location.reload(); 
-        }, 1500);
+        toast.success('Pro Access Granted!');
       } else {
         toast.error(res.error || t('invalid_coupon', 'Invalid Coupon Code'));
       }
@@ -46,13 +44,16 @@ export function ServiceCapModal({ open, onClose }) {
 
   if (isSuccess) {
     return createPortal(
-      <div className="overlay overlay--center">
+      <div className="overlay overlay--center" style={{ zIndex: 10000 }}>
         <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw', textAlign: 'center', padding: '40px 20px' }}>
           <div style={{ width: '80px', height: '80px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
             <FiStar size={40} fill="currentColor" />
           </div>
           <h2 className="dialog__title">Pro Access Active!</h2>
-          <p style={{ color: 'var(--text-2)', marginTop: '12px' }}>Thank you for your support. Unlimited tracking is now enabled.</p>
+          <p style={{ color: 'var(--text-2)', marginTop: '12px', marginBottom: '24px' }}>Thank you for your support. Unlimited tracking is now enabled.</p>
+          <button className="btn btn--primary" style={{ width: '100%' }} onClick={onClose}>
+            Continue
+          </button>
         </div>
       </div>,
       document.body
@@ -106,6 +107,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   useEffect(() => {
     setSelectedIds(new Set(services.slice(0, SERVICE_CAP).map(s => s.id)));
@@ -121,7 +123,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
       }
     } else {
       if (selectedIds.size >= SERVICE_CAP) {
-        toast.error(`You can only select up to ${SERVICE_CAP} services`, { id: 'cleanup-limit-error' });
+        toast.error(`Standard limit reached. Enter Coupon to keep more!`, { id: 'cleanup-limit-error' });
         return;
       }
     }
@@ -135,11 +137,6 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
   };
 
   const handleConfirm = () => {
-    const keepCount = Math.min(services.length, SERVICE_CAP);
-    if (selectedIds.size > keepCount) {
-       toast.error(`Please select only ${SERVICE_CAP} services to keep`);
-       return;
-    }
     const toKeep = Array.from(selectedIds);
     const toDelete = services.filter(s => !selectedIds.has(s.id)).map(s => s.id);
     onConfirm(toKeep, toDelete);
@@ -149,16 +146,15 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
     if (!coupon.trim()) return;
     setValidating(true);
     try {
+      const normalizedCoupon = String(coupon).trim().toUpperCase();
       const { validateCoupon } = await import('../api/servicesApi.js');
-      const res = await validateCoupon(coupon);
+      const res = await validateCoupon(normalizedCoupon);
       if (res.ok) {
         const { db } = await import('../../../shared/db/storage.js');
         const { isSecurePro } = await import('../utils/billing.js');
-        await db.setSetting('is_pro', isSecurePro(coupon));
-        toast.success('Pro Access Granted! Refreshing...');
-        setTimeout(() => {
-          window.location.reload(); 
-        }, 1000);
+        await db.setSetting('is_pro', isSecurePro(normalizedCoupon));
+        setIsSuccess(true);
+        toast.success('Pro Access Activated!');
       } else {
         toast.error(res.error || t('invalid_coupon', 'Invalid Coupon Code'));
       }
@@ -175,6 +171,24 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
     window.location.href = `mailto:mail.akbarmulla@gmail.com?subject=${subject}&body=${body}`;
   };
 
+  if (isSuccess) {
+    return createPortal(
+      <div className="overlay overlay--center" style={{ zIndex: 10000 }}>
+        <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw', textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ width: '80px', height: '80px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            <FiStar size={40} fill="currentColor" />
+          </div>
+          <h2 className="dialog__title">Pro Access Active!</h2>
+          <p style={{ color: 'var(--text-2)', marginTop: '12px', marginBottom: '24px' }}>Thank you for your support. Unlimited tracking is now enabled.</p>
+          <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => onConfirm(services.map(s => s.id), [])}>
+            Continue to Dashboard
+          </button>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 9999 }}>
       <div className="dialog" role="dialog" style={{ width: '450px', maxWidth: '94vw' }}>
@@ -183,10 +197,10 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
              <div style={{ width: '40px', height: '40px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <FiZap size={20} />
              </div>
-             <h2 className="dialog__title" style={{ margin: 0 }}>{t('service_limit_update', 'Service Limit Update')}</h2>
+             <h2 className="dialog__title">{t('service_limit_update', 'Service Limit Update')}</h2>
           </div>
           <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5' }}>
-            {t('service_limit_cleanup_desc', "To ensure the best experience for everyone, we've introduced a limit of {{cap}} services per user. Please choose the {{cap}} services you'd like to keep. The others will be moved to the Trash.", { cap: SERVICE_CAP })}
+            {t('service_limit_cleanup_desc', "To ensure the best experience for everyone, we've introduced a limit of {{cap}} services per user. Please choose the {{cap}} services you'd like to keep.", { cap: SERVICE_CAP })}
           </p>
         </div>
 
@@ -258,7 +272,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
           </div>
 
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button className="btn btn--ghost" style={{ width: '100%', height: '40px', border: '1px solid var(--border)' }} onClick={handleConfirm} disabled={selectedIds.size === 0 || selectedIds.size > Math.min(services.length, SERVICE_CAP) || validating}>
+            <button className="btn btn--ghost" style={{ width: '100%', height: '40px', border: '1px solid var(--border)' }} onClick={handleConfirm} disabled={selectedIds.size === 0 || selectedIds.size > SERVICE_CAP || validating}>
               <FiTrash2 size={16} style={{ marginRight: '8px' }} /> {t('keep_selected_trash_others', 'Keep Selected & Trash Others')}
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -280,20 +294,21 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
 export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, title = 'Select Services', onConfirm, onClose }) {
   const { t } = useTranslation();
   const remaining = Math.max(0, SERVICE_CAP - currentCount);
-  const maxToSelect = isPro ? entries.length : remaining;
-  
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [coupon, setCoupon] = useState('');
+  const [validating, setValidating] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setSelectedIds(new Set(entries.slice(0, maxToSelect).map(e => e.serviceNumber || e.number)));
+      setSelectedIds(new Set(entries.slice(0, remaining).map(e => e.serviceNumber || e.number)));
     }
-  }, [open, entries, maxToSelect]);
+  }, [open, entries, remaining]);
 
   const toggleSelect = (sn) => {
     const isSelected = selectedIds.has(sn);
 
-    if (!isSelected && !isPro && selectedIds.size >= remaining) {
+    if (!isSelected && selectedIds.size >= remaining) {
       toast.error(`Limit reached: You can only add ${remaining} more service(s) (Limit: ${SERVICE_CAP})`, { id: 'selection-limit-error' });
       return;
     }
@@ -312,7 +327,48 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
     onClose();
   };
 
+  const handleApplyCoupon = async () => {
+    if (!coupon.trim()) return;
+    setValidating(true);
+    try {
+      const normalizedCoupon = String(coupon).trim().toUpperCase();
+      const { validateCoupon } = await import('../api/servicesApi.js');
+      const res = await validateCoupon(normalizedCoupon);
+      if (res.ok) {
+        const { db } = await import('../../../shared/db/storage.js');
+        const { isSecurePro } = await import('../utils/billing.js');
+        await db.setSetting('is_pro', isSecurePro(normalizedCoupon));
+        setIsSuccess(true);
+        toast.success('Pro Access Activated!');
+      } else {
+        toast.error(res.error || t('invalid_coupon', 'Invalid Coupon Code'));
+      }
+    } catch (e) {
+      toast.error('Validation failed');
+    } finally {
+      setValidating(false);
+    }
+  };
+
   if (!open) return null;
+
+  if (isSuccess) {
+    return createPortal(
+      <div className="overlay overlay--center" style={{ zIndex: 10000 }}>
+        <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw', textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ width: '80px', height: '80px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            <FiStar size={40} fill="currentColor" />
+          </div>
+          <h2 className="dialog__title">Pro Access Active!</h2>
+          <p style={{ color: 'var(--text-2)', marginTop: '12px', marginBottom: '24px' }}>Thank you for your support. All services are being added.</p>
+          <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => { onConfirm(entries); onClose(); }}>
+            Import All Services
+          </button>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 10000 }}>
@@ -321,11 +377,10 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
           <h2 className="dialog__title">{title}</h2>
           <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginTop: '8px' }}>
             We found <strong>{entries.length} services</strong>. 
-            {!isPro && (
-               remaining > 0 
+            {remaining > 0 
                 ? <> As a standard user, you can add up to <strong>{remaining} more</strong>.</>
                 : <> You've reached your limit of <strong>{SERVICE_CAP}</strong>. Please upgrade to Pro for more.</>
-            )}
+            }
           </p>
         </div>
 
@@ -379,16 +434,34 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
           </div>
         </div>
 
-        <div className="dialog__footer" style={{ padding: '20px 24px 24px', gap: '12px' }}>
-          <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
-          <button 
-            className="btn btn--primary" 
-            style={{ flex: 1.5 }} 
-            onClick={handleConfirm}
-            disabled={selectedIds.size === 0}
-          >
-            Add {selectedIds.size} Services
-          </button>
+        <div className="dialog__footer" style={{ padding: '20px 24px 24px', flexDirection: 'column', gap: '12px' }}>
+          <div className="field" style={{ width: '100%' }}>
+             <div style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                  className="field__input" 
+                  placeholder={t('enter_coupon_code', 'Enter Coupon Code')} 
+                  style={{ textTransform: 'uppercase', flex: 1 }} 
+                  value={coupon}
+                  onChange={e => setCoupon(e.target.value)}
+                  disabled={validating}
+                />
+                <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
+                  {validating ? '...' : 'Apply'}
+                </button>
+             </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={validating}>Cancel</button>
+            <button 
+              className="btn btn--primary" 
+              style={{ flex: 1.5 }} 
+              onClick={handleConfirm}
+              disabled={selectedIds.size === 0 || validating}
+            >
+              Add {selectedIds.size} Services
+            </button>
+          </div>
         </div>
       </div>
     </div>,
