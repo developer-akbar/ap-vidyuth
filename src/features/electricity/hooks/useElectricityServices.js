@@ -284,8 +284,8 @@ export function useElectricityServices() {
     return res;
   }, [reload]);
 
-  const requestProAccess = useCallback(async (type, message) => {
-    return requestProAccessApi(type, message);
+  const requestProAccess = useCallback(async (type, message, name, email) => {
+    return requestProAccessApi(type, message, name, email);
   }, []);
 
   return {

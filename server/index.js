@@ -1185,12 +1185,13 @@ app.get('/api/notifications/check', async (req, res) => {
 });
 
 app.post('/api/request-access', async (req, res) => {
-  const { deviceId, message, type } = req.body || {};
+  const { deviceId, message, type, name, userEmail } = req.body || {};
   const { 
     VITE_SMTP_HOST, 
     VITE_SMTP_PORT, 
     VITE_SMTP_USER, 
-    VITE_SMTP_PASSWORD 
+    VITE_SMTP_PASSWORD,
+    VITE_TO_EMAIL
   } = process.env;
 
   if (!VITE_SMTP_USER || !VITE_SMTP_PASSWORD) {
@@ -1210,14 +1211,17 @@ app.post('/api/request-access', async (req, res) => {
 
   const isWithdraw = type === 'WITHDRAW';
   const subject = isWithdraw ? 'Pro Subscription Withdrawal Request' : 'Pro Access Request - AP Vidyuth';
+  const toEmail = VITE_TO_EMAIL || 'mail.developer.akbar@gmail.com';
   
   const mailOptions = {
     from: `"AP Vidyuth App" <${VITE_SMTP_USER}>`,
-    to: 'mail.developer.akbar@gmail.com',
-    replyTo: VITE_SMTP_USER,
+    to: toEmail,
+    replyTo: userEmail || VITE_SMTP_USER,
     subject: subject,
     text: `New Request from AP Vidyuth App\n\n` +
           `Type: ${isWithdraw ? 'WITHDRAWAL' : 'ACCESS'}\n` +
+          `Name: ${name || 'Not provided'}\n` +
+          `Email: ${userEmail || 'Not provided'}\n` +
           `Device ID: ${deviceId || 'Unknown'}\n\n` +
           `User Message:\n${message || 'No additional message provided.'}\n\n` +
           `--- End of Request ---`,
