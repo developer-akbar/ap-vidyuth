@@ -148,13 +148,22 @@ function AppContent() {
   const handleWithdrawPro = async () => {
     setConfirmState({
       open: true,
-      title: 'Withdraw Pro Access?',
-      description: 'Are you sure you want to withdraw your Pro subscription? You will be limited to 4 services again.',
+      title: 'Request Pro Withdrawal?',
+      description: 'Are you sure you want to withdraw your Pro subscription? We will process your request and revert your account to standard.',
       isDanger: true,
       onConfirm: async () => {
-        await db.setSetting('is_pro', null);
-        await electricityContext.actions.reload();
-        toast.success('Pro access withdrawn');
+        try {
+          const { requestProAccess } = await import('../features/electricity/api/servicesApi.js');
+          const res = await requestProAccess('WITHDRAW', 'User requested Pro subscription withdrawal.');
+          if (res.ok) {
+            toast.success('Withdrawal Request Sent! Reverting account...');
+            // Revert immediately for UX, actual processing is in background
+            await db.setSetting('is_pro', null);
+            await electricityContext.actions.reload();
+          }
+        } catch (e) {
+          toast.error('Failed to send request. Please try again later.');
+        }
       }
     });
   };
@@ -457,7 +466,7 @@ function AppContent() {
                         {!electricityContext.isPro ? (
                           <SettingsItem 
                             icon={FiZap} 
-                            label="Get Pro Access" 
+                            label="Request Access" 
                             description="Unlock unlimited services & premium features" 
                             onClick={() => setCapModalOpen(true)} 
                             color="var(--primary)" 
@@ -465,12 +474,13 @@ function AppContent() {
                         ) : (
                           <SettingsItem 
                             icon={FiZap} 
-                            label="Withdraw Subscription" 
+                            label="Request Withdrawal" 
                             description="Cancel your Pro access and return to standard" 
                             onClick={handleWithdrawPro} 
                             color="var(--text-3)" 
                           />
                         )}
+
                       </div>
                     </div>
                     <div style={{ marginBottom: '24px' }}>

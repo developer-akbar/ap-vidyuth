@@ -370,3 +370,9 @@ export async function validateCoupon(code) {
   const deviceId = await getDeviceId();
   return apiPost('/validate-coupon', { code, deviceId });
 }
+
+export async function requestProAccess(type = 'ACCESS', message = '') {
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/request-access', { deviceId, message, type });
+}

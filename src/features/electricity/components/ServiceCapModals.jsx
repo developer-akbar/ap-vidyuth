@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { FiAlertCircle, FiCheck, FiMail, FiTrash2, FiZap, FiStar } from 'react-icons/fi';
+import { FiAlertCircle, FiCheck, FiMail, FiTrash2, FiZap, FiStar, FiSend } from 'react-icons/fi';
 import { SERVICE_CAP, getDeviceId } from '../../../shared/utils/index.js';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ export function ServiceCapModal({ open, onClose }) {
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false);
 
   if (!open) return null;
 
@@ -36,11 +37,19 @@ export function ServiceCapModal({ open, onClose }) {
     }
   };
 
-  const handleContactDeveloper = async () => {
-    const deviceId = await getDeviceId();
-    const subject = encodeURIComponent('Request for Extended Service Access - AP Vidyuth');
-    const body = encodeURIComponent(`Hi Akbar,\n\nI would like to request extended access to track more than 4 services in the AP Vidyuth app. Please share coupon code.\n\nDevice ID: ${deviceId}\n\n[Optional: Enter your reason here]`);
-    window.location.href = `mailto:mail.akbarmulla@gmail.com?subject=${subject}&body=${body}`;
+  const handleRequestAccess = async () => {
+    setIsRequesting(true);
+    try {
+      const { requestProAccess } = await import('../api/servicesApi.js');
+      const res = await requestProAccess('ACCESS', 'User requested extended access for tracking >4 services.');
+      if (res.ok) {
+        toast.success('Access Request Sent! We will contact you soon.');
+      }
+    } catch (e) {
+      toast.error('Failed to send request. Please try again later.');
+    } finally {
+      setIsRequesting(false);
+    }
   };
 
   if (isSuccess) {
@@ -72,7 +81,7 @@ export function ServiceCapModal({ open, onClose }) {
         </div>
         <div className="dialog__body" style={{ textAlign: 'center' }}>
           <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: '1.6' }}>
-            {t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or contact the developer for extended access.", { cap: SERVICE_CAP })}
+            {t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or request for extended access.", { cap: SERVICE_CAP })}
           </p>
           
           <div className="field" style={{ marginTop: '20px' }}>
@@ -82,12 +91,12 @@ export function ServiceCapModal({ open, onClose }) {
               style={{ textAlign: 'center', textTransform: 'uppercase' }} 
               value={coupon}
               onChange={e => setCoupon(e.target.value)}
-              disabled={validating}
+              disabled={validating || isRequesting}
             />
           </div>
         </div>
         <div className="dialog__footer" style={{ flexDirection: 'column', gap: '8px' }}>
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating}>
+          <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating || isRequesting}>
             {validating ? 'Validating...' : t('apply_coupon', 'Apply Coupon')}
           </button>
           
@@ -97,10 +106,10 @@ export function ServiceCapModal({ open, onClose }) {
             <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
           </div>
 
-          <button className="btn" style={{ width: '100%', background: 'var(--blue)', color: 'white' }} onClick={handleContactDeveloper} disabled={validating}>
-            <FiMail size={16} style={{ marginRight: '8px' }} /> {t('contact_developer', 'Contact Developer')}
+          <button className="btn" style={{ width: '100%', background: 'var(--blue)', color: 'white' }} onClick={handleRequestAccess} disabled={validating || isRequesting}>
+            {isRequesting ? t('requesting', 'Requesting...') : <><FiSend size={16} style={{ marginRight: '8px' }} /> {t('request_access', 'Request Access')}</>}
           </button>
-          <button className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: '4px' }} onClick={onClose} disabled={validating}>
+          <button className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: '4px' }} onClick={onClose} disabled={validating || isRequesting}>
             {t('close', 'Close')}
           </button>
         </div>
@@ -116,6 +125,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false);
 
   useEffect(() => {
     setSelectedIds(new Set(services.slice(0, SERVICE_CAP).map(s => s.id)));
@@ -173,11 +183,19 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
     }
   };
 
-  const handleContactDeveloper = async () => {
-    const deviceId = await getDeviceId();
-    const subject = encodeURIComponent('Request for Extended Service Access - AP Vidyuth');
-    const body = encodeURIComponent(`Hi Akbar,\n\nI would like to request extended access to track more than 4 services in the AP Vidyuth app. Please share coupon code.\n\nDevice ID: ${deviceId}\n\n[Optional: Enter your reason here]`);
-    window.location.href = `mailto:mail.akbarmulla@gmail.com?subject=${subject}&body=${body}`;
+  const handleRequestAccess = async () => {
+    setIsRequesting(true);
+    try {
+      const { requestProAccess } = await import('../api/servicesApi.js');
+      const res = await requestProAccess('ACCESS', 'User requested extended access during mandatory cleanup.');
+      if (res.ok) {
+        toast.success('Access Request Sent! We will contact you soon.');
+      }
+    } catch (e) {
+      toast.error('Failed to send request. Please try again later.');
+    } finally {
+      setIsRequesting(false);
+    }
   };
 
   if (isSuccess) {
@@ -272,16 +290,16 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
                   style={{ textTransform: 'uppercase', flex: 1 }} 
                   value={coupon}
                   onChange={e => setCoupon(e.target.value)}
-                  disabled={validating}
+                  disabled={validating || isRequesting}
                 />
-                <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
+                <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || isRequesting || !coupon.trim()}>
                   {validating ? '...' : 'Apply'}
                 </button>
              </div>
           </div>
 
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button className="btn btn--ghost" style={{ width: '100%', height: '40px', border: '1px solid var(--border)' }} onClick={handleConfirm} disabled={selectedIds.size === 0 || selectedIds.size > SERVICE_CAP || validating}>
+            <button className="btn btn--ghost" style={{ width: '100%', height: '40px', border: '1px solid var(--border)' }} onClick={handleConfirm} disabled={selectedIds.size === 0 || selectedIds.size > SERVICE_CAP || validating || isRequesting}>
               <FiTrash2 size={16} style={{ marginRight: '8px' }} /> {t('keep_selected_trash_others', 'Keep Selected & Trash Others')}
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -289,8 +307,8 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
                <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: '600' }}>OR</span>
                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
             </div>
-            <button className="btn" style={{ width: '100%', height: '40px', background: 'var(--blue)', color: 'white' }} onClick={handleContactDeveloper} disabled={validating}>
-              <FiMail size={16} style={{ marginRight: '8px' }} /> {t('get_extended_access', 'Get Extended Access')}
+            <button className="btn" style={{ width: '100%', height: '40px', background: 'var(--blue)', color: 'white' }} onClick={handleRequestAccess} disabled={validating || isRequesting}>
+              {isRequesting ? 'Requesting...' : <><FiSend size={16} style={{ marginRight: '8px' }} /> Request Access</>}
             </button>
           </div>
         </div>
@@ -307,6 +325,7 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -356,6 +375,21 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
       toast.error('Validation failed');
     } finally {
       setValidating(false);
+    }
+  };
+
+  const handleRequestAccess = async () => {
+    setIsRequesting(true);
+    try {
+      const { requestProAccess } = await import('../api/servicesApi.js');
+      const res = await requestProAccess('ACCESS', 'User requested extended access during service selection.');
+      if (res.ok) {
+        toast.success('Access Request Sent! We will contact you soon.');
+      }
+    } catch (e) {
+      toast.error('Failed to send request. Please try again later.');
+    } finally {
+      setIsRequesting(false);
     }
   };
 
@@ -452,21 +486,24 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
                   style={{ textTransform: 'uppercase', flex: 1 }} 
                   value={coupon}
                   onChange={e => setCoupon(e.target.value)}
-                  disabled={validating}
+                  disabled={validating || isRequesting}
                 />
-                <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
+                <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || isRequesting || !coupon.trim()}>
                   {validating ? '...' : 'Apply'}
                 </button>
              </div>
           </div>
 
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={validating}>Cancel</button>
+            <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={validating || isRequesting}>Cancel</button>
+            <button className="btn btn--ghost" onClick={handleRequestAccess} style={{ flex: 1, border: '1px solid var(--border)' }} disabled={validating || isRequesting}>
+               {isRequesting ? '...' : 'Request Access'}
+            </button>
             <button 
               className="btn btn--primary" 
               style={{ flex: 1.5 }} 
               onClick={handleConfirm}
-              disabled={selectedIds.size === 0 || validating}
+              disabled={selectedIds.size === 0 || validating || isRequesting}
             >
               Add {selectedIds.size} Services
             </button>

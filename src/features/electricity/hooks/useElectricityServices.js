@@ -22,6 +22,7 @@ import {
   shouldAutoRefresh,
   updateService,
   validateCoupon as validateCouponApi,
+  requestProAccess as requestProAccessApi,
 } from '../api/servicesApi.js';
 import { getValidSession } from '../utils/billdeskSession.jsx';
 import { syncPushTokenWithServer } from '../utils/notifications.js';
@@ -283,9 +284,13 @@ export function useElectricityServices() {
     return res;
   }, [reload]);
 
+  const requestProAccess = useCallback(async (type, message) => {
+    return requestProAccessApi(type, message);
+  }, []);
+
   return {
     ...state,
     isPro: state.isPro,
-    actions: { reload, add, refresh, refreshAll, update, remove, bulkRemove, restore, bulkRestore, purge, bulkPurge, validateCoupon },
+    actions: { reload, add, refresh, refreshAll, update, remove, bulkRemove, restore, bulkRestore, purge, bulkPurge, validateCoupon, requestProAccess },
   };
   }
