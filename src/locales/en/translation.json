@@ -198,7 +198,9 @@
   "service_limit_update": "Service Limit Update",
   "service_limit_cleanup_desc": "To ensure the best experience for everyone, we've introduced a limit of {{cap}} services per user. Please choose the {{cap}} services you'd like to keep. The others will be moved to the Trash.",
   "keep_selected_trash_others": "Keep Selected & Trash Others",
-  "get_extended_access": "Get Extended Access",
-  "coupon_hint": "Have a coupon code? Contact the developer.",
+  "get_extended_access": "Request Access",
+  "request_access": "Request Access",
+  "requesting": "Requesting...",
+  "coupon_hint": "Have a coupon code? Request for access.",
   "restore_limit_note": "Note: Only the first {{cap}} services will be restored due to the current limit."
   }

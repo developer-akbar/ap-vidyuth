@@ -30,6 +30,7 @@ import { solveCaptchaImage } from './utils/billdesk/ocr.js';
 import { scrapeBillDeskSession } from './utils/billdesk/session.js';
 import { Redis } from '@upstash/redis';
 import admin from 'firebase-admin';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -1180,6 +1181,58 @@ app.get('/api/notifications/check', async (req, res) => {
   } catch (err) {
     console.error('[cron] Global error:', err);
     res.status(500).json({ ok: false, error: 'Internal error' });
+  }
+});
+
+app.post('/api/request-access', async (req, res) => {
+  const { deviceId, message, type, name, userEmail } = req.body || {};
+  const { 
+    VITE_SMTP_HOST, 
+    VITE_SMTP_PORT, 
+    VITE_SMTP_USER, 
+    VITE_SMTP_PASSWORD,
+    VITE_TO_EMAIL
+  } = process.env;
+
+  if (!VITE_SMTP_USER || !VITE_SMTP_PASSWORD) {
+    console.error('[api] SMTP configuration missing');
+    return res.status(503).json({ ok: false, error: 'Email service unavailable' });
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: VITE_SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(VITE_SMTP_PORT || '465'),
+    secure: (VITE_SMTP_PORT || '465') === '465',
+    auth: {
+      user: VITE_SMTP_USER,
+      pass: VITE_SMTP_PASSWORD,
+    },
+  });
+
+  const isWithdraw = type === 'WITHDRAW';
+  const subject = isWithdraw ? 'Pro Subscription Withdrawal Request' : 'Pro Access Request - AP Vidyuth';
+  const toEmail = VITE_TO_EMAIL || 'mail.developer.akbar@gmail.com';
+  
+  const mailOptions = {
+    from: `"AP Vidyuth App" <${VITE_SMTP_USER}>`,
+    to: toEmail,
+    replyTo: userEmail || VITE_SMTP_USER,
+    subject: subject,
+    text: `New Request from AP Vidyuth App\n\n` +
+          `Type: ${isWithdraw ? 'WITHDRAWAL' : 'ACCESS'}\n` +
+          `Name: ${name || 'Not provided'}\n` +
+          `Email: ${userEmail || 'Not provided'}\n` +
+          `Device ID: ${deviceId || 'Unknown'}\n\n` +
+          `User Message:\n${message || 'No additional message provided.'}\n\n` +
+          `--- End of Request ---`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    res.json({ ok: true, message: 'Request sent successfully' });
+  } catch (err) {
+    console.error('[api] Email failed:', err.message);
+    res.status(502).json({ ok: false, error: 'Failed to send request' });
   }
 });
 

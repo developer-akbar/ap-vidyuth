@@ -34,7 +34,7 @@ export function apiBase() {
   return '/api';
 }
 
-export async function apiPost(path, body) {
+export async function apiPost(path, body, customHeaders = {}) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s global timeout
 
@@ -44,7 +44,7 @@ export async function apiPost(path, body) {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...customHeaders },
       body: JSON.stringify(body),
       signal: controller.signal
     });
@@ -369,4 +369,10 @@ export async function validateCoupon(code) {
   const { getDeviceId } = await import('../../../shared/utils/index.js');
   const deviceId = await getDeviceId();
   return apiPost('/validate-coupon', { code, deviceId });
+}
+
+export async function requestProAccess(type = 'ACCESS', message = '', name = '', userEmail = '') {
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/request-access', { deviceId, message, type, name, userEmail });
 }

@@ -1,15 +1,83 @@
 import { useEffect, useState, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { FiAlertCircle, FiCheck, FiMail, FiTrash2, FiZap, FiStar } from 'react-icons/fi';
+import { FiAlertCircle, FiCheck, FiMail, FiTrash2, FiZap, FiStar, FiSend } from 'react-icons/fi';
 import { SERVICE_CAP, getDeviceId } from '../../../shared/utils/index.js';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+
+export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess }) {
+  const { t } = useTranslation();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!open) return null;
+
+  const handleSubmit = async () => {
+    if (!name.trim() || !email.trim()) {
+      toast.error('Name and Email are required.');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const { requestProAccess } = await import('../api/servicesApi.js');
+      const defaultMessage = type === 'WITHDRAW' ? 'User requested Pro subscription withdrawal.' : 'User requested extended access for tracking >4 services.';
+      const res = await requestProAccess(type, message || defaultMessage, name, email);
+      if (res.ok) {
+        toast.success(type === 'WITHDRAW' ? 'Withdrawal Request Sent!' : 'Access Request Sent! We will contact you soon.');
+        onSuccess && onSuccess();
+        onClose();
+      }
+    } catch (e) {
+      toast.error('Failed to send request. Please try again later.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return createPortal(
+    <div className="overlay overlay--center" style={{ zIndex: 11000 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw' }}>
+        <div className="dialog__header" style={{ padding: '24px 24px 16px' }}>
+          <h2 className="dialog__title">{type === 'WITHDRAW' ? 'Withdraw Subscription' : 'Request Pro Access'}</h2>
+          <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginTop: '8px' }}>
+            Please provide your details so we can contact you regarding your request.
+          </p>
+        </div>
+        <div className="dialog__body" style={{ padding: '0 24px' }}>
+          <div className="field" style={{ marginBottom: '16px' }}>
+            <label className="field__label">Name *</label>
+            <input className="field__input" placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} disabled={isSubmitting} />
+          </div>
+          <div className="field" style={{ marginBottom: '16px' }}>
+            <label className="field__label">Email *</label>
+            <input className="field__input" type="email" placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} disabled={isSubmitting} />
+          </div>
+          <div className="field" style={{ marginBottom: '16px' }}>
+            <label className="field__label">Message (Optional)</label>
+            <textarea className="field__input" placeholder="Why do you need more services?" rows={3} value={message} onChange={e => setMessage(e.target.value)} disabled={isSubmitting} style={{ resize: 'none' }} />
+          </div>
+        </div>
+        <div className="dialog__footer" style={{ padding: '20px 24px 24px', display: 'flex', gap: '12px' }}>
+          <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={isSubmitting}>Cancel</button>
+          <button className="btn btn--primary" onClick={handleSubmit} style={{ flex: 1.5 }} disabled={isSubmitting || !name.trim() || !email.trim()}>
+            {isSubmitting ? 'Sending...' : 'Send Request'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 export function ServiceCapModal({ open, onClose }) {
   const { t } = useTranslation();
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [requestFormOpen, setRequestFormOpen] = useState(false);
 
   if (!open) return null;
 
@@ -36,12 +104,10 @@ export function ServiceCapModal({ open, onClose }) {
     }
   };
 
-  const handleContactDeveloper = async () => {
-    const deviceId = await getDeviceId();
-    const subject = encodeURIComponent('Request for Extended Service Access - AP Vidyuth');
-    const body = encodeURIComponent(`Hi Akbar,\n\nI would like to request extended access to track more than 4 services in the AP Vidyuth app. Please share coupon code.\n\nDevice ID: ${deviceId}\n\n[Optional: Enter your reason here]`);
-    window.location.href = `mailto:mail.akbarmulla@gmail.com?subject=${subject}&body=${body}`;
+  const handleRequestAccessClick = () => {
+    setRequestFormOpen(true);
   };
+
 
   if (isSuccess) {
     return createPortal(
@@ -72,7 +138,7 @@ export function ServiceCapModal({ open, onClose }) {
         </div>
         <div className="dialog__body" style={{ textAlign: 'center' }}>
           <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: '1.6' }}>
-            {t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or contact the developer for extended access.", { cap: SERVICE_CAP })}
+            {t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or request for extended access.", { cap: SERVICE_CAP })}
           </p>
           
           <div className="field" style={{ marginTop: '20px' }}>
@@ -97,14 +163,15 @@ export function ServiceCapModal({ open, onClose }) {
             <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
           </div>
 
-          <button className="btn" style={{ width: '100%', background: 'var(--blue)', color: 'white' }} onClick={handleContactDeveloper} disabled={validating}>
-            <FiMail size={16} style={{ marginRight: '8px' }} /> {t('contact_developer', 'Contact Developer')}
+          <button className="btn" style={{ width: '100%', background: 'var(--blue)', color: 'white' }} onClick={handleRequestAccessClick} disabled={validating}>
+            <FiSend size={16} style={{ marginRight: '8px' }} /> {t('request_access', 'Request Access')}
           </button>
           <button className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: '4px' }} onClick={onClose} disabled={validating}>
             {t('close', 'Close')}
           </button>
         </div>
       </div>
+      <RequestAccessForm open={requestFormOpen} onClose={() => setRequestFormOpen(false)} />
     </div>,
     document.body
   );
@@ -116,6 +183,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [requestFormOpen, setRequestFormOpen] = useState(false);
 
   useEffect(() => {
     setSelectedIds(new Set(services.slice(0, SERVICE_CAP).map(s => s.id)));
@@ -173,11 +241,8 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
     }
   };
 
-  const handleContactDeveloper = async () => {
-    const deviceId = await getDeviceId();
-    const subject = encodeURIComponent('Request for Extended Service Access - AP Vidyuth');
-    const body = encodeURIComponent(`Hi Akbar,\n\nI would like to request extended access to track more than 4 services in the AP Vidyuth app. Please share coupon code.\n\nDevice ID: ${deviceId}\n\n[Optional: Enter your reason here]`);
-    window.location.href = `mailto:mail.akbarmulla@gmail.com?subject=${subject}&body=${body}`;
+  const handleRequestAccessClick = () => {
+    setRequestFormOpen(true);
   };
 
   if (isSuccess) {
@@ -289,12 +354,13 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
                <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: '600' }}>OR</span>
                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
             </div>
-            <button className="btn" style={{ width: '100%', height: '40px', background: 'var(--blue)', color: 'white' }} onClick={handleContactDeveloper} disabled={validating}>
-              <FiMail size={16} style={{ marginRight: '8px' }} /> {t('get_extended_access', 'Get Extended Access')}
+            <button className="btn" style={{ width: '100%', height: '40px', background: 'var(--blue)', color: 'white' }} onClick={handleRequestAccessClick} disabled={validating}>
+              <FiSend size={16} style={{ marginRight: '8px' }} /> Request Access
             </button>
           </div>
         </div>
       </div>
+      <RequestAccessForm open={requestFormOpen} type="ACCESS" onClose={() => setRequestFormOpen(false)} />
     </div>,
     document.body
   );
@@ -307,6 +373,7 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [requestFormOpen, setRequestFormOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -357,6 +424,10 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
     } finally {
       setValidating(false);
     }
+  };
+
+  const handleRequestAccessClick = () => {
+    setRequestFormOpen(true);
   };
 
   if (!open) return null;
@@ -462,6 +533,9 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
 
           <div style={{ display: 'flex', gap: '12px' }}>
             <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={validating}>Cancel</button>
+            <button className="btn btn--ghost" onClick={handleRequestAccessClick} style={{ flex: 1, border: '1px solid var(--border)' }} disabled={validating}>
+               <FiSend size={16} style={{ marginRight: '8px' }} /> Request Access
+            </button>
             <button 
               className="btn btn--primary" 
               style={{ flex: 1.5 }} 
@@ -473,6 +547,7 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
           </div>
         </div>
       </div>
+      <RequestAccessForm open={requestFormOpen} type="ACCESS" onClose={() => setRequestFormOpen(false)} />
     </div>,
     document.body
   );
