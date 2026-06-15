@@ -15,7 +15,7 @@ import { PrivacyPolicy } from '../features/settings/PrivacyPolicy.jsx';
 import { PrefixMigration } from '../features/settings/components/PrefixMigration.jsx';
 import { SettingsItem } from '../features/settings/components/SettingsItem.jsx';
 import { BackupRestore } from '../features/settings/components/BackupRestore.jsx';
-import { ServiceCapModal } from '../features/electricity/components/ServiceCapModals.jsx';
+import { ServiceCapModal, RequestAccessForm } from '../features/electricity/components/ServiceCapModals.jsx';
 import { ConfirmDialog } from '../shared/components/ConfirmDialog.jsx';
 import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
@@ -143,29 +143,11 @@ function AppContent() {
 
   const [meterLogCount, setMeterLogCount] = useState(0);
   const [capModalOpen, setCapModalOpen] = useState(false);
+  const [withdrawFormOpen, setWithdrawFormOpen] = useState(false);
   const [confirmState, setConfirmState] = useState({ open: false, title: '', description: '', isDanger: false, onConfirm: () => {} });
 
-  const handleWithdrawPro = async () => {
-    setConfirmState({
-      open: true,
-      title: 'Request Pro Withdrawal?',
-      description: 'Are you sure you want to withdraw your Pro subscription? We will process your request and revert your account to standard.',
-      isDanger: true,
-      onConfirm: async () => {
-        try {
-          const { requestProAccess } = await import('../features/electricity/api/servicesApi.js');
-          const res = await requestProAccess('WITHDRAW', 'User requested Pro subscription withdrawal.');
-          if (res.ok) {
-            toast.success('Withdrawal Request Sent! Reverting account...');
-            // Revert immediately for UX, actual processing is in background
-            await db.setSetting('is_pro', null);
-            await electricityContext.actions.reload();
-          }
-        } catch (e) {
-          toast.error('Failed to send request. Please try again later.');
-        }
-      }
-    });
+  const handleWithdrawPro = () => {
+    setWithdrawFormOpen(true);
   };
 
   useEffect(() => {
@@ -557,6 +539,7 @@ function AppContent() {
         <Analytics /><SpeedInsights />
 
         <ServiceCapModal open={capModalOpen} onClose={() => setCapModalOpen(false)} />
+        <RequestAccessForm open={withdrawFormOpen} type="WITHDRAW" onClose={() => setWithdrawFormOpen(false)} onSuccess={() => { db.setSetting('is_pro', null); electricityContext.actions.reload(); }} />
         <ConfirmDialog 
           open={confirmState.open} 
           title={confirmState.title} 

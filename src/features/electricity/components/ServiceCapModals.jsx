@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, useContext } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FiAlertCircle, FiCheck, FiMail, FiTrash2, FiZap, FiStar, FiSend } from 'react-icons/fi';
+import { FiAlertCircle, FiCheck, FiTrash2, FiZap, FiStar, FiSend } from 'react-icons/fi';
 import { SERVICE_CAP, getDeviceId } from '../../../shared/utils/index.js';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
