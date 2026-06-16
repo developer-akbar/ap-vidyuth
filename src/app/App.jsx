@@ -1,7 +1,6 @@
 import { Component } from 'react';
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
-import { FiZap, FiGrid, FiSettings, FiMonitor } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import { App as CapApp } from '@capacitor/app';
 import { Analytics } from '@vercel/analytics/react';
@@ -15,13 +14,13 @@ import { PrivacyPolicy } from '../features/settings/PrivacyPolicy.jsx';
 import { PrefixMigration } from '../features/settings/components/PrefixMigration.jsx';
 import { SettingsItem } from '../features/settings/components/SettingsItem.jsx';
 import { BackupRestore } from '../features/settings/components/BackupRestore.jsx';
-import { ServiceCapModal, RequestAccessForm } from '../features/electricity/components/ServiceCapModals.jsx';
+import { ServiceCapModal, RequestAccessForm, RequestSuccessModal } from '../features/electricity/components/ServiceCapModals.jsx';
 import { ConfirmDialog } from '../shared/components/ConfirmDialog.jsx';
 import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Loader } from '../shared/components/Loader.jsx';
-import { FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail, FiWifiOff } from 'react-icons/fi';
+import { FiZap, FiGrid, FiSettings, FiMonitor, FiUser, FiArrowLeft, FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail, FiWifiOff } from 'react-icons/fi';
 
 import { useNetwork } from '../shared/hooks/useNetwork.js';
 import { db } from '../shared/db/storage.js';
@@ -52,7 +51,6 @@ class ErrorBoundary extends Component {
 // ── Lazy Loaded Components ──────────────────────────────────────────────────
 const CalculationSettings = lazy(() => import('../features/electricity/components/CalculationSettings.jsx').then(m => ({ default: m.CalculationSettings })));
 const ApplianceCalculator = lazy(() => import('../features/electricity/components/ApplianceCalculator.jsx').then(m => ({ default: m.ApplianceCalculator })));
-
 const OverviewTab = lazy(() => import('../features/electricity/OverviewTab.jsx').then(m => ({ default: m.OverviewTab })));
 
 // ── Loading Fallback ────────────────────────────────────────────────────────
@@ -144,10 +142,37 @@ function AppContent() {
   const [meterLogCount, setMeterLogCount] = useState(0);
   const [capModalOpen, setCapModalOpen] = useState(false);
   const [withdrawFormOpen, setWithdrawFormOpen] = useState(false);
+  const [showUserInfo, setShowUserInfo] = useState(false);
+  const [successState, setSuccessState] = useState({ open: false, type: '', email: '' });
   const [confirmState, setConfirmState] = useState({ open: false, title: '', description: '', isDanger: false, onConfirm: () => {} });
+
+  const [userName, setUserName] = useState(() => localStorage.getItem('user_name') || '');
+  const [userEmail, setUserEmail] = useState(() => localStorage.getItem('user_email') || '');
+
+  const saveUserInfo = () => {
+    localStorage.setItem('user_name', userName.trim());
+    localStorage.setItem('user_email', userEmail.trim());
+    toast.success('User info saved');
+    setShowUserInfo(false);
+  };
 
   const handleWithdrawPro = () => {
     setWithdrawFormOpen(true);
+  };
+
+  const handleRequestSuccess = (type, email) => {
+    setWithdrawFormOpen(false);
+    setCapModalOpen(false);
+    
+    // Refresh user info state in case it was updated in the form
+    setUserName(localStorage.getItem('user_name') || '');
+    setUserEmail(localStorage.getItem('user_email') || '');
+
+    if (type === 'WITHDRAW') {
+      db.setSetting('is_pro', null);
+      electricityContext.actions.reload();
+    }
+    setSuccessState({ open: true, type, email });
   };
 
   useEffect(() => {
@@ -262,7 +287,7 @@ function AppContent() {
       if (backEvent.detail.handled) return;
 
       const curr = activePageRef.current;
-      if (['privacy', 'prefix-migration', 'calculation-settings', 'appliances'].includes(curr)) {
+      if (['privacy', 'prefix-migration', 'calculation-settings', 'appliances', 'user-profile'].includes(curr)) {
         setActivePage(curr === 'appliances' ? 'electricity' : 'settings');
         return;
       }
@@ -300,7 +325,7 @@ function AppContent() {
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key !== 'Escape') return;
-      if (['appliances', 'privacy', 'prefix-migration', 'calculation-settings'].includes(activePage)) {
+      if (['appliances', 'privacy', 'prefix-migration', 'calculation-settings', 'user-profile'].includes(activePage)) {
         setActivePage(activePage === 'appliances' ? 'electricity' : 'settings');
       }
     };
@@ -328,8 +353,7 @@ function AppContent() {
     }
     const mainEl = document.querySelector('.main');
     if (mainEl) scrollPositions.current[activePage] = mainEl.scrollTop;
-    if (id === 'settings') setActivePage('settings');
-    else setActivePage(id);
+    setActivePage(id);
   };
 
   useEffect(() => {
@@ -429,6 +453,55 @@ function AppContent() {
               {activePage === 'appliances' && <ApplianceCalculator onBack={() => setActivePage('electricity')} />}
               {activePage === 'home' && <OverviewTab electricityContext={electricityContext} />}
               {activePage === 'privacy' && <PrivacyPolicy onBack={() => setActivePage('settings')} />}
+              {activePage === 'user-profile' && (
+                <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
+                  <div className="page__header page__header--sticky">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <button className="btn btn--icon" onClick={() => setActivePage('settings')} aria-label="Back">
+                        <FiArrowLeft size={20} />
+                      </button>
+                      <h2 className="page__title">User Profile</h2>
+                    </div>
+                  </div>
+                  <div className="page__body" style={{ padding: '24px' }}>
+                    {(!userName || !userEmail || showUserInfo) ? (
+                      <div className="scard" style={{ padding: '24px' }}>
+                        <div className="field" style={{ marginBottom: '16px' }}>
+                          <label className="field__label">Full Name</label>
+                          <input className="field__input" placeholder="Enter your name" value={userName} onChange={e => setUserName(e.target.value)} />
+                        </div>
+                        <div className="field" style={{ marginBottom: '16px' }}>
+                          <label className="field__label">Email Address</label>
+                          <input className="field__input" type="email" placeholder="Enter your email" value={userEmail} onChange={e => setUserEmail(e.target.value)} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                          {userName && userEmail && (
+                             <button className="btn btn--ghost" style={{ flex: 1 }} onClick={() => setShowUserInfo(false)}>Cancel</button>
+                          )}
+                          <button className="btn btn--primary" style={{ flex: 1.5 }} onClick={saveUserInfo} disabled={!userName.trim() || !userEmail.trim()}>Save Details</button>
+                        </div>
+                        <p style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-3)', textAlign: 'center', lineHeight: '1.4' }}>
+                          We use these details only to process Pro requests and provide support. We never share your data.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="scard" style={{ padding: '24px' }}>
+                        <div style={{ marginBottom: '20px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase' }}>Saved Name</label>
+                          <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-1)', marginTop: '4px' }}>{userName}</p>
+                        </div>
+                        <div style={{ marginBottom: '24px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase' }}>Saved Email</label>
+                          <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-1)', marginTop: '4px' }}>{userEmail}</p>
+                        </div>
+                        <button className="btn btn--outline" style={{ width: '100%', borderColor: 'var(--border)' }} onClick={() => setShowUserInfo(true)}>
+                          Edit Profile Details
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {activePage === 'settings' && (
                 <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
                   <div className="page__header page__header--sticky">
@@ -445,6 +518,14 @@ function AppContent() {
                     <div style={{ marginBottom: '24px' }}>
                       <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account & Subscription</h3>
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
+                        <SettingsItem 
+                          icon={FiUser} 
+                          label="User Profile" 
+                          description={userName ? "View or edit your contact details" : "Set your name and email for Pro access"} 
+                          onClick={() => setActivePage('user-profile')} 
+                          color="var(--blue)" 
+                        />
+                        <div style={{ height: '1px', background: 'var(--border)', margin: '0 16px' }} />
                         {!electricityContext.isPro ? (
                           <SettingsItem 
                             icon={FiZap} 
@@ -462,9 +543,9 @@ function AppContent() {
                             color="var(--text-3)" 
                           />
                         )}
-
                       </div>
                     </div>
+
                     <div style={{ marginBottom: '24px' }}>
                       <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tools & Utilities</h3>
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
@@ -530,7 +611,7 @@ function AppContent() {
         </ErrorBoundary>
         <nav className="bottom-nav">
           {NAV.map(({ id, icon: Icon }) => (
-            <button key={id} className={`bottom-nav__item ${activePage === id || (id === 'settings' && ['prefix-migration', 'calculation-settings', 'privacy'].includes(activePage)) ? 'bottom-nav__item--active' : ''}`} onClick={() => handleNavClick(id)} aria-label={t(id)}>
+            <button key={id} className={`bottom-nav__item ${activePage === id || (id === 'settings' && ['prefix-migration', 'calculation-settings', 'privacy', 'user-profile'].includes(activePage)) ? 'bottom-nav__item--active' : ''}`} onClick={() => handleNavClick(id)} aria-label={t(id)}>
               <Icon size={20} /><span>{t(id)}</span>
             </button>
           ))}
@@ -538,8 +619,13 @@ function AppContent() {
         <Toaster position="bottom-center" visibleToasts={1} containerClassName="toast-container" containerStyle={{ zIndex: 200000 }} toastOptions={{ success: { duration: 2000 }, error: { duration: 4000 }, duration: 3000, style: { background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '13px', fontWeight: '500', fontFamily: 'var(--font)', boxShadow: 'var(--shadow-lg)' } }} />
         <Analytics /><SpeedInsights />
 
-        <ServiceCapModal open={capModalOpen} onClose={() => setCapModalOpen(false)} />
-        <RequestAccessForm open={withdrawFormOpen} type="WITHDRAW" onClose={() => setWithdrawFormOpen(false)} onSuccess={() => { db.setSetting('is_pro', null); electricityContext.actions.reload(); }} />
+        <ServiceCapModal 
+          open={capModalOpen} 
+          serviceCount={electricityContext.services.filter(s => !s.isDeleted).length}
+          onClose={() => setCapModalOpen(false)} 
+        />
+        <RequestAccessForm open={withdrawFormOpen} type="WITHDRAW" onClose={() => setWithdrawFormOpen(false)} onSuccess={handleRequestSuccess} />
+        <RequestSuccessModal {...successState} onClose={() => setSuccessState({ open: false, type: '', email: '' })} />
         <ConfirmDialog 
           open={confirmState.open} 
           title={confirmState.title} 

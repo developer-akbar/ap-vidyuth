@@ -1,21 +1,68 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { FiAlertCircle, FiCheck, FiTrash2, FiZap, FiStar, FiSend } from 'react-icons/fi';
 import { SERVICE_CAP, getDeviceId } from '../../../shared/utils/index.js';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+import { Loader } from '../../../shared/components/Loader.jsx';
 
-export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess }) {
+export function RequestSuccessModal({ open, type, email, onClose }) {
   const { t } = useTranslation();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const handleBack = (e) => {
+      if (!open) return;
+      e.detail.handled = true;
+      onClose();
+    };
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (open) {
+      window.addEventListener('app-back-button', handleBack);
+      window.addEventListener('keydown', handleEsc);
+    }
+    return () => {
+      window.removeEventListener('app-back-button', handleBack);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
-  const handleSubmit = async () => {
-    if (!name.trim() || !email.trim()) {
+  return createPortal(
+    <div className="overlay overlay--center" style={{ zIndex: 11000 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw', textAlign: 'center', padding: '40px 24px' }}>
+        <div style={{ width: '64px', height: '64px', background: 'var(--green-light)', color: 'var(--green)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+          <FiCheck size={32} />
+        </div>
+        <h2 className="dialog__title">{type === 'WITHDRAW' ? 'Withdrawal Requested' : 'Request Received'}</h2>
+        <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: '1.6', marginTop: '12px', marginBottom: '24px' }}>
+          {type === 'WITHDRAW' 
+            ? `Your withdrawal request has been sent. We will process it shortly and communicate through your email: ${email}.` 
+            : `Thank you for your request. Our team will review it and get back to you soon. We will communicate through your email address: ${email}.`}
+        </p>
+        <button className="btn btn--primary" style={{ width: '100%' }} onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess }) {
+  const { t } = useTranslation();
+  const [name, setName] = useState(() => localStorage.getItem('user_name') || '');
+  const [email, setEmail] = useState(() => localStorage.getItem('user_email') || '');
+  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = useCallback(async (forcedName, forcedEmail) => {
+    const finalName = forcedName || name.trim();
+    const finalEmail = forcedEmail || email.trim();
+
+    if (!finalName || !finalEmail) {
       toast.error('Name and Email are required.');
       return;
     }
@@ -24,26 +71,76 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
     try {
       const { requestProAccess } = await import('../api/servicesApi.js');
       const defaultMessage = type === 'WITHDRAW' ? 'User requested Pro subscription withdrawal.' : 'User requested extended access for tracking >4 services.';
-      const res = await requestProAccess(type, message || defaultMessage, name, email);
+      const res = await requestProAccess(type, message || defaultMessage, finalName, finalEmail);
       if (res.ok) {
-        toast.success(type === 'WITHDRAW' ? 'Withdrawal Request Sent!' : 'Access Request Sent! We will contact you soon.');
-        onSuccess && onSuccess();
-        onClose();
+        // Save to localStorage if not already present or if changed
+        localStorage.setItem('user_name', finalName);
+        localStorage.setItem('user_email', finalEmail);
+        
+        onSuccess && onSuccess(type, finalEmail);
+      } else {
+        toast.error(res.error || 'Failed to send request.');
       }
     } catch (e) {
       toast.error('Failed to send request. Please try again later.');
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [name, email, message, type, onSuccess]);
+
+  useEffect(() => {
+    const handleBack = (e) => {
+      if (!open) return;
+      e.detail.handled = true;
+      onClose();
+    };
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    
+    if (open) {
+      window.addEventListener('app-back-button', handleBack);
+      window.addEventListener('keydown', handleEsc);
+
+      // Auto-submit if profile is already complete
+      const savedName = localStorage.getItem('user_name');
+      const savedEmail = localStorage.getItem('user_email');
+      if (savedName && savedEmail && !isSubmitting) {
+        handleSubmit(savedName, savedEmail);
+      }
+    }
+    return () => {
+      window.removeEventListener('app-back-button', handleBack);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [open, onClose, isSubmitting, handleSubmit]);
+
+  if (!open) return null;
+
+  // If we are auto-submitting, show a loader
+  const isAutoSubmitting = localStorage.getItem('user_name') && localStorage.getItem('user_email');
+
+  if (isAutoSubmitting && isSubmitting) {
+    return createPortal(
+      <div className="overlay overlay--center" style={{ zIndex: 11000 }}>
+        <div className="dialog" style={{ width: '300px', textAlign: 'center', padding: '32px' }}>
+          <Loader size={24} />
+          <p style={{ marginTop: '16px', color: 'var(--text-2)', fontSize: '14px' }}>Sending request...</p>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 11000 }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw' }}>
         <div className="dialog__header" style={{ padding: '24px 24px 16px' }}>
-          <h2 className="dialog__title">{type === 'WITHDRAW' ? 'Withdraw Subscription' : 'Request Pro Access'}</h2>
+          <h2 className="dialog__title">{type === 'WITHDRAW' ? 'Withdraw Subscription' : 'Upgrade to Pro'}</h2>
           <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginTop: '8px' }}>
-            Please provide your details so we can contact you regarding your request.
+            {type === 'WITHDRAW' 
+              ? 'Tell us why you want to withdraw your Pro subscription.'
+              : 'Unlock unlimited services and premium features by requesting Pro access.'}
           </p>
         </div>
         <div className="dialog__body" style={{ padding: '0 24px' }}>
@@ -57,12 +154,15 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
           </div>
           <div className="field" style={{ marginBottom: '16px' }}>
             <label className="field__label">Message (Optional)</label>
-            <textarea className="field__input" placeholder="Why do you need more services?" rows={3} value={message} onChange={e => setMessage(e.target.value)} disabled={isSubmitting} style={{ resize: 'none' }} />
+            <textarea className="field__input" placeholder={type === 'WITHDRAW' ? "Reason for withdrawal..." : "How many services do you plan to track?"} rows={3} value={message} onChange={e => setMessage(e.target.value)} disabled={isSubmitting} style={{ resize: 'none' }} />
           </div>
+          <p style={{ fontSize: '11px', color: 'var(--text-3)', fontStyle: 'italic', marginTop: '4px' }}>
+            Note: Your contact details are only used to serve you better and provide access if needed. We never share your data.
+          </p>
         </div>
         <div className="dialog__footer" style={{ padding: '20px 24px 24px', display: 'flex', gap: '12px' }}>
           <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={isSubmitting}>Cancel</button>
-          <button className="btn btn--primary" onClick={handleSubmit} style={{ flex: 1.5 }} disabled={isSubmitting || !name.trim() || !email.trim()}>
+          <button className="btn btn--primary" onClick={() => handleSubmit()} style={{ flex: 1.5 }} disabled={isSubmitting || !name.trim() || !email.trim()}>
             {isSubmitting ? 'Sending...' : 'Send Request'}
           </button>
         </div>
@@ -72,14 +172,36 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
   );
 }
 
-export function ServiceCapModal({ open, onClose }) {
+export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
   const { t } = useTranslation();
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [requestFormOpen, setRequestFormOpen] = useState(false);
+  const [successState, setSuccessState] = useState({ open: false, type: '', email: '' });
 
-  if (!open) return null;
+  useEffect(() => {
+    const handleBack = (e) => {
+      if (!open) return;
+      e.detail.handled = true;
+      onClose();
+    };
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (open) {
+      window.addEventListener('app-back-button', handleBack);
+      window.addEventListener('keydown', handleEsc);
+    }
+    return () => {
+      window.removeEventListener('app-back-button', handleBack);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [open, onClose]);
+
+  if (!open && !successState.open) return null;
+
+  const isLimitReached = serviceCount >= SERVICE_CAP;
 
   const handleApplyCoupon = async () => {
     if (!coupon.trim()) return;
@@ -108,6 +230,12 @@ export function ServiceCapModal({ open, onClose }) {
     setRequestFormOpen(true);
   };
 
+  const handleRequestSuccess = (type, email) => {
+    setRequestFormOpen(false);
+    onClose();
+    setSuccessState({ open: true, type, email });
+  };
+
 
   if (isSuccess) {
     return createPortal(
@@ -127,18 +255,37 @@ export function ServiceCapModal({ open, onClose }) {
     );
   }
 
+  if (!open && successState.open) {
+    return <RequestSuccessModal {...successState} onClose={() => setSuccessState({ open: false, type: '', email: '' })} />;
+  }
+
   return createPortal(
     <div className="overlay overlay--center" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw' }}>
         <div className="dialog__header" style={{ textAlign: 'center', paddingTop: '20px' }}>
-          <div style={{ width: '56px', height: '56px', background: 'var(--amber-light)', color: 'var(--amber)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-            <FiAlertCircle size={32} />
+          <div style={{ 
+            width: '56px', 
+            height: '56px', 
+            background: isLimitReached ? 'var(--amber-light)' : 'var(--primary-light)', 
+            color: isLimitReached ? 'var(--amber)' : 'var(--primary)', 
+            borderRadius: '50%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            margin: '0 auto 16px' 
+          }}>
+            {isLimitReached ? <FiAlertCircle size={32} /> : <FiZap size={32} />}
           </div>
-          <h2 className="dialog__title">{t('service_limit_reached', 'Service Limit Reached')}</h2>
+          <h2 className="dialog__title">
+            {isLimitReached ? t('service_limit_reached', 'Service Limit Reached') : 'Get Pro Access'}
+          </h2>
         </div>
-        <div className="dialog__body" style={{ textAlign: 'center' }}>
+        <div className="dialog__body" style={{ textAlign: 'center', padding: '0 24px' }}>
           <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: '1.6' }}>
-            {t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or request for extended access.", { cap: SERVICE_CAP })}
+            {isLimitReached 
+              ? t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or request for Pro access.", { cap: SERVICE_CAP })
+              : 'Upgrade to Pro to add more service numbers, get unlimited tracking, and access premium features. Enter a Coupon Code or raise a request below.'
+            }
           </p>
           
           <div className="field" style={{ marginTop: '20px' }}>
@@ -171,7 +318,7 @@ export function ServiceCapModal({ open, onClose }) {
           </button>
         </div>
       </div>
-      <RequestAccessForm open={requestFormOpen} onClose={() => setRequestFormOpen(false)} />
+      <RequestAccessForm open={requestFormOpen} onClose={() => setRequestFormOpen(false)} onSuccess={handleRequestSuccess} />
     </div>,
     document.body
   );
@@ -184,6 +331,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [requestFormOpen, setRequestFormOpen] = useState(false);
+  const [successState, setSuccessState] = useState({ open: false, type: '', email: '' });
 
   useEffect(() => {
     setSelectedIds(new Set(services.slice(0, SERVICE_CAP).map(s => s.id)));
@@ -243,6 +391,11 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
 
   const handleRequestAccessClick = () => {
     setRequestFormOpen(true);
+  };
+
+  const handleRequestSuccess = (type, email) => {
+    setRequestFormOpen(false);
+    setSuccessState({ open: true, type, email });
   };
 
   if (isSuccess) {
@@ -360,7 +513,8 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
           </div>
         </div>
       </div>
-      <RequestAccessForm open={requestFormOpen} type="ACCESS" onClose={() => setRequestFormOpen(false)} />
+      <RequestAccessForm open={requestFormOpen} type="ACCESS" onClose={() => setRequestFormOpen(false)} onSuccess={handleRequestSuccess} />
+      <RequestSuccessModal {...successState} onClose={() => setSuccessState({ open: false, type: '', email: '' })} />
     </div>,
     document.body
   );
@@ -374,6 +528,7 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
   const [validating, setValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [requestFormOpen, setRequestFormOpen] = useState(false);
+  const [successState, setSuccessState] = useState({ open: false, type: '', email: '' });
 
   useEffect(() => {
     if (open) {
@@ -430,7 +585,32 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
     setRequestFormOpen(true);
   };
 
-  if (!open) return null;
+  const handleRequestSuccess = (type, email) => {
+    setRequestFormOpen(false);
+    onClose();
+    setSuccessState({ open: true, type, email });
+  };
+
+  useEffect(() => {
+    const handleBack = (e) => {
+      if (!open) return;
+      e.detail.handled = true;
+      onClose();
+    };
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (open) {
+      window.addEventListener('app-back-button', handleBack);
+      window.addEventListener('keydown', handleEsc);
+    }
+    return () => {
+      window.removeEventListener('app-back-button', handleBack);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [open, onClose]);
+
+  if (!open && !successState.open) return null;
 
   if (isSuccess) {
     return createPortal(
@@ -448,6 +628,10 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
       </div>,
       document.body
     );
+  }
+
+  if (!open && successState.open) {
+    return <RequestSuccessModal {...successState} onClose={() => setSuccessState({ open: false, type: '', email: '' })} />;
   }
 
   return createPortal(
@@ -547,7 +731,8 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
           </div>
         </div>
       </div>
-      <RequestAccessForm open={requestFormOpen} type="ACCESS" onClose={() => setRequestFormOpen(false)} />
+      <RequestAccessForm open={requestFormOpen} type="ACCESS" onClose={() => setRequestFormOpen(false)} onSuccess={handleRequestSuccess} />
+      <RequestSuccessModal {...successState} onClose={() => setSuccessState({ open: false, type: '', email: '' })} />
     </div>,
     document.body
   );
