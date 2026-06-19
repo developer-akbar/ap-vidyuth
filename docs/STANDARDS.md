@@ -149,6 +149,408 @@ unless a specific screen explicitly overrides one.
 
 ---
 
+## 9. GRACEFUL DEGRADATION & RESILIENT UI
+
+### Core Principle
+**The application must remain usable even when individual features, APIs, services, or components fail.**
+
+Never block the entire page because one section cannot load. Each feature should fail independently without affecting unrelated functionality.
+
+---
+
+### 9.1 Component Independence
+
+Every major section must own:
+- Data fetching logic
+- Loading state
+- Error state
+- Empty state
+- Retry mechanism
+
+**Good Pattern**
+- Analytics widget fails → Only that widget shows an error state
+- User profile API fails → Dashboard, notifications, and navigation continue working
+- One service refresh fails → Other services refresh successfully
+
+**Anti-Pattern**
+- One API failure causes a blank page
+- Entire application becomes unusable because a single request timed out
+- Dashboard fails to render if secondary feature data is unavailable
+
+---
+
+### 9.2 Loading State Standards
+
+Every asynchronous operation must display a loading state.
+
+**Preferred Loading Order**
+1. Cached data (if available)
+2. Skeleton loader (layout-preserving placeholder)
+3. Spinner (only when necessary — use sparingly)
+
+**Rules**
+- Never display empty whitespace while loading
+- Avoid layout shifts during data fetching
+- Keep previous data visible whenever possible
+- Never show a loading spinner for >3s without a timeout/error fallback
+
+**Examples**
+
+Good:
+- Show previous bill history while fetching updates
+- Show skeleton cards that match the final layout
+- Display cached data immediately, then refresh in background
+
+Bad:
+- Entire screen disappears during refresh
+- User sees a blank page while data loads
+- Layout shifts dramatically once data arrives
+
+---
+
+### 9.3 Error Handling Standards
+
+Errors must be localized and never expose internal details.
+
+**Every component must handle:**
+- Network failures (timeouts, connection refused)
+- API failures (5xx errors, rate limits)
+- Invalid responses (malformed data)
+- Permission failures (unauthorized access)
+- Unexpected exceptions (null pointer, type errors)
+
+**Required Error UI**
+```
+⚠️ Unable to load monthly expenses.
+
+[ Retry ]
+```
+
+**Error Message Guidelines**
+- Use friendly, non-technical language
+- Explain what went wrong, not the server error
+- Provide a clear action (Retry, Go Back, Contact Support)
+- Keep messages under 120 characters
+
+**Never Expose**
+- Stack traces
+- Database error codes
+- Internal exception details
+- Server implementation details
+- Sensitive system information
+- Raw API error responses
+
+**Example Translations**
+```javascript
+// ❌ Bad
+"SyntaxError: Unexpected token < in JSON at position 0"
+"Error 504 Gateway Timeout"
+"Internal Server Error: Connection pool exhausted"
+
+// ✅ Good
+"Unable to fetch your bills. Please check your connection and try again."
+"This took longer than expected. Your data might be saving in the background."
+"We're having trouble accessing this right now. Try again in a moment."
+```
+
+---
+
+### 9.4 Retry Standards
+
+Every recoverable failure must provide a retry mechanism.
+
+**Supported Approaches**
+- Retry button (explicit user action)
+- Pull-to-refresh (gesture-based)
+- Automatic retry with exponential backoff
+
+**Suggested Retry Strategy**
+```
+Attempt 1 → Immediate (manual retry)
+Attempt 2 → After 2 seconds
+Attempt 3 → After 5 seconds
+Attempt 4+ → Manual retry button only
+```
+
+**Implementation Rules**
+- Do not retry indefinitely
+- Avoid creating retry loops that could hammer the server
+- Inform the user when retries have stopped
+- Log retry attempts for debugging
+
+**Example**
+```javascript
+const [retries, setRetries] = useState(0);
+const MAX_RETRIES = 3;
+
+const handleRetry = async () => {
+  if (retries >= MAX_RETRIES) {
+    toast.error('Max retries reached. Please try again later.');
+    return;
+  }
+  
+  setRetries(r => r + 1);
+  await fetch().catch(err => {
+    if (retries < MAX_RETRIES - 1) {
+      setTimeout(handleRetry, [0, 2000, 5000][retries]);
+    }
+  });
+};
+```
+
+---
+
+### 9.5 Offline-First Behaviour
+
+Whenever possible:
+- Show cached data immediately
+- Fetch fresh data in the background
+- Update the UI when fresh data becomes available
+
+**Principle**
+Users should see useful content before they see freshness.
+
+**Examples**
+
+Good:
+- Show cached bills while syncing in background
+- Display last-known balance while checking for updates
+- Preserve all user interactions while offline
+
+Bad:
+- Hide all content until fresh data arrives
+- Block interactions while syncing
+- Show "Loading..." instead of cached content
+
+---
+
+### 9.6 Empty State Standards
+
+Empty data is not an error. Provide meaningful guidance.
+
+**Examples**
+
+No services yet:
+```
+🔌 No electricity services added yet.
+
+Add your first service to get started →
+```
+
+No payment history:
+```
+📋 No payments recorded.
+
+Your payment history will appear here once you've made a payment.
+```
+
+No meter readings logged:
+```
+📖 No meter readings logged this month.
+
+Start tracking usage by logging your first reading →
+```
+
+**Never Show**
+- Blank cards
+- Empty tables
+- Empty charts
+- Empty containers with no explanation
+- "No data" without context
+
+---
+
+### 9.7 Progressive Enhancement
+
+Base functionality must work before advanced functionality loads.
+
+**Priority Order**
+1. Core data (services, bills, balances)
+2. User actions (pay, add service, refresh)
+3. Tables and lists (payment history, trends)
+4. Charts and visualizations (consumption graphs)
+5. Animations and enhancements (smooth transitions)
+
+**Examples**
+
+If charts fail:
+- Show tabular data instead
+
+If animations fail:
+- Application remains fully usable
+
+If analytics/tracking fails:
+- Core workflows continue functioning
+
+---
+
+### 9.8 State Preservation
+
+Failures must never destroy user work.
+
+**Protect**
+- Form inputs (service number, label, amount)
+- Search terms and filters
+- Draft content (unsaved changes)
+- User selections (checkboxes, tabs)
+- Scroll position
+
+**Examples**
+
+Good:
+```
+User fills in service number → Network fails → Error toast shown
+User refocuses the same form → Their entered data is still there
+User can edit and try again without re-typing
+```
+
+Bad:
+```
+User fills in service number → Network fails → Form clears automatically
+User must enter everything again → Frustrating UX
+```
+
+**Implementation**
+```javascript
+const [formData, setFormData] = useState(() => 
+  localStorage.getItem('draftService') 
+    ? JSON.parse(localStorage.getItem('draftService'))
+    : { serviceNumber: '', label: '' }
+);
+
+// Save draft on change
+useEffect(() => {
+  localStorage.setItem('draftService', JSON.stringify(formData));
+}, [formData]);
+
+// Clear draft only on successful save
+const handleSave = async () => {
+  try {
+    await actions.add(formData);
+    localStorage.removeItem('draftService'); // Only clear on success
+  } catch (e) {
+    // Preserve formData, show error
+  }
+};
+```
+
+---
+
+### 9.9 Error Boundaries
+
+Wrap feature-level components with Error Boundaries to catch React render errors.
+
+**Usage**
+```javascript
+<ErrorBoundary fallback={<ErrorPage section="electricity" />}>
+  <ElectricityDashboard />
+</ErrorBoundary>
+```
+
+**Requirements**
+- Log error to console and logging service
+- Display user-friendly error UI
+- Provide recovery action (Retry, Go Home)
+- Never expose stack traces to end users
+
+---
+
+### 9.10 Logging Standards
+
+All failures must be logged for debugging.
+
+**Log Examples**
+- API failures (status code, endpoint, duration)
+- Network errors (timeout, connection refused)
+- Component crashes (component name, stack trace)
+- Validation failures (field, expected vs actual)
+- User recovery actions (retry clicked, page refreshed)
+
+**Rules**
+- Include sufficient debugging context (service ID, timestamp)
+- Use appropriate log levels (error, warn, info)
+- Avoid logging sensitive user information (passwords, PINs)
+- Never expose logs to end users
+
+**Example**
+```javascript
+const handleFetch = async () => {
+  try {
+    const result = await fetch(`/api/bills/${serviceId}`);
+    if (!result.ok) {
+      console.error('[ElectricityDashboard] Bill fetch failed', {
+        status: result.status,
+        serviceId,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (e) {
+    console.error('[ElectricityDashboard] Bill fetch error', {
+      message: e.message,
+      serviceId,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+```
+
+---
+
+### 9.11 Widget & Dashboard Standards
+
+Each widget must operate independently.
+
+**Required States Per Widget**
+- Loading (skeleton or spinner)
+- Success (data displayed)
+- Empty (no data available)
+- Error (with retry)
+- Refreshing (updating in background)
+
+**Rules**
+- One widget must never block another
+- Widget failures must not break page rendering
+- Widgets should be independently refreshable
+- One widget's error should not trigger a full page reload
+
+---
+
+### 9.12 API Integration Checklist
+
+Every API integration must define:
+
+- [ ] Loading state (skeleton, spinner, or cached data)
+- [ ] Success state (data rendered correctly)
+- [ ] Empty state (meaningful message if no data)
+- [ ] Error state (friendly message + retry button)
+- [ ] Retry mechanism (manual or automatic)
+- [ ] State preservation (form inputs saved on failure)
+- [ ] Logging strategy (errors logged with context)
+- [ ] Cached data fallback (if applicable for offline support)
+
+**A feature is NOT production-ready if any of these are missing.**
+
+---
+
+### 9.13 User Experience Principles
+
+**Always Prefer**
+- Partial functionality over total failure
+- Cached content over blank screens
+- Localized errors over global crashes
+- User progress preservation over forced re-entry
+- Background sync over blocking operations
+
+**Never**
+- Display a white screen because one request failed
+- Block navigation because one widget failed
+- Force page reloads to recover from small errors
+- Lose user-entered data after failures
+- Show loading spinners indefinitely
+- Expose technical error details to end users
+
+---
+
 ### 9. OFFLINE & NETWORK STATE
 
 - Detect online/offline via window.addEventListener('online'/'offline') and
