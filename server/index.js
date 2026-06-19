@@ -1945,13 +1945,7 @@ app.post('/api/validate-coupon', async (req, res) => {
   
   // 1. Device Whitelist Bypass (Works even if code is empty)
   if (deviceId) {
-    const entries = (process.env.ALLOWED_DEVICE_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
-    const allowedDevices = entries.map(item => item.includes(':') ? item.split(':')[1] : item);
-
-    if (allowedDevices.includes(deviceId)) {
-      return res.json({ ok: true, message: 'Pro Access Granted (Device Whitelisted)' });
-    }
-
+    // If Redis is configured, treat it as the primary real-time whitelist database
     if (redis) {
       try {
         const isWhitelisted = await redis.sismember('allowed_device_ids', deviceId);
@@ -1959,8 +1953,42 @@ app.post('/api/validate-coupon', async (req, res) => {
           return res.json({ ok: true, message: 'Pro Access Granted (Device Whitelisted)' });
         }
       } catch (err) {
-        console.error('[api] Redis whitelist check failed:', err.message);
+        console.error('[api] Redis whitelist check failed in validate-coupon:', err.message);
       }
+    }
+
+    // Check Vercel API if token is configured for dynamic, real-time sync.
+    // This handles withdrawal/revocation immediately without needing a server rebuild.
+    let isWhitelistedInVercel = false;
+    if (process.env.VERCEL_API_TOKEN) {
+      try {
+        const vercelRes = await getVercelDeviceWhitelist();
+        if (!vercelRes.error) {
+          const currentWhitelist = vercelRes.value || '';
+          const entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+          const allowedDevices = entries.map(item => item.includes(':') ? item.split(':')[1] : item);
+          if (allowedDevices.includes(deviceId)) {
+            isWhitelistedInVercel = true;
+            // Hot-cache it in Redis for instant subsequent checks
+            if (redis) {
+              await redis.sadd('allowed_device_ids', deviceId);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[api] Dynamic Vercel check failed in validate-coupon:', err.message);
+      }
+    } else {
+      // Fallback to static process.env.ALLOWED_DEVICE_IDS if Vercel API is not configured
+      const entries = (process.env.ALLOWED_DEVICE_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
+      const allowedDevices = entries.map(item => item.includes(':') ? item.split(':')[1] : item);
+      if (allowedDevices.includes(deviceId)) {
+        isWhitelistedInVercel = true;
+      }
+    }
+
+    if (isWhitelistedInVercel) {
+      return res.json({ ok: true, message: 'Pro Access Granted (Device Whitelisted)' });
     }
   }
 

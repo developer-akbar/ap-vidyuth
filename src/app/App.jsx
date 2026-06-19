@@ -157,7 +157,24 @@ function AppContent() {
   };
 
   const handleWithdrawPro = () => {
-    setWithdrawFormOpen(true);
+    if (electricityContext.proSource === 'coupon') {
+      setConfirmState({
+        open: true,
+        title: 'Deactivate Pro Access',
+        description: 'Are you sure you want to deactivate your Pro access? You will return to standard limits (max 4 services).',
+        isDanger: true,
+        onConfirm: async () => {
+          setConfirmState(prev => ({ ...prev, open: false }));
+          const { db } = await import('../shared/db/storage.js');
+          await db.setSetting('is_pro', null);
+          await db.setSetting('pro_source', null);
+          toast.success('Pro access deactivated');
+          electricityContext.actions.reload();
+        }
+      });
+    } else {
+      setWithdrawFormOpen(true);
+    }
   };
 
   const handleRequestSuccess = (type, email) => {
@@ -170,6 +187,7 @@ function AppContent() {
 
     if (type === 'WITHDRAW') {
       db.setSetting('is_pro', null);
+      db.setSetting('pro_source', null);
       electricityContext.actions.reload();
     }
     setSuccessState({ open: true, type, email });
@@ -508,8 +526,15 @@ function AppContent() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <h2 className="page__title">{t('settings')}</h2>
                       {electricityContext.isPro && (
-                        <div style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--primary)' }}>
-                          <FiZap size={14} fill="currentColor" /> PRO
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          <div style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--primary)' }}>
+                            <FiZap size={14} fill="currentColor" /> PRO
+                          </div>
+                          {electricityContext.proSource && (
+                            <span style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase', marginRight: '4px' }}>
+                              via {electricityContext.proSource === 'request' ? 'Request Access' : 'Coupon Code'}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
