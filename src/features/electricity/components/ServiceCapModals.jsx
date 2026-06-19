@@ -220,6 +220,8 @@ export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
         const { db } = await import('../../../shared/db/storage.js');
         const { isSecurePro } = await import('../utils/billing.js');
         await db.setSetting('is_pro', isSecurePro(normalizedCoupon));
+        const isWhitelistBypass = res.message && res.message.includes('Device Whitelisted');
+        await db.setSetting('pro_source', isWhitelistBypass ? 'request' : 'coupon');
         setIsSuccess(true);
         toast.success('Pro Access Granted!');
       } else {
@@ -383,6 +385,8 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
         const { db } = await import('../../../shared/db/storage.js');
         const { isSecurePro } = await import('../utils/billing.js');
         await db.setSetting('is_pro', isSecurePro(normalizedCoupon));
+        const isWhitelistBypass = res.message && res.message.includes('Device Whitelisted');
+        await db.setSetting('pro_source', isWhitelistBypass ? 'request' : 'coupon');
         setIsSuccess(true);
         toast.success('Pro Access Activated!');
       } else {
@@ -575,6 +579,8 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
         const { db } = await import('../../../shared/db/storage.js');
         const { isSecurePro } = await import('../utils/billing.js');
         await db.setSetting('is_pro', isSecurePro(normalizedCoupon));
+        const isWhitelistBypass = res.message && res.message.includes('Device Whitelisted');
+        await db.setSetting('pro_source', isWhitelistBypass ? 'request' : 'coupon');
         setIsSuccess(true);
         toast.success('Pro Access Activated!');
       } else {

@@ -35,12 +35,13 @@ const initialState = {
   loading: true,
   refreshingIds: new Set(),
   isPro: false,
+  proSource: null,
 };
 
 function reducer(state, action) {
   switch (action.type) {
     case 'LOAD':
-      return { ...state, services: action.services, trash: action.trash, isPro: action.isPro, loading: false };
+      return { ...state, services: action.services, trash: action.trash, isPro: action.isPro, proSource: action.proSource || null, loading: false };
 
     case 'REFRESHING_ADD': {
       const next = new Set(state.refreshingIds);
@@ -70,13 +71,15 @@ export function useElectricityServices() {
   const reload = useCallback(async () => {
     try {
       const { db } = await import('../../../shared/db/storage.js');
-      const [services, trash, isProValue] = await Promise.all([
+      const [services, trash, isProValue, proSourceValue] = await Promise.all([
         listServices(), 
         listTrash(),
-        db.getSetting('is_pro')
+        db.getSetting('is_pro'),
+        db.getSetting('pro_source')
       ]);
 
       let isPro = !!isProValue;
+      let proSource = proSourceValue || null;
 
       // Silent whitelist check if not already Pro
       if (!isPro) {
@@ -86,14 +89,16 @@ export function useElectricityServices() {
           if (res.ok) {
             const { isSecurePro } = await import('../utils/billing.js');
             await db.setSetting('is_pro', isSecurePro('WHITELISTED'));
+            await db.setSetting('pro_source', 'request');
             isPro = true;
+            proSource = 'request';
           }
         } catch (e) {
           // Silently fail, it's just a background check
         }
       }
 
-      dispatch({ type: 'LOAD', services, trash, isPro });
+      dispatch({ type: 'LOAD', services, trash, isPro, proSource });
       
       // Sync push notifications state with server
       syncPushTokenWithServer().catch(err => console.error("Push sync failed", err));
@@ -101,7 +106,7 @@ export function useElectricityServices() {
       return services; // return so auto-refresh can inspect them
     } catch (e) {
       console.error("[useElectricityServices] Failed to load services:", e);
-      dispatch({ type: 'LOAD', services: [], trash: [], isPro: false });
+      dispatch({ type: 'LOAD', services: [], trash: [], isPro: false, proSource: null });
       return [];
     }
   }, []);
@@ -279,6 +284,10 @@ export function useElectricityServices() {
        const { db } = await import('../../../shared/db/storage.js');
        const { isSecurePro } = await import('../utils/billing.js');
        await db.setSetting('is_pro', isSecurePro(code));
+       
+       const isWhitelistBypass = res.message && res.message.includes('Device Whitelisted');
+       await db.setSetting('pro_source', isWhitelistBypass ? 'request' : 'coupon');
+       
        await reload();
     }
     return res;
