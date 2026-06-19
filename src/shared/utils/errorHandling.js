@@ -64,6 +64,11 @@ export async function retryWithBackoff(
 
       if (isLastAttempt) break;
 
+      // Abort retrying for unrecoverable client/validation errors
+      if (!isRecoverableError(error)) {
+        break;
+      }
+
       // Wait before next retry
       const delay = delays[attempt] || 0;
       if (delay > 0) {

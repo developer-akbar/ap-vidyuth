@@ -88,9 +88,15 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
     }
   }, [name, email, message, type, onSuccess]);
 
+  const autoSubmitAttempted = useRef(false);
+
   useEffect(() => {
+    if (!open) {
+      autoSubmitAttempted.current = false;
+      return;
+    }
+
     const handleBack = (e) => {
-      if (!open) return;
       e.detail.handled = true;
       onClose();
     };
@@ -98,17 +104,17 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
       if (e.key === 'Escape') onClose();
     };
     
-    if (open) {
-      window.addEventListener('app-back-button', handleBack);
-      window.addEventListener('keydown', handleEsc);
+    window.addEventListener('app-back-button', handleBack);
+    window.addEventListener('keydown', handleEsc);
 
-      // Auto-submit if profile is already complete
-      const savedName = localStorage.getItem('user_name');
-      const savedEmail = localStorage.getItem('user_email');
-      if (savedName && savedEmail && !isSubmitting) {
-        handleSubmit(savedName, savedEmail);
-      }
+    // Auto-submit if profile is already complete and we haven't attempted it yet
+    const savedName = localStorage.getItem('user_name');
+    const savedEmail = localStorage.getItem('user_email');
+    if (savedName && savedEmail && !isSubmitting && !autoSubmitAttempted.current) {
+      autoSubmitAttempted.current = true;
+      handleSubmit(savedName, savedEmail);
     }
+
     return () => {
       window.removeEventListener('app-back-button', handleBack);
       window.removeEventListener('keydown', handleEsc);
