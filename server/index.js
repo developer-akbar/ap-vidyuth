@@ -1541,7 +1541,7 @@ app.post('/api/request-access', async (req, res) => {
   if (existingUserEntry) {
     const parts = existingUserEntry.split(':');
     const existingDeviceId = parts[1];
-    const existingDeviceName = parts.slice(2).join(':') || 'another device';
+    const existingDeviceName = parts[2] || 'another device';
 
     if (existingDeviceId !== deviceId) {
       // Duplicate Email registered with ANOTHER device ID! Reject and show device name.
@@ -1650,6 +1650,9 @@ app.post('/api/request-access', async (req, res) => {
   }
 });
 
+// Simple in-memory cache to prevent duplicate processing on rapid reloads
+const processedApprovals = new Set();
+
 app.get('/api/grant-access', async (req, res) => {
   const { deviceId, email, name, token } = req.query;
 
@@ -1662,58 +1665,85 @@ app.get('/api/grant-access', async (req, res) => {
     return res.status(403).send('<h1>Access Denied</h1><p>Invalid or expired grant token.</p>');
   }
 
-  try {
-    // 2. Fetch current whitelist to append mapping
-    let currentWhitelist = '';
-    let entries = [];
+  // Clean device name (no colons or commas) - declared early so it's always available
+  let cleanDeviceName = 'Unknown Device';
+  const deviceNameFromQuery = req.query.deviceName;
+  if (deviceNameFromQuery) {
+    cleanDeviceName = String(deviceNameFromQuery).replace(/[:]/g, '-').replace(/[,]/g, '-').trim();
+  }
+
+  let alreadyWhitelisted = false;
+
+  // Check in-memory cache first to avoid slow Redis/Vercel queries on rapid page reloads
+  if (processedApprovals.has(token)) {
+    alreadyWhitelisted = true;
+  }
+
+  // Check Redis next as it is much faster than Vercel API and has immediate propagation
+  if (!alreadyWhitelisted && redis) {
     try {
-      const vercelRes = await getVercelDeviceWhitelist();
-      if (!vercelRes.error) {
-        currentWhitelist = vercelRes.value || '';
-        entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
-      } else {
-        throw new Error(vercelRes.error);
+      const isMember = await redis.sismember('allowed_device_ids', deviceId);
+      if (isMember) {
+        alreadyWhitelisted = true;
+        processedApprovals.add(token); // Populate in-memory cache for this token
       }
     } catch (err) {
-      console.error('[api] Failed to get Vercel whitelist:', err.message);
-      throw new Error(`Failed to read Vercel environment variables: ${err.message}. Please verify VERCEL_API_TOKEN configuration.`);
+      console.error('[api] Redis whitelist check failed on grant-access:', err.message);
     }
+  }
 
-    // Check if duplicate email with another device exists (double check at approval time)
-    const emailIndex = entries.findIndex(item => item.split(':')[0].toLowerCase() === email.toLowerCase());
-    
-    // Clean device name (no colons or commas)
-    let cleanDeviceName = 'Unknown Device';
-    const deviceNameFromQuery = req.query.deviceName;
-    if (deviceNameFromQuery) {
-      cleanDeviceName = String(deviceNameFromQuery).replace(/[:]/g, '-').replace(/[,]/g, '-').trim();
-    }
-
-    const mappingEntry = `${email}:${deviceId}:${cleanDeviceName}`;
-
-    if (emailIndex >= 0) {
-      const existingParts = entries[emailIndex].split(':');
-      if (existingParts[1] !== deviceId) {
-        throw new Error(`Email ${email} is already whitelisted for another device: ${existingParts[2] || 'another device'}. Please revoke that first.`);
+  try {
+    if (!alreadyWhitelisted) {
+      // 2. Fetch current whitelist to append mapping
+      let currentWhitelist = '';
+      let entries = [];
+      try {
+        const vercelRes = await getVercelDeviceWhitelist();
+        if (!vercelRes.error) {
+          currentWhitelist = vercelRes.value || '';
+          entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+        } else {
+          throw new Error(vercelRes.error);
+        }
+      } catch (err) {
+        console.error('[api] Failed to get Vercel whitelist:', err.message);
+        throw new Error(`Failed to read Vercel environment variables: ${err.message}. Please verify VERCEL_API_TOKEN configuration.`);
       }
-      // If exact same mapping already exists, no need to re-add
-    } else {
-      // Append mapping
-      entries.push(mappingEntry);
+
+      // Check if duplicate email with another device exists (double check at approval time)
+      const emailIndex = entries.findIndex(item => item.split(':')[0].toLowerCase() === email.toLowerCase());
+
+      const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+      const mappingEntry = `${email}:${deviceId}:${cleanDeviceName}:${timestamp}`;
+
+      if (emailIndex >= 0) {
+        const existingParts = entries[emailIndex].split(':');
+        if (existingParts[1] !== deviceId) {
+          throw new Error(`Email ${email} is already whitelisted for another device: ${existingParts[2] || 'another device'}. Please revoke that first.`);
+        }
+        alreadyWhitelisted = true;
+      }
+
+      if (!alreadyWhitelisted) {
+        // Append mapping
+        entries.push(mappingEntry);
+        const newWhitelistValue = entries.join(',');
+
+        // 3. Update Vercel
+        await updateVercelDeviceWhitelist(newWhitelistValue);
+        
+        // 4. Update Upstash Redis
+        if (redis) {
+          await redis.sadd('allowed_device_ids', deviceId);
+        }
+
+        // 5. Send approval confirmation email to the user
+        await sendApprovalEmail(email, name || 'User', deviceId);
+      }
+
+      // Mark this request/token as processed in memory
+      processedApprovals.add(token);
     }
-
-    const newWhitelistValue = entries.join(',');
-
-    // 3. Update Vercel
-    const result = await updateVercelDeviceWhitelist(newWhitelistValue);
-    
-    // 4. Update Upstash Redis
-    if (redis) {
-      await redis.sadd('allowed_device_ids', deviceId);
-    }
-
-    // 5. Send approval confirmation email to the user
-    await sendApprovalEmail(email, name || 'User', deviceId);
 
     // 6. Respond with a gorgeous success page
     res.send(`
@@ -1818,7 +1848,7 @@ app.get('/api/grant-access', async (req, res) => {
         <div class="card">
           <span class="icon">⚡</span>
           <h1>Pro Access Active!</h1>
-          <p>The device has been successfully whitelisted. An approval confirmation email has been sent to the user.</p>
+          <p>${alreadyWhitelisted ? 'This device was already whitelisted. No additional action was taken.' : 'The device has been successfully whitelisted. An approval confirmation email has been sent to the user.'}</p>
           <div class="details">
             <div class="detail-item">
               <span class="detail-label">User Name</span>
@@ -1838,7 +1868,7 @@ app.get('/api/grant-access', async (req, res) => {
             </div>
             <div class="detail-item">
               <span class="detail-label">Action Status</span>
-              <span class="detail-value" style="color: #60a5fa;">Vercel whitelisted, Redis updated, Email sent</span>
+              <span class="detail-value" style="color: #60a5fa;">${alreadyWhitelisted ? 'Already Whitelisted (No changes made)' : 'Vercel whitelisted, Redis updated, Email sent'}</span>
             </div>
           </div>
           <a href="https://ap-vidyuth.vercel.app" class="btn">Close Window</a>
