@@ -150,6 +150,25 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
           </p>
         </div>
         <div className="dialog__body" style={{ padding: '0 24px' }}>
+          {type === 'WITHDRAW' && (
+            <div style={{ 
+              backgroundColor: 'rgba(239, 68, 68, 0.08)', 
+              border: '1px solid rgba(239, 68, 68, 0.15)', 
+              borderRadius: '8px', 
+              padding: '12px 14px', 
+              marginBottom: '16px',
+              fontSize: '12px',
+              color: 'var(--red)',
+              lineHeight: '1.4'
+            }}>
+              <strong style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>⚠️ What you will lose:</strong>
+              <ul style={{ margin: '0', paddingLeft: '16px', listStyleType: 'disc' }}>
+                <li style={{ marginBottom: '4px' }}>Ability to track unlimited services (reverts to standard <strong>max 4 services</strong> limit).</li>
+                <li style={{ marginBottom: '4px' }}>Active tracking for any existing services beyond the 4-service cap.</li>
+                <li style={{ marginBottom: '0' }}>Priority status for quick background bill checking.</li>
+              </ul>
+            </div>
+          )}
           <div className="field" style={{ marginBottom: '16px' }}>
             <label className="field__label">Name *</label>
             <input className="field__input" placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} disabled={isSubmitting} />
