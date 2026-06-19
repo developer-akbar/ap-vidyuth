@@ -1,0 +1,107 @@
+/**
+ * Error Boundary Styles
+ */
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: var(--spacing-lg);
+  background: var(--bg-0);
+}
+
+.error-boundary__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  max-width: 480px;
+  text-align: center;
+}
+
+.error-boundary__icon {
+  color: var(--red);
+  opacity: 0.8;
+}
+
+.error-boundary__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-1);
+  margin: 0;
+}
+
+.error-boundary__message {
+  font-size: 0.875rem;
+  color: var(--text-2);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.error-boundary__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.error-boundary__button {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+  font-size: 0.875rem;
+}
+
+.error-boundary__button--primary {
+  background: var(--blue);
+  color: white;
+}
+
+.error-boundary__button--primary:hover {
+  background: var(--blue-dark);
+  transform: translateY(-2px);
+}
+
+.error-boundary__button--secondary {
+  background: var(--bg-2);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}
+
+.error-boundary__button--secondary:hover {
+  background: var(--bg-3);
+}
+
+.error-boundary__details {
+  margin-top: var(--spacing-lg);
+  width: 100%;
+  text-align: left;
+  background: var(--bg-1);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.error-boundary__details summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.error-boundary__stack {
+  margin: var(--spacing-sm) 0 0 0;
+  font-size: 0.65rem;
+  color: var(--red);
+  overflow-x: auto;
+  max-height: 200px;
+  background: var(--bg-0);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-xs);
+}
