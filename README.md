@@ -7,7 +7,7 @@ A privacy-first electricity bill tracking app for APSPDCL consumers, built with 
 ## ⚡ Features
 
 ### 🏠 Dashboard (Electricity)
-- **Multi-Service Tracking** — Monitor multiple APSPDCL connections from a single unified view
+- **Multi-Service Tracking** — Monitor multiple APSPDCL connections from a single unified view (default limit: 4 services; unlimited with Pro)
 - **Card View Modes** — Switch between **Classic** (header-focused) and **Quick Glance** (metrics + history chips) with persisted preference
 - **Smart Card Expansion** — Expand any card for a high-density summary: billed units, 3-month history chips, granular insights
 - **Pinning** — Pin important services to the top with a visual indicator for quick access
@@ -66,6 +66,13 @@ A privacy-first electricity bill tracking app for APSPDCL consumers, built with 
 - **Privacy-First Local Storage** — All data stored on-device (IndexedDB for Web / SQLite for Android). Nothing sent to any cloud
 - **Privacy Policy** — Accessible in-app without login
 - **Offline Support** — All cached data remains accessible with no internet connection
+
+### 👤 Pro Subscription
+- **Service Capacity Unlock** — Upgrade to Pro for unlimited service tracking (free plan limited to 4 services)
+- **Device Whitelisting** — Securely manage which devices can access your account with automatic device registration and verification
+- **Account Management** — Manage your Pro subscription, linked devices, and account settings from your user profile
+- **Coupon Redemption** — Redeem coupon codes to unlock Pro features and skip the service cap
+- **Email Notifications** — Receive subscription status updates and device management notifications at your registered email
 
 ### 🧪 Experimental
 - **Dynamic UPI QR Payments** — Reverse-engineered APSPDCL UPI logic generates dynamic payment QR codes. Requires Bill Generation Time (HHMM) for a valid VPA. Manual override available. *Do not use for high-value payments without validation — official "Pay Now" redirection remains the primary safe method.*
