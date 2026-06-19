@@ -173,7 +173,16 @@ function AppContent() {
         }
       });
     } else {
-      setWithdrawFormOpen(true);
+      setConfirmState({
+        open: true,
+        title: 'Request Pro Withdrawal',
+        description: 'Are you sure you want to request withdrawal of your Pro subscription? You will lose the ability to track unlimited services and revert to the standard limit of max 4 services.',
+        isDanger: true,
+        onConfirm: () => {
+          setConfirmState(prev => ({ ...prev, open: false }));
+          setWithdrawFormOpen(true);
+        }
+      });
     }
   };
 
