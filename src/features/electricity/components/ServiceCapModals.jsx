@@ -39,8 +39,8 @@ export function RequestSuccessModal({ open, type, email, onClose }) {
         <h2 className="dialog__title">{type === 'WITHDRAW' ? 'Withdrawal Requested' : 'Request Received'}</h2>
         <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: '1.6', marginTop: '12px', marginBottom: '24px' }}>
           {type === 'WITHDRAW' 
-            ? `Your withdrawal request has been sent. We will process it shortly and communicate through your email: ${email}.` 
-            : `Thank you for your request. Our team will review it and get back to you soon. We will communicate through your email address: ${email}.`}
+            ? `Your withdrawal request has been sent. We will process it shortly and communicate through your email: ${email}. (Please check your spam or junk folder if you do not receive our confirmation.)` 
+            : `Thank you for your request. Our team will review it and get back to you soon. We will communicate through your email address: ${email}. (Please check your spam or junk folder if you do not receive our response.)`}
         </p>
         <button className="btn btn--primary" style={{ width: '100%' }} onClick={onClose}>
           Close
