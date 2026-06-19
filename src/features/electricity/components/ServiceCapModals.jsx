@@ -82,7 +82,7 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
         toast.error(res.error || 'Failed to send request.');
       }
     } catch (e) {
-      toast.error('Failed to send request. Please try again later.');
+      toast.error(e.message || 'Failed to send request. Please try again later.');
     } finally {
       setIsSubmitting(false);
     }

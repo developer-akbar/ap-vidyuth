@@ -31,8 +31,173 @@ import { scrapeBillDeskSession } from './utils/billdesk/session.js';
 import { Redis } from '@upstash/redis';
 import admin from 'firebase-admin';
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 
 dotenv.config();
+
+// ── Vercel & Access Grant Utilities ──────────────────────────────────────────
+
+function generateGrantToken(deviceId, email) {
+  const secret = process.env.INTERNAL_SECRET || 'fallback-secret-ap-vidyuth';
+  return crypto.createHmac('sha256', secret)
+    .update(`${deviceId}:${email}`)
+    .digest('hex');
+}
+
+function verifyGrantToken(token, deviceId, email) {
+  const expectedToken = generateGrantToken(deviceId, email);
+  return token === expectedToken;
+}
+
+async function getVercelDeviceWhitelist() {
+  const token = process.env.VERCEL_API_TOKEN;
+  const projectId = process.env.VERCEL_PROJECT_ID || 'prj_L72mlnVsVIUrccddgXv4s66OCGpB';
+  const teamId = process.env.VERCEL_TEAM_ID || 'team_4IzMW96EbuIOHjgUo1ej1Wu1';
+
+  if (!token) {
+    console.warn('[vercel] VERCEL_API_TOKEN is not configured.');
+    return { error: 'VERCEL_API_TOKEN is not configured', value: '', exists: false };
+  }
+
+  const queryParams = teamId ? `?teamId=${teamId}` : '';
+  const baseUrl = `https://api.vercel.com/v9/projects/${projectId}/env`;
+
+  try {
+    const listRes = await fetch(`${baseUrl}${queryParams}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!listRes.ok) {
+      const errText = await listRes.text();
+      console.error(`[vercel] Failed to list env variables: ${listRes.status} ${errText}`);
+      return { error: `Failed to list env variables: ${listRes.status}`, value: '', exists: false };
+    }
+
+    const { envs } = await listRes.json();
+    const existingVar = envs.find(e => e.key === 'ALLOWED_DEVICE_IDS');
+    
+    if (existingVar) {
+      return { value: existingVar.value || '', id: existingVar.id, exists: true };
+    }
+    return { value: '', exists: false };
+  } catch (err) {
+    console.error('[vercel] Error fetching env variables:', err.message);
+    return { error: err.message, value: '', exists: false };
+  }
+}
+
+async function updateVercelDeviceWhitelist(newValue) {
+  const token = process.env.VERCEL_API_TOKEN;
+  const projectId = process.env.VERCEL_PROJECT_ID || 'prj_L72mlnVsVIUrccddgXv4s66OCGpB';
+  const teamId = process.env.VERCEL_TEAM_ID || 'team_4IzMW96EbuIOHjgUo1ej1Wu1';
+
+  if (!token) {
+    throw new Error('VERCEL_API_TOKEN is not configured.');
+  }
+
+  const queryParams = teamId ? `?teamId=${teamId}` : '';
+  const baseUrl = `https://api.vercel.com/v9/projects/${projectId}/env`;
+
+  const existing = await getVercelDeviceWhitelist();
+  if (existing.error) {
+    throw new Error(existing.error);
+  }
+
+  if (existing.exists && existing.id) {
+    const updateRes = await fetch(`${baseUrl}/${existing.id}${queryParams}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        value: newValue,
+        type: 'plain',
+        target: ['production', 'preview', 'development']
+      })
+    });
+
+    if (!updateRes.ok) {
+      const errText = await updateRes.text();
+      throw new Error(`Failed to update Vercel variable: ${updateRes.status} ${errText}`);
+    }
+    return { status: 'updated' };
+  } else {
+    const createRes = await fetch(`${baseUrl}${queryParams}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        key: 'ALLOWED_DEVICE_IDS',
+        value: newValue,
+        type: 'plain',
+        target: ['production', 'preview', 'development']
+      })
+    });
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      throw new Error(`Failed to create Vercel variable: ${createRes.status} ${errText}`);
+    }
+    return { status: 'created' };
+  }
+}
+
+async function sendApprovalEmail(userEmail, userName, deviceId) {
+  const { 
+    VITE_SMTP_HOST, 
+    VITE_SMTP_PORT, 
+    VITE_SMTP_USER, 
+    VITE_SMTP_PASSWORD
+  } = process.env;
+
+  if (!VITE_SMTP_USER || !VITE_SMTP_PASSWORD) {
+    console.warn('[api] SMTP configuration missing, skipping approval email');
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: VITE_SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(VITE_SMTP_PORT || '465'),
+    secure: (VITE_SMTP_PORT || '465') === '465',
+    auth: {
+      user: VITE_SMTP_USER,
+      pass: VITE_SMTP_PASSWORD,
+    },
+  });
+
+  const mailOptions = {
+    from: `"AP Vidyuth App" <${VITE_SMTP_USER}>`,
+    to: userEmail,
+    subject: 'Pro Access Granted! - AP Vidyuth',
+    text: `Hi ${userName},\n\n` +
+          `Your request for Pro Access on AP Vidyuth has been approved!\n` +
+          `Your device ID (${deviceId}) has been successfully whitelisted.\n\n` +
+          `You can now track unlimited services and access premium features. Simply reopen the app to activate your Pro access.\n\n` +
+          `Thank you for your support!\n\n` +
+          `Best regards,\n` +
+          `AP Vidyuth Team`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff; color: #1f2937;">
+        <h2 style="color: #10b981; margin-top: 0;">Pro Access Active! 🎉</h2>
+        <p>Hi <strong>${userName}</strong>,</p>
+        <p>We are pleased to inform you that your request for Pro Access on <strong>AP Vidyuth</strong> has been approved and activated.</p>
+        <div style="background-color: #f3f4f6; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 13px; margin: 16px 0; word-break: break-all;">
+          <strong>Whitelisted Device ID:</strong><br/>
+          ${deviceId}
+        </div>
+        <p>You can now track unlimited electricity services, view detailed bill histories, and unlock all premium features.</p>
+        <p style="font-style: italic; color: #6b7280; font-size: 14px;">Please close and reopen the app if Pro features are not instantly visible.</p>
+        <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #9ca3af; margin-bottom: 0;">This is an automated notification from the AP Vidyuth app server.</p>
+      </div>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+}
 
 // ── Notification Infrastructure ──────────────────────────────────────────────
 
@@ -1185,7 +1350,7 @@ app.get('/api/notifications/check', async (req, res) => {
 });
 
 app.post('/api/request-access', async (req, res) => {
-  const { deviceId, message, type, name, userEmail } = req.body || {};
+  const { deviceId, message, type, name, userEmail, deviceName, deviceType, osName, userAgent } = req.body || {};
   const { 
     VITE_SMTP_HOST, 
     VITE_SMTP_PORT, 
@@ -1210,21 +1375,270 @@ app.post('/api/request-access', async (req, res) => {
   });
 
   const isWithdraw = type === 'WITHDRAW';
-  const subject = isWithdraw ? 'Pro Subscription Withdrawal Request' : 'Pro Access Request - AP Vidyuth';
   const toEmail = VITE_TO_EMAIL || 'mail.developer.akbar@gmail.com';
+  const reqIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+
+  // Get public server URL base
+  const getPublicServerUrl = () => {
+    if (process.env.PUBLIC_SERVER_URL) {
+      return process.env.PUBLIC_SERVER_URL.replace(/\/$/, '');
+    }
+    const host = req.get('host');
+    const protocol = req.protocol;
+    if (host) {
+      return `${protocol}://${host}`;
+    }
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}`;
+    }
+    return 'https://ap-vidyuth.vercel.app';
+  };
+
+  const serverUrl = getPublicServerUrl();
+
+  // 1. Fetch current Vercel whitelist to verify duplicates / remove entries
+  let currentWhitelist = '';
+  let entries = [];
+  try {
+    const vercelRes = await getVercelDeviceWhitelist();
+    if (!vercelRes.error) {
+      currentWhitelist = vercelRes.value || '';
+      entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+    } else {
+      console.warn('[api] Could not fetch Vercel whitelist for checking:', vercelRes.error);
+      currentWhitelist = process.env.ALLOWED_DEVICE_IDS || '';
+      entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+    }
+  } catch (err) {
+    console.error('[api] Whitelist fetch error:', err.message);
+    currentWhitelist = process.env.ALLOWED_DEVICE_IDS || '';
+    entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+  }
+
+  if (isWithdraw) {
+    // ──── WITHDRAW FLOW (Automated Revocation) ────
+    console.log(`[api] Processing withdrawal for email: ${userEmail}, deviceId: ${deviceId}`);
+    
+    // Find device ID of the user email if not provided in the request
+    let resolvedDeviceId = deviceId;
+    const emailEntry = entries.find(item => item.split(':')[0].toLowerCase() === (userEmail || '').toLowerCase());
+    if (emailEntry) {
+      resolvedDeviceId = emailEntry.split(':')[1] || resolvedDeviceId;
+    }
+
+    // Filter out entries matching this email or device ID
+    const filteredEntries = entries.filter(item => {
+      const parts = item.split(':');
+      const itemEmail = parts[0];
+      const itemDevId = parts[1];
+      
+      const emailMatches = userEmail && itemEmail.toLowerCase() === userEmail.toLowerCase();
+      const devIdMatches = resolvedDeviceId && itemDevId === resolvedDeviceId;
+      
+      return !emailMatches && !devIdMatches;
+    });
+
+    const newWhitelistValue = filteredEntries.join(',');
+
+    // Update Vercel
+    let vercelUpdated = false;
+    try {
+      if (process.env.VERCEL_API_TOKEN) {
+        await updateVercelDeviceWhitelist(newWhitelistValue);
+        vercelUpdated = true;
+        console.log('[api] Vercel whitelist updated after withdrawal');
+      }
+    } catch (err) {
+      console.error('[api] Failed to update Vercel variable on withdrawal:', err.message);
+    }
+
+    // Update Redis
+    let redisUpdated = false;
+    if (redis) {
+      try {
+        if (resolvedDeviceId) {
+          await redis.srem('allowed_device_ids', resolvedDeviceId);
+        }
+        if (deviceId && deviceId !== resolvedDeviceId) {
+          await redis.srem('allowed_device_ids', deviceId);
+        }
+        redisUpdated = true;
+        console.log('[api] Redis whitelist updated after withdrawal');
+      } catch (err) {
+        console.error('[api] Redis remove failed on withdrawal:', err.message);
+      }
+    }
+
+    // Send confirmation email to User
+    try {
+      const userMailOptions = {
+        from: `"AP Vidyuth App" <${VITE_SMTP_USER}>`,
+        to: userEmail,
+        subject: 'Pro Subscription Withdrawn - AP Vidyuth',
+        text: `Hi ${name || 'User'},\n\n` +
+              `Your AP Vidyuth Pro subscription has been successfully withdrawn.\n` +
+              `Your device ID (${resolvedDeviceId || 'N/A'}) has been removed from our whitelist.\n\n` +
+              `If you did not request this, or if you want to activate Pro again, please raise a request inside the app.\n\n` +
+              `Thank you for using AP Vidyuth.\n\n` +
+              `Best regards,\n` +
+              `AP Vidyuth Team`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff; color: #1f2937;">
+            <h2 style="color: #ef4444; margin-top: 0;">Subscription Withdrawn</h2>
+            <p>Hi <strong>${name || 'User'}</strong>,</p>
+            <p>Your <strong>AP Vidyuth Pro</strong> subscription has been successfully withdrawn.</p>
+            <div style="background-color: #f3f4f6; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 13px; margin: 16px 0; word-break: break-all;">
+              <strong>Removed Device ID:</strong><br/>
+              ${resolvedDeviceId || 'N/A'}
+            </div>
+            <p>Your device has been removed from our whitelist. If you need Pro access again in the future, you can submit a new request within the app.</p>
+            <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #9ca3af; margin-bottom: 0;">AP Vidyuth Team</p>
+          </div>
+        `
+      };
+      await transporter.sendMail(userMailOptions);
+    } catch (err) {
+      console.error('[api] Failed to send user withdraw confirmation email:', err.message);
+    }
+
+    // Send notification email to Developer/Manager
+    try {
+      const devMailOptions = {
+        from: `"AP Vidyuth App" <${VITE_SMTP_USER}>`,
+        to: toEmail,
+        subject: `Pro Subscription Withdrawn - ${name || 'User'}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #0b0f19; color: #f3f4f6;">
+            <h2 style="color: #ef4444; margin-top: 0;">Subscription Withdrawn Notification</h2>
+            <p>User <strong>${name || 'User'}</strong> (${userEmail}) has withdrawn their Pro subscription.</p>
+            <div style="background-color: #111827; border: 1px solid #1f2937; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 13px; margin: 16px 0; word-break: break-all;">
+              <strong>User Email:</strong> ${userEmail}<br/>
+              <strong>Device ID:</strong> ${resolvedDeviceId || 'N/A'}<br/>
+              <strong>Vercel Env Updated:</strong> ${vercelUpdated ? 'Yes' : 'No (Token or configuration missing)'}<br/>
+              <strong>Redis Updated:</strong> ${redisUpdated ? 'Yes' : 'No'}
+            </div>
+            <p style="color: #9ca3af; font-size: 14px;">User message/reason: "${message || 'None'}"</p>
+          </div>
+        `
+      };
+      await transporter.sendMail(devMailOptions);
+    } catch (err) {
+      console.error('[api] Failed to send developer withdraw notification email:', err.message);
+    }
+
+    return res.json({ ok: true, message: 'Subscription successfully withdrawn.' });
+  }
+
+  // ──── ACCESS FLOW ────
   
+  // 1. Duplicate email/device check
+  const existingUserEntry = entries.find(item => {
+    const parts = item.split(':');
+    return parts[0].toLowerCase() === (userEmail || '').toLowerCase();
+  });
+
+  if (existingUserEntry) {
+    const parts = existingUserEntry.split(':');
+    const existingDeviceId = parts[1];
+    const existingDeviceName = parts.slice(2).join(':') || 'another device';
+
+    if (existingDeviceId !== deviceId) {
+      // Duplicate Email registered with ANOTHER device ID! Reject and show device name.
+      console.warn(`[api] Registration rejected: ${userEmail} is already registered on device ${existingDeviceId} (${existingDeviceName})`);
+      return res.status(400).json({ 
+        ok: false, 
+        error: `You are already registered with another device (${existingDeviceName}). Please revoke the access for that device first, then raise the request again.` 
+      });
+    } else {
+      // Same device and same email: Access is already active! Just return success.
+      return res.json({ ok: true, message: 'Pro access is already active on this device!' });
+    }
+  }
+
+  // 2. Send email to Developer/Manager with Grant Access button
+  const subject = 'Pro Access Request - AP Vidyuth';
+  const grantToken = generateGrantToken(deviceId || '', userEmail || '');
+  const grantAccessUrl = `${serverUrl}/api/grant-access?deviceId=${encodeURIComponent(deviceId || '')}&email=${encodeURIComponent(userEmail || '')}&name=${encodeURIComponent(name || '')}&deviceName=${encodeURIComponent(deviceName || '')}&token=${grantToken}`;
+
   const mailOptions = {
     from: `"AP Vidyuth App" <${VITE_SMTP_USER}>`,
     to: toEmail,
     replyTo: userEmail || VITE_SMTP_USER,
     subject: subject,
     text: `New Request from AP Vidyuth App\n\n` +
-          `Type: ${isWithdraw ? 'WITHDRAWAL' : 'ACCESS'}\n` +
+          `Type: ACCESS\n` +
           `Name: ${name || 'Not provided'}\n` +
           `Email: ${userEmail || 'Not provided'}\n` +
-          `Device ID: ${deviceId || 'Unknown'}\n\n` +
+          `Device ID: ${deviceId || 'Unknown'}\n` +
+          `Device Name: ${deviceName || 'Unknown'}\n` +
+          `Platform: ${deviceType || 'Browser'} (${osName || 'Unknown OS'})\n\n` +
           `User Message:\n${message || 'No additional message provided.'}\n\n` +
+          `Grant Access URL (Paste in browser):\n${grantAccessUrl}\n\n` +
           `--- End of Request ---`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #0b0f19; color: #f3f4f6;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="display: inline-block; padding: 8px 16px; background-color: #1e3a8a; border-radius: 20px; color: #3b82f6; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
+            New Request
+          </div>
+          <h2 style="color: #ffffff; margin-top: 12px; margin-bottom: 4px; font-size: 20px;">Pro Access Request</h2>
+          <p style="color: #9ca3af; margin: 0; font-size: 14px;">AP Vidyuth App</p>
+        </div>
+
+        <div style="background-color: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h3 style="color: #3b82f6; margin-top: 0; margin-bottom: 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em;">User Details</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 120px; font-weight: 500;">Name:</td>
+              <td style="padding: 6px 0; color: #f3f4f6; font-size: 14px; font-weight: 600;">${name || 'Not provided'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Email:</td>
+              <td style="padding: 6px 0; color: #f3f4f6; font-size: 14px; font-weight: 600;"><a href="mailto:${userEmail}" style="color: #3b82f6; text-decoration: none;">${userEmail || 'Not provided'}</a></td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background-color: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h3 style="color: #10b981; margin-top: 0; margin-bottom: 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em;">Device Details</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 120px; font-weight: 500;">Device Name:</td>
+              <td style="padding: 6px 0; color: #f3f4f6; font-size: 14px; font-weight: 600;">${deviceName || 'Unknown'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Platform:</td>
+              <td style="padding: 6px 0; color: #f3f4f6; font-size: 14px; font-weight: 600;">${deviceType || 'Browser'} (${osName || 'Unknown OS'})</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Device ID:</td>
+              <td style="padding: 6px 0; color: #a7f3d0; font-family: monospace; font-size: 12px; word-break: break-all;">${deviceId || 'Unknown'}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background-color: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+          <h3 style="color: #f59e0b; margin-top: 0; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em;">User Message</h3>
+          <p style="margin: 0; color: #d1d5db; font-size: 14px; line-height: 1.6; font-style: italic;">"${message || 'No additional message provided.'}"</p>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 24px;">
+          <a href="${grantAccessUrl}" style="background-color: #10b981; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2); transition: background-color 0.2s;">
+            Grant Pro Access
+          </a>
+          <p style="color: #6b7280; font-size: 11px; margin-top: 10px;">Clicking this will automatically add the Device ID to Vercel and notify the user.</p>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #1f2937; margin: 24px 0;" />
+        <div style="font-size: 11px; color: #4b5563; word-break: break-all;">
+          <strong>Request Meta:</strong><br/>
+          User Agent: ${userAgent || 'N/A'}<br/>
+          IP: ${reqIp || 'N/A'}<br/>
+          Time: ${new Date().toISOString()}
+        </div>
+      </div>
+    `
   };
 
   try {
@@ -1236,14 +1650,288 @@ app.post('/api/request-access', async (req, res) => {
   }
 });
 
-app.post('/api/validate-coupon', (req, res) => {
+app.get('/api/grant-access', async (req, res) => {
+  const { deviceId, email, name, token } = req.query;
+
+  if (!deviceId || !email || !token) {
+    return res.status(400).send('<h1>Bad Request</h1><p>Missing required parameters.</p>');
+  }
+
+  // 1. Verify token
+  if (!verifyGrantToken(token, deviceId, email)) {
+    return res.status(403).send('<h1>Access Denied</h1><p>Invalid or expired grant token.</p>');
+  }
+
+  try {
+    // 2. Fetch current whitelist to append mapping
+    let currentWhitelist = '';
+    let entries = [];
+    try {
+      const vercelRes = await getVercelDeviceWhitelist();
+      if (!vercelRes.error) {
+        currentWhitelist = vercelRes.value || '';
+        entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+      } else {
+        throw new Error(vercelRes.error);
+      }
+    } catch (err) {
+      console.error('[api] Failed to get Vercel whitelist:', err.message);
+      throw new Error(`Failed to read Vercel environment variables: ${err.message}. Please verify VERCEL_API_TOKEN configuration.`);
+    }
+
+    // Check if duplicate email with another device exists (double check at approval time)
+    const emailIndex = entries.findIndex(item => item.split(':')[0].toLowerCase() === email.toLowerCase());
+    
+    // Clean device name (no colons or commas)
+    let cleanDeviceName = 'Unknown Device';
+    const deviceNameFromQuery = req.query.deviceName;
+    if (deviceNameFromQuery) {
+      cleanDeviceName = String(deviceNameFromQuery).replace(/[:]/g, '-').replace(/[,]/g, '-').trim();
+    }
+
+    const mappingEntry = `${email}:${deviceId}:${cleanDeviceName}`;
+
+    if (emailIndex >= 0) {
+      const existingParts = entries[emailIndex].split(':');
+      if (existingParts[1] !== deviceId) {
+        throw new Error(`Email ${email} is already whitelisted for another device: ${existingParts[2] || 'another device'}. Please revoke that first.`);
+      }
+      // If exact same mapping already exists, no need to re-add
+    } else {
+      // Append mapping
+      entries.push(mappingEntry);
+    }
+
+    const newWhitelistValue = entries.join(',');
+
+    // 3. Update Vercel
+    const result = await updateVercelDeviceWhitelist(newWhitelistValue);
+    
+    // 4. Update Upstash Redis
+    if (redis) {
+      await redis.sadd('allowed_device_ids', deviceId);
+    }
+
+    // 5. Send approval confirmation email to the user
+    await sendApprovalEmail(email, name || 'User', deviceId);
+
+    // 6. Respond with a gorgeous success page
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Pro Access Granted</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 16px;
+            box-sizing: border-box;
+          }
+          .card {
+            background-color: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 16px;
+            padding: 40px 24px;
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+          }
+          .icon {
+            font-size: 56px;
+            margin-bottom: 20px;
+            display: inline-block;
+            line-height: 1;
+          }
+          h1 {
+            color: #10b981;
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 24px;
+            font-weight: 700;
+          }
+          p {
+            color: #9ca3af;
+            line-height: 1.6;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 15px;
+          }
+          .details {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: left;
+            margin-bottom: 32px;
+            font-size: 14px;
+          }
+          .detail-item {
+            margin: 10px 0;
+            display: flex;
+            flex-direction: column;
+          }
+          .detail-item:first-child { margin-top: 0; }
+          .detail-item:last-child { margin-bottom: 0; }
+          .detail-label {
+            color: #6b7280;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+            font-weight: 600;
+          }
+          .detail-value {
+            color: #f3f4f6;
+            font-family: monospace;
+            word-break: break-all;
+            font-weight: 500;
+          }
+          .btn {
+            background-color: #10b981;
+            color: white;
+            text-decoration: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 16px;
+            display: inline-block;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+          }
+          .btn:hover {
+            background-color: #059669;
+            transform: translateY(-1px);
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <span class="icon">⚡</span>
+          <h1>Pro Access Active!</h1>
+          <p>The device has been successfully whitelisted. An approval confirmation email has been sent to the user.</p>
+          <div class="details">
+            <div class="detail-item">
+              <span class="detail-label">User Name</span>
+              <span class="detail-value" style="font-family: inherit; font-size: 15px;">${name || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">User Email</span>
+              <span class="detail-value" style="font-family: inherit; font-size: 15px;">${email}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Device Name</span>
+              <span class="detail-value" style="font-family: inherit; font-size: 15px;">${cleanDeviceName}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Device ID</span>
+              <span class="detail-value">${deviceId}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Action Status</span>
+              <span class="detail-value" style="color: #60a5fa;">Vercel whitelisted, Redis updated, Email sent</span>
+            </div>
+          </div>
+          <a href="https://ap-vidyuth.vercel.app" class="btn">Close Window</a>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error('[api] Grant access failed:', err);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Error Granting Access</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 16px;
+            box-sizing: border-box;
+          }
+          .card {
+            background-color: #111827;
+            border: 1px solid #ef4444;
+            border-radius: 16px;
+            padding: 40px 24px;
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+          }
+          .icon {
+            font-size: 56px;
+            margin-bottom: 20px;
+            display: inline-block;
+          }
+          h1 {
+            color: #ef4444;
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 24px;
+          }
+          p {
+            color: #9ca3af;
+            line-height: 1.6;
+            font-size: 15px;
+            margin-bottom: 0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <span class="icon">❌</span>
+          <h1>Failed to Grant Access</h1>
+          <p>${err.message || 'An unexpected error occurred while updating variables.'}</p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
+app.post('/api/validate-coupon', async (req, res) => {
   const { code, deviceId } = req.body || {};
   const validCode = process.env.AP_VIDYUTH_SERVICE_COUPON;
-  const allowedDevices = (process.env.ALLOWED_DEVICE_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
   
   // 1. Device Whitelist Bypass (Works even if code is empty)
-  if (deviceId && allowedDevices.includes(deviceId)) {
-    return res.json({ ok: true, message: 'Pro Access Granted (Device Whitelisted)' });
+  if (deviceId) {
+    const entries = (process.env.ALLOWED_DEVICE_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
+    const allowedDevices = entries.map(item => item.includes(':') ? item.split(':')[1] : item);
+
+    if (allowedDevices.includes(deviceId)) {
+      return res.json({ ok: true, message: 'Pro Access Granted (Device Whitelisted)' });
+    }
+
+    if (redis) {
+      try {
+        const isWhitelisted = await redis.sismember('allowed_device_ids', deviceId);
+        if (isWhitelisted) {
+          return res.json({ ok: true, message: 'Pro Access Granted (Device Whitelisted)' });
+        }
+      } catch (err) {
+        console.error('[api] Redis whitelist check failed:', err.message);
+      }
+    }
   }
 
   // 2. Master Coupon Validation

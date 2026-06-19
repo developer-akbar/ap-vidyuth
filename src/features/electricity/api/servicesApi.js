@@ -374,5 +374,48 @@ export async function validateCoupon(code) {
 export async function requestProAccess(type = 'ACCESS', message = '', name = '', userEmail = '') {
   const { getDeviceId } = await import('../../../shared/utils/index.js');
   const deviceId = await getDeviceId();
-  return apiPost('/request-access', { deviceId, message, type, name, userEmail });
+
+  let deviceName = 'Unknown Device';
+  let deviceType = 'Browser';
+  let osName = 'Unknown OS';
+
+  try {
+    const { Device } = await import('@capacitor/device');
+    const info = await Device.getInfo();
+    if (info.platform === 'web') {
+      deviceType = 'Browser';
+      const ua = navigator.userAgent;
+      if (ua.includes('Firefox')) deviceName = 'Firefox Browser';
+      else if (ua.includes('Chrome')) deviceName = 'Chrome Browser';
+      else if (ua.includes('Safari')) deviceName = 'Safari Browser';
+      else if (ua.includes('Edge')) deviceName = 'Edge Browser';
+      else deviceName = 'Web Browser';
+
+      if (ua.includes('Windows')) osName = 'Windows';
+      else if (ua.includes('Macintosh')) osName = 'macOS';
+      else if (ua.includes('Linux')) osName = 'Linux';
+      else if (ua.includes('Android')) osName = 'Android';
+      else if (ua.includes('iPhone') || ua.includes('iPad')) osName = 'iOS';
+    } else {
+      deviceType = 'App';
+      deviceName = `${info.manufacturer || ''} ${info.model || ''}`.trim() || 'Mobile Device';
+      osName = info.operatingSystem || info.platform;
+    }
+  } catch (e) {
+    console.error('Failed to get device info:', e);
+  }
+
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+
+  return apiPost('/request-access', { 
+    deviceId, 
+    message, 
+    type, 
+    name, 
+    userEmail,
+    deviceName,
+    deviceType,
+    osName,
+    userAgent
+  });
 }
