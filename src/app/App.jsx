@@ -1381,6 +1381,94 @@ function AppContent() {
                                         "{user.pro_request_message}"
                                       </div>
                                     )}
+                                    {type === 'PENDING' && (
+                                      <div 
+                                        style={{ 
+                                          marginTop: '12px', 
+                                          paddingTop: '10px', 
+                                          borderTop: '1px solid var(--border)',
+                                          display: 'flex', 
+                                          flexDirection: 'column', 
+                                          gap: '6px' 
+                                        }}
+                                        onClick={e => e.stopPropagation()}
+                                      >
+                                        <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-2)' }}>
+                                          Decline Reason (shared with user):
+                                        </label>
+                                        <textarea
+                                          id={`decline-reason-${user.id}`}
+                                          placeholder="e.g. Please enter a valid name and company email address..."
+                                          className="field__input"
+                                          style={{ 
+                                            width: '100%', 
+                                            height: '56px', 
+                                            padding: '6px 8px', 
+                                            fontSize: '12px', 
+                                            resize: 'vertical',
+                                            borderRadius: '6px',
+                                            background: 'var(--surface-1)',
+                                            border: '1px solid var(--border)',
+                                            color: 'var(--text-1)'
+                                          }}
+                                        />
+                                        <button
+                                          className="btn btn--xs"
+                                          style={{ 
+                                            background: 'var(--red)', 
+                                            color: 'white', 
+                                            border: 'none', 
+                                            alignSelf: 'flex-start',
+                                            padding: '4px 12px',
+                                            fontSize: '11px',
+                                            height: '24px',
+                                            borderRadius: '6px',
+                                            fontWeight: '600'
+                                          }}
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            const reasonVal = document.getElementById(`decline-reason-${user.id}`).value;
+                                            setConfirmState({
+                                              open: true,
+                                              title: 'Decline Request',
+                                              description: `Decline pro access request for ${user.name || 'Anonymous User'}?`,
+                                              isDanger: true,
+                                              onConfirm: async () => {
+                                                setConfirmState(prev => ({ ...prev, open: false }));
+                                                try {
+                                                  const headers = { 'Authorization': `Bearer ${adminToken}` };
+                                                  const res = await apiPost('/admin/decline', { userId: user.id, reason: reasonVal }, headers);
+                                                  if (res.ok) {
+                                                    toast.success('Request declined and email sent.');
+                                                    loadAdminData();
+                                                  } else {
+                                                    toast.error(res.error || 'Failed to decline request');
+                                                  }
+                                                } catch (err) {
+                                                  toast.error(err.message);
+                                                }
+                                              }
+                                            });
+                                          }}
+                                        >
+                                          Decline Access
+                                        </button>
+                                      </div>
+                                    )}
+                                    {user.decline_reason && (
+                                      <div
+                                        style={{
+                                          marginTop: '4px',
+                                          padding: '8px',
+                                          background: 'rgba(239, 68, 68, 0.05)',
+                                          borderRadius: '6px',
+                                          borderLeft: '3px solid var(--red)',
+                                          color: 'var(--text-2)'
+                                        }}
+                                      >
+                                        <strong>Previous Decline Reason:</strong> "{user.decline_reason}"
+                                      </div>
+                                    )}
                                     {user.pro_granted_at && (
                                       <div>
                                         <strong>Pro Granted At:</strong> {formatDateTime(user.pro_granted_at)}

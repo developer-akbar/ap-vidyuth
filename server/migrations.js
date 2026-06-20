@@ -58,6 +58,7 @@ export async function initDb() {
     await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_name VARCHAR(50) DEFAULT 'FREE';");
     await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS service_limit INTEGER DEFAULT 4;");
     await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS requested_plan VARCHAR(50);");
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS decline_reason TEXT;");
 
     // 1.5 Create user_services table to sync IndexedDB services to cloud
     await client.sql`

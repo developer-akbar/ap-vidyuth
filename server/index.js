@@ -288,6 +288,58 @@ async function sendPlanUpdateEmail(userEmail, userName, oldPlan, newPlan, servic
   await transporter.sendMail(mailOptions);
 }
 
+async function sendDeclineEmail(userEmail, userName, reason) {
+  const { 
+    VITE_SMTP_HOST, 
+    VITE_SMTP_PORT, 
+    VITE_SMTP_USER, 
+    VITE_SMTP_PASSWORD
+  } = process.env;
+
+  if (!VITE_SMTP_USER || !VITE_SMTP_PASSWORD) {
+    console.warn('[api] SMTP configuration missing, skipping decline email');
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: VITE_SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(VITE_SMTP_PORT || '465'),
+    secure: (VITE_SMTP_PORT || '465') === '465',
+    auth: {
+      user: VITE_SMTP_USER,
+      pass: VITE_SMTP_PASSWORD,
+    },
+  });
+
+  const mailOptions = {
+    from: `"AP Vidyuth App" <${VITE_SMTP_USER}>`,
+    to: userEmail,
+    subject: 'Request for Pro Access Declined - AP Vidyuth',
+    text: `Hi ${userName},\n\n` +
+          `Your request for Pro access has been reviewed and declined by the administrator.\n\n` +
+          `Reason:\n${reason || 'No specific reason provided.'}\n\n` +
+          `If this issue can be resolved, please try requesting access again after some time.\n\n` +
+          `Best regards,\n` +
+          `AP Vidyuth Team`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff; color: #1f2937;">
+        <h2 style="color: #ef4444; margin-top: 0;">Request Declined ❌</h2>
+        <p>Hi <strong>${userName}</strong>,</p>
+        <p>Your request for <strong>AP Vidyuth Pro</strong> access has been reviewed and declined by the administrator.</p>
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; border-radius: 4px; margin: 16px 0;">
+          <p style="margin: 0; font-weight: 600; color: #991b1b; font-size: 14px;">Reason for Decline:</p>
+          <p style="margin: 6px 0 0; color: #7f1d1d; font-size: 14px; font-style: italic;">"${reason || 'No specific reason provided.'}"</p>
+        </div>
+        <p>If you can address the reason mentioned above, please feel free to submit a new request after some time.</p>
+        <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #9ca3af; margin-bottom: 0; text-align: center;">AP Vidyuth Team</p>
+      </div>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
 // ── Notification Infrastructure ──────────────────────────────────────────────
 
 const redis = process.env.UPSTASH_REDIS_REST_URL
@@ -3388,7 +3440,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
   }
   try {
     const standardUsers = await pgPool.query(
-      "SELECT id, name, email, device_id, registered_at, last_seen_at, heard_from, pro_request_status, pro_requested_at, pro_request_message, plan_name, service_limit, requested_plan FROM users WHERE role = 'STANDARD' ORDER BY registered_at DESC"
+      "SELECT id, name, email, device_id, registered_at, last_seen_at, heard_from, pro_request_status, pro_requested_at, pro_request_message, decline_reason, plan_name, service_limit, requested_plan FROM users WHERE role = 'STANDARD' ORDER BY registered_at DESC"
     );
     const proUsers = await pgPool.query(
       "SELECT id, name, email, device_id, registered_at, pro_granted_at, last_seen_at, heard_from, plan_name, service_limit, requested_plan FROM users WHERE role = 'PRO' ORDER BY pro_granted_at DESC"
@@ -3506,6 +3558,84 @@ app.post('/api/admin/grant', requireAdmin, async (req, res) => {
     res.json({ ok: true, message: `Subscription plan successfully updated to ${plan}.` });
   } catch (err) {
     console.error('[api] Admin grant failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Admin Decline Request
+app.post('/api/admin/decline', requireAdmin, async (req, res) => {
+  const { userId, reason } = req.body || {};
+  if (!userId) return res.status(400).json({ ok: false, error: 'userId is required' });
+  if (!pgPool) return res.status(503).json({ ok: false, error: 'Database not available' });
+
+  try {
+    const userRes = await pgPool.query('SELECT name, email, device_id FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'User not found' });
+    }
+    const { name, email, device_id: deviceId } = userRes.rows[0];
+
+    // 1. Update database: decline request status, save reason, ensure role is STANDARD and plan is FREE
+    await pgPool.query(
+      `UPDATE users 
+       SET pro_request_status = 'DECLINED',
+           decline_reason = $1,
+           role = 'STANDARD',
+           plan_name = 'FREE',
+           service_limit = 4,
+           pro_source = NULL
+       WHERE id = $2`,
+      [reason || null, userId]
+    );
+
+    // 2. Remove from whitelist (safety measure)
+    if (process.env.VERCEL_API_TOKEN) {
+      try {
+        const vercelRes = await getVercelDeviceWhitelist();
+        if (!vercelRes.error) {
+          const currentWhitelist = vercelRes.value || '';
+          let entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+          const targetEmail = email || `unregistered-${deviceId || 'unknown'}`;
+          
+          entries = entries.filter(item => {
+            const parts = item.split(':');
+            const itemEmail = parts[0];
+            const itemDevId = parts[1];
+            const emailMatches = itemEmail.toLowerCase() === targetEmail.toLowerCase();
+            const devIdMatches = deviceId && itemDevId === deviceId;
+            return !emailMatches && !devIdMatches;
+          });
+          await updateVercelDeviceWhitelist(entries.join(','));
+        }
+      } catch (err) {
+        console.error('[api] Admin decline Vercel update failed:', err.message);
+      }
+    }
+
+    if (redis && deviceId) {
+      await redis.srem('allowed_device_ids', deviceId);
+    }
+
+    // 3. Create Notification
+    const notifMsg = `Your request for Pro access was declined. Reason: ${reason || 'None provided'}. Please try again later.`;
+    await pgPool.query(
+      `INSERT INTO notifications (user_id, title, message)
+       VALUES ($1, 'Request Declined', $2)`,
+      [userId, notifMsg]
+    );
+
+    // 4. Send decline email to user (if email exists)
+    if (email) {
+      try {
+        await sendDeclineEmail(email, name || 'User', reason);
+      } catch (err) {
+        console.error('[api] Decline confirmation email failed:', err.message);
+      }
+    }
+
+    res.json({ ok: true, message: 'Request successfully declined.' });
+  } catch (err) {
+    console.error('[api] Admin decline failed:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
