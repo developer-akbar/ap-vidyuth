@@ -138,6 +138,7 @@ function AppContent() {
 
   const { isOffline } = useNetwork();
   const scrollPositions = useRef({});
+  const devClickCountRef = useRef(0);
   const [globalProgress, setGlobalProgress] = useState(null);
   const electricityContext = useElectricityServices();
 
@@ -1769,7 +1770,20 @@ function AppContent() {
                       </div>
                     </div>
                   </div>
-                  <footer className="dev-footer" style={{ marginTop: '20px', paddingBottom: '32px', textAlign: 'center' }}>
+                  <footer 
+                    className="dev-footer" 
+                    style={{ marginTop: '20px', paddingBottom: '32px', textAlign: 'center', cursor: 'pointer' }}
+                    onClick={() => {
+                      devClickCountRef.current += 1;
+                      if (devClickCountRef.current >= 7) {
+                        devClickCountRef.current = 0;
+                        setActivePage('admin');
+                        toast.success('Entering Administration Portal...');
+                      } else if (devClickCountRef.current >= 3) {
+                        toast.info(`Tap ${7 - devClickCountRef.current} more times for Admin access`, { id: 'dev-toast' });
+                      }
+                    }}
+                  >
                     <p className="dev-footer__name">{t('developed_by')} Akbar</p>
                     <span className="dev-footer__tag">{`v${__APP_VERSION__}`}</span>
                   </footer>
