@@ -2207,6 +2207,100 @@ app.post('/api/validate-coupon', async (req, res) => {
   const normalizedValid = String(validCode).trim().toUpperCase();
 
   if (normalizedInput === normalizedValid) {
+    // Determine user identity from Bearer token
+    const authHeader = req.headers.authorization;
+    let email = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const session = verifyUserToken(token);
+      if (session) {
+        email = session.email;
+      }
+    }
+
+    if (pgPool) {
+      try {
+        if (email) {
+          // Upsert registered user to PRO DIAMOND (unlimited)
+          await pgPool.query(
+            `INSERT INTO users (name, email, device_id, role, plan_name, service_limit, pro_source, pro_request_status, pro_granted_at, last_seen_at)
+             VALUES ('User', $1, $2, 'PRO', 'DIAMOND', 999999, 'coupon', 'APPROVED', NOW(), NOW())
+             ON CONFLICT (email)
+             DO UPDATE SET 
+               role = 'PRO',
+               plan_name = 'DIAMOND',
+               service_limit = 999999,
+               pro_source = 'coupon',
+               pro_request_status = 'APPROVED',
+               pro_granted_at = NOW(),
+               device_id = COALESCE(users.device_id, EXCLUDED.device_id),
+               last_seen_at = NOW()`,
+            [email, deviceId || null]
+          );
+        } else if (deviceId) {
+          // Check if an anonymous user with this device ID exists
+          const existingRes = await pgPool.query('SELECT id FROM users WHERE device_id = $1', [deviceId]);
+          if (existingRes.rows.length > 0) {
+            // Update all matching devices
+            await pgPool.query(
+              `UPDATE users 
+               SET role = 'PRO',
+                   plan_name = 'DIAMOND',
+                   service_limit = 999999,
+                   pro_source = 'coupon',
+                   pro_request_status = 'APPROVED',
+                   pro_granted_at = NOW(),
+                   last_seen_at = NOW()
+               WHERE device_id = $1`,
+              [deviceId]
+            );
+          } else {
+            // Insert a new anonymous user with PRO DIAMOND status
+            await pgPool.query(
+              `INSERT INTO users (name, email, device_id, role, plan_name, service_limit, pro_source, pro_request_status, pro_granted_at, last_seen_at)
+               VALUES ('Anonymous User', NULL, $1, 'PRO', 'DIAMOND', 999999, 'coupon', 'APPROVED', NOW(), NOW())`,
+              [deviceId]
+            );
+          }
+        }
+      } catch (err) {
+        console.error('[api] Failed to update user database in validate-coupon:', err.message);
+      }
+    }
+
+    // Update Vercel whitelist dynamically if VERCEL_API_TOKEN is set
+    if (process.env.VERCEL_API_TOKEN && (email || deviceId)) {
+      try {
+        const vercelRes = await getVercelDeviceWhitelist();
+        if (!vercelRes.error) {
+          const currentWhitelist = vercelRes.value || '';
+          let entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+          const targetEmail = email || `unregistered-${deviceId || 'unknown'}`;
+          const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+          const mappingEntry = `${targetEmail}:${deviceId || 'Unknown_Device'}:Coupon_Activated:${timestamp}`;
+
+          const emailIdx = entries.findIndex(item => item.split(':')[0].toLowerCase() === targetEmail.toLowerCase());
+          if (emailIdx >= 0) {
+            entries[emailIdx] = mappingEntry;
+          } else {
+            entries.push(mappingEntry);
+          }
+          await updateVercelDeviceWhitelist(entries.join(','));
+        }
+      } catch (err) {
+        console.error('[api] Failed to update Vercel whitelist in validate-coupon:', err.message);
+      }
+    }
+
+    // Add to Redis whitelist
+    if (redis && deviceId) {
+      try {
+        await redis.sadd('allowed_device_ids', deviceId);
+      } catch (err) {
+        console.error('[api] Failed to add to Redis whitelist in validate-coupon:', err.message);
+      }
+    }
+
     res.json({ ok: true, message: 'Pro Access Granted' });
   } else {
     res.status(401).json({ ok: false, error: 'Invalid Coupon Code' });
