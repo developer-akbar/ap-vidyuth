@@ -63,9 +63,9 @@ A privacy-first electricity bill tracking app for APSPDCL consumers, built with 
 - **Backup & Restore** — Export and import all data as a local JSON file
 
 ### 🔐 Privacy & Security
-- **Privacy-First Local Storage** — All data stored on-device (IndexedDB for Web / SQLite for Android). Nothing sent to any cloud
-- **Privacy Policy** — Accessible in-app without login
-- **Offline Support** — All cached data remains accessible with no internet connection
+- **Privacy-First Storage with Optional Cloud Sync** — By default, all data is stored on-device (IndexedDB for Web / SQLite for Android). Users who register can choose to sync data securely to PostgreSQL. Unregistered user services are tracked via unique device ID to compile capacity statistics.
+- **Privacy Policy** — Accessible in-app without login.
+- **Offline Support** — All cached data remains fully accessible with no internet connection.
 
 ### 👤 Pro Subscription & Profile Management
 - **Profile Registration** — Opt-in profile registration captures Name, Email, and growth attribution referral metadata ("How did you hear about us?").

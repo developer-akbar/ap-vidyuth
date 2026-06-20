@@ -53,9 +53,9 @@ export function RestoreDialog({ open, previewCount, hasData, onClose, onConfirm,
           <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-1)' }}>
             <strong>Preview:</strong> This backup contains <b>{previewCount}</b> valid services.
           </p>
-          {previewCount > SERVICE_CAP && !electricityContext.isPro && (
+          {previewCount > (electricityContext?.serviceLimit || 4) && (
             <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--amber)', fontWeight: '600' }}>
-              Note: Only the first {SERVICE_CAP} services will be restored due to the current limit.
+              Note: Only the first {electricityContext?.serviceLimit || 4} services will be restored due to the current limit.
             </p>
           )}
         </div>

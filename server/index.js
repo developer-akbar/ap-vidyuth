@@ -208,6 +208,73 @@ async function sendApprovalEmail(userEmail, userName, deviceId) {
   await transporter.sendMail(mailOptions);
 }
 
+async function sendPlanUpdateEmail(userEmail, userName, oldPlan, newPlan, serviceLimit) {
+  const { 
+    VITE_SMTP_HOST, 
+    VITE_SMTP_PORT, 
+    VITE_SMTP_USER, 
+    VITE_SMTP_PASSWORD
+  } = process.env;
+
+  if (!VITE_SMTP_USER || !VITE_SMTP_PASSWORD) {
+    console.warn('[api] SMTP configuration missing, skipping plan update email');
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: VITE_SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(VITE_SMTP_PORT || '465'),
+    secure: (VITE_SMTP_PORT || '465') === '465',
+    auth: {
+      user: VITE_SMTP_USER,
+      pass: VITE_SMTP_PASSWORD,
+    },
+  });
+
+  const displayLimit = serviceLimit === 999999 ? 'Unlimited' : serviceLimit;
+
+  const mailOptions = {
+    from: `"AP Vidyuth App" <${VITE_SMTP_USER}>`,
+    to: userEmail,
+    subject: 'Subscription Plan Updated - AP Vidyuth',
+    text: `Hi ${userName},\n\n` +
+          `Your subscription plan on AP Vidyuth has been updated by the administrator.\n\n` +
+          `Previous Plan: ${oldPlan}\n` +
+          `New Plan: ${newPlan} (Max Services: ${displayLimit})\n\n` +
+          `Thank you for using AP Vidyuth!\n\n` +
+          `Best regards,\n` +
+          `AP Vidyuth Team`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff; color: #1f2937;">
+        <h2 style="color: #6366f1; margin-top: 0;">Subscription Plan Updated ⚡</h2>
+        <p>Hi <strong>${userName}</strong>,</p>
+        <p>Your subscription plan on <strong>AP Vidyuth</strong> has been successfully updated by the administrator.</p>
+        <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 4px 0; color: #6b7280; font-size: 14px;">Previous Plan:</td>
+              <td style="padding: 4px 0; color: #1f2937; font-size: 14px; font-weight: 600; text-transform: uppercase;">${oldPlan}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #6b7280; font-size: 14px;">New Plan:</td>
+              <td style="padding: 4px 0; color: #6366f1; font-size: 14px; font-weight: 700; text-transform: uppercase;">${newPlan}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #6b7280; font-size: 14px;">Service Limit:</td>
+              <td style="padding: 4px 0; color: #1f2937; font-size: 14px; font-weight: 600;">${displayLimit} active services</td>
+            </tr>
+          </table>
+        </div>
+        <p>If you have any questions or require custom limits, please reach out to our team.</p>
+        <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #9ca3af; margin-bottom: 0; text-align: center;">AP Vidyuth Team</p>
+      </div>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
 // ── Notification Infrastructure ──────────────────────────────────────────────
 
 const redis = process.env.UPSTASH_REDIS_REST_URL
@@ -1359,7 +1426,7 @@ app.get('/api/notifications/check', async (req, res) => {
 });
 
 app.post('/api/request-access', async (req, res) => {
-  const { deviceId, message, type, name, userEmail, deviceName, deviceType, osName, userAgent } = req.body || {};
+  const { deviceId, message, type, name, userEmail, deviceName, deviceType, osName, userAgent, requestedPlan } = req.body || {};
 
   // Pro requests/withdrawals require profile name and email completed
   if (!userEmail || !name) {
@@ -1383,8 +1450,8 @@ app.post('/api/request-access', async (req, res) => {
         );
       } else {
         await pgPool.query(
-          `INSERT INTO users (name, email, device_id, role, profile_completed, registered_at, last_seen_at, pro_request_status, pro_requested_at, pro_request_message)
-           VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW(), 'PENDING', NOW(), $4)
+          `INSERT INTO users (name, email, device_id, role, profile_completed, registered_at, last_seen_at, pro_request_status, pro_requested_at, pro_request_message, requested_plan)
+           VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW(), 'PENDING', NOW(), $4, $5)
            ON CONFLICT (email)
            DO UPDATE SET 
              name = COALESCE(users.name, EXCLUDED.name),
@@ -1393,14 +1460,15 @@ app.post('/api/request-access', async (req, res) => {
              last_seen_at = NOW(),
              pro_request_status = 'PENDING',
              pro_requested_at = NOW(),
-             pro_request_message = EXCLUDED.pro_request_message`,
-          [name || 'User', userEmail, deviceId || null, message || 'No message']
+             pro_request_message = EXCLUDED.pro_request_message,
+             requested_plan = EXCLUDED.requested_plan`,
+          [name || 'User', userEmail, deviceId || null, message || 'No message', requestedPlan || 'BRONZE']
         );
         // Also insert an admin notification about the request
         await pgPool.query(
           `INSERT INTO notifications (user_id, title, message)
            VALUES (NULL, 'Pro Request Pending', $1)`,
-          [`User ${name} (${userEmail}) has requested Pro access. Reason: "${message || 'None'}"`]
+          [`User ${name} (${userEmail}) has requested the ${requestedPlan || 'BRONZE'} plan. Reason: "${message || 'None'}"`]
         );
       }
     } catch (err) {
@@ -1626,6 +1694,7 @@ app.post('/api/request-access', async (req, res) => {
           `Type: ACCESS\n` +
           `Name: ${name || 'Not provided'}\n` +
           `Email: ${userEmail || 'Not provided'}\n` +
+          `Requested Plan: ${requestedPlan || 'BRONZE'}\n` +
           `Device ID: ${deviceId || 'Unknown'}\n` +
           `Device Name: ${deviceName || 'Unknown'}\n` +
           `Platform: ${deviceType || 'Browser'} (${osName || 'Unknown OS'})\n\n` +
@@ -1652,6 +1721,10 @@ app.post('/api/request-access', async (req, res) => {
             <tr>
               <td style="padding: 6px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Email:</td>
               <td style="padding: 6px 0; color: #f3f4f6; font-size: 14px; font-weight: 600;"><a href="mailto:${userEmail}" style="color: #3b82f6; text-decoration: none;">${userEmail || 'Not provided'}</a></td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Requested Plan:</td>
+              <td style="padding: 6px 0; color: #f59e0b; font-size: 14px; font-weight: 600; text-transform: uppercase;">${requestedPlan || 'BRONZE'}</td>
             </tr>
           </table>
         </div>
@@ -2180,21 +2253,172 @@ app.post('/api/users/profile', async (req, res) => {
 
 // Update last_seen_at for active user tracking
 app.post('/api/users/track', async (req, res) => {
-  const { deviceId, email } = req.body || {};
+  let { deviceId, email, services } = req.body || {};
+  
+  if (email === 'null' || email === 'undefined' || email === '') {
+    email = null;
+  }
+  if (deviceId === 'null' || deviceId === 'undefined' || deviceId === '') {
+    deviceId = null;
+  }
+
   if (!deviceId && !email) {
     return res.status(400).json({ ok: false, error: 'DeviceId or email is required' });
   }
   if (!pgPool) {
     return res.json({ ok: true, offline: true });
   }
+
+  const hasServices = (Array.isArray(services) && services.length > 0) || req.body.hasServices === true;
+
   try {
-    await pgPool.query(
-      `UPDATE users 
-       SET last_seen_at = NOW() 
-       WHERE (email = $1 OR (device_id = $2 AND device_id IS NOT NULL))`,
-      [email || null, deviceId || null]
-    );
-    res.json({ ok: true });
+    let user = null;
+    if (email) {
+      const emailRes = await pgPool.query('SELECT * FROM users WHERE email = $1', [email]);
+      if (emailRes.rows.length > 0) {
+        user = emailRes.rows[0];
+        await pgPool.query(
+          `UPDATE users 
+           SET last_seen_at = NOW(), 
+               device_id = COALESCE(device_id, $1) 
+           WHERE id = $2`,
+          [deviceId || null, user.id]
+        );
+      } else {
+        const insertRes = await pgPool.query(
+          `INSERT INTO users (name, email, device_id, role, profile_completed, registered_at, last_seen_at)
+           VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW())
+           RETURNING *`,
+          ['User', email, deviceId || null]
+        );
+        user = insertRes.rows[0];
+      }
+    } else if (deviceId) {
+      const deviceRes = await pgPool.query('SELECT * FROM users WHERE device_id = $1', [deviceId]);
+      if (deviceRes.rows.length > 0) {
+        user = deviceRes.rows[0];
+        await pgPool.query(
+          'UPDATE users SET last_seen_at = NOW() WHERE id = $1',
+          [user.id]
+        );
+      } else if (hasServices) {
+        const insertRes = await pgPool.query(
+          `INSERT INTO users (name, email, device_id, role, profile_completed, registered_at, last_seen_at)
+           VALUES ($1, NULL, $2, 'STANDARD', false, NOW(), NOW())
+           RETURNING *`,
+          ['Anonymous User', deviceId]
+        );
+        user = insertRes.rows[0];
+      }
+    }
+
+    // Sync services if this is an anonymous/unregistered user
+    if (user && !user.email && Array.isArray(services)) {
+      try {
+        const client = await pgPool.connect();
+        try {
+          await client.query('BEGIN');
+          // 1. Get existing service numbers for this anonymous user
+          const existingRes = await client.query(
+            'SELECT service_number FROM user_services WHERE user_id = $1',
+            [user.id]
+          );
+          const existingNums = new Set(existingRes.rows.map(r => r.service_number));
+          const incomingNums = new Set(services.map(s => s.serviceNumber || s.service_number).filter(Boolean));
+
+          // 2. Delete services no longer present
+          const toDelete = [...existingNums].filter(num => !incomingNums.has(num));
+          if (toDelete.length > 0) {
+            await client.query(
+              'DELETE FROM user_services WHERE user_id = $1 AND service_number = ANY($2)',
+              [user.id, toDelete]
+            );
+          }
+
+          // 3. Insert or update current services
+          for (const s of services) {
+            const serviceNum = s.serviceNumber || s.service_number;
+            if (!serviceNum) continue;
+
+            const params = [user.id, ...dbSerializeService(s)];
+            await client.query(
+              `INSERT INTO user_services (
+                user_id, service_number, label, customer_name, last_bill_date, last_due_date,
+                last_amount_due, last_billed_units, last_three_amounts, last_status, last_fetched_at,
+                history_fetched_at, last_reported_bill_date, bill_time, bill_no_prefix, last_refreshed_date, last_error,
+                is_paid, paid_date, receipt_number, paid_amount, bill_breakup, bill_history,
+                payment_history, trend_data, insights, category, closing_rdg, ctr_load,
+                division_code, division_name, circle_name, section_name, unique_service_number,
+                pinned, pinned_at, is_deleted, deleted_at, created_at, updated_at
+              ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
+              )
+              ON CONFLICT (user_id, service_number)
+              DO UPDATE SET
+                label = EXCLUDED.label,
+                customer_name = EXCLUDED.customer_name,
+                last_bill_date = EXCLUDED.last_bill_date,
+                last_due_date = EXCLUDED.last_due_date,
+                last_amount_due = EXCLUDED.last_amount_due,
+                last_billed_units = EXCLUDED.last_billed_units,
+                last_three_amounts = EXCLUDED.last_three_amounts,
+                last_status = EXCLUDED.last_status,
+                last_fetched_at = EXCLUDED.last_fetched_at,
+                history_fetched_at = EXCLUDED.history_fetched_at,
+                last_reported_bill_date = EXCLUDED.last_reported_bill_date,
+                bill_time = EXCLUDED.bill_time,
+                bill_no_prefix = EXCLUDED.bill_no_prefix,
+                last_refreshed_date = EXCLUDED.last_refreshed_date,
+                last_error = EXCLUDED.last_error,
+                is_paid = EXCLUDED.is_paid,
+                paid_date = EXCLUDED.paid_date,
+                receipt_number = EXCLUDED.receipt_number,
+                paid_amount = EXCLUDED.paid_amount,
+                bill_breakup = EXCLUDED.bill_breakup,
+                bill_history = EXCLUDED.bill_history,
+                payment_history = EXCLUDED.payment_history,
+                trend_data = EXCLUDED.trend_data,
+                insights = EXCLUDED.insights,
+                category = EXCLUDED.category,
+                closing_rdg = EXCLUDED.closing_rdg,
+                ctr_load = EXCLUDED.ctr_load,
+                division_code = EXCLUDED.division_code,
+                division_name = EXCLUDED.division_name,
+                circle_name = EXCLUDED.circle_name,
+                section_name = EXCLUDED.section_name,
+                unique_service_number = EXCLUDED.unique_service_number,
+                pinned = EXCLUDED.pinned,
+                pinned_at = EXCLUDED.pinned_at,
+                is_deleted = EXCLUDED.is_deleted,
+                deleted_at = EXCLUDED.deleted_at,
+                updated_at = EXCLUDED.updated_at`,
+              params
+            );
+          }
+          await client.query('COMMIT');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          console.error('[api] Anonymous services transaction failed:', err.message);
+        } finally {
+          client.release();
+        }
+      } catch (err) {
+        console.error('[api] Failed to get db connection for anonymous services sync:', err.message);
+      }
+    }
+
+    if (user) {
+      res.json({
+        ok: true,
+        user: {
+          role: user.role,
+          planName: user.plan_name || 'FREE',
+          serviceLimit: user.service_limit || 4
+        }
+      });
+    } else {
+      res.json({ ok: true });
+    }
   } catch (err) {
     console.error('[api] User tracking failed:', err.message);
     res.status(500).json({ ok: false, error: err.message });
@@ -2402,7 +2626,7 @@ function dbDeserializeService(row) {
 
 // User Registration Route
 app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, heardFrom } = req.body || {};
+  const { name, email, password, heardFrom, deviceId } = req.body || {};
   if (!name || !email || !password) {
     return res.status(400).json({ ok: false, error: 'Name, email, and password are required' });
   }
@@ -2420,10 +2644,10 @@ app.post('/api/auth/register', async (req, res) => {
       const passHash = hashPassword(password);
       const updateRes = await pgPool.query(
         `UPDATE users
-         SET name = $1, password_hash = $2, profile_completed = true, last_seen_at = NOW()
-         WHERE email = $3
+         SET name = $1, password_hash = $2, profile_completed = true, last_seen_at = NOW(), device_id = COALESCE(device_id, $3)
+         WHERE email = $4
          RETURNING *`,
-        [name, passHash, email]
+        [name, passHash, deviceId || null, email]
       );
       const user = updateRes.rows[0];
       const token = generateUserToken(user.id, user.email, user.role);
@@ -2437,18 +2661,52 @@ app.post('/api/auth/register', async (req, res) => {
           role: user.role,
           theme: user.theme,
           density: user.density,
-          language: user.language
+          language: user.language,
+          planName: user.plan_name || 'FREE',
+          serviceLimit: user.service_limit || 4
         }
       });
+    }
+
+    // Check if there is an anonymous user with this deviceId
+    if (deviceId) {
+      const anonRes = await pgPool.query('SELECT * FROM users WHERE device_id = $1 AND email IS NULL', [deviceId]);
+      if (anonRes.rows.length > 0) {
+        const passHash = hashPassword(password);
+        const updateRes = await pgPool.query(
+          `UPDATE users
+           SET name = $1, email = $2, password_hash = $3, profile_completed = true, last_seen_at = NOW(), heard_from = COALESCE(heard_from, $4)
+           WHERE id = $5
+           RETURNING *`,
+          [name, email, passHash, heardFrom || null, anonRes.rows[0].id]
+        );
+        const user = updateRes.rows[0];
+        const token = generateUserToken(user.id, user.email, user.role);
+        return res.json({
+          ok: true,
+          token,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            theme: user.theme,
+            density: user.density,
+            language: user.language,
+            planName: user.plan_name || 'FREE',
+            serviceLimit: user.service_limit || 4
+          }
+        });
+      }
     }
 
     // New user signup
     const passHash = hashPassword(password);
     const result = await pgPool.query(
-      `INSERT INTO users (name, email, password_hash, role, profile_completed, registered_at, last_seen_at, heard_from)
-       VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW(), $4)
+      `INSERT INTO users (name, email, password_hash, role, profile_completed, registered_at, last_seen_at, heard_from, device_id)
+       VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW(), $4, $5)
        RETURNING *`,
-      [name, email, passHash, heardFrom || null]
+      [name, email, passHash, heardFrom || null, deviceId || null]
     );
     const user = result.rows[0];
     const token = generateUserToken(user.id, user.email, user.role);
@@ -2462,7 +2720,9 @@ app.post('/api/auth/register', async (req, res) => {
         role: user.role,
         theme: user.theme,
         density: user.density,
-        language: user.language
+        language: user.language,
+        planName: user.plan_name || 'FREE',
+        serviceLimit: user.service_limit || 4
       }
     });
   } catch (err) {
@@ -2473,7 +2733,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 // User Login Route
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body || {};
+  const { email, password, deviceId } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ ok: false, error: 'Email and password are required' });
   }
@@ -2492,8 +2752,14 @@ app.post('/api/auth/login', async (req, res) => {
     if (!verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ ok: false, error: 'Invalid email or password' });
     }
-    // Update active connection
-    await pgPool.query('UPDATE users SET last_seen_at = NOW() WHERE id = $1', [user.id]);
+    // Update active connection and deviceId
+    await pgPool.query(
+      `UPDATE users 
+       SET last_seen_at = NOW(), 
+           device_id = COALESCE(device_id, $1) 
+       WHERE id = $2`,
+      [deviceId || null, user.id]
+    );
     const token = generateUserToken(user.id, user.email, user.role);
     res.json({
       ok: true,
@@ -2505,7 +2771,9 @@ app.post('/api/auth/login', async (req, res) => {
         role: user.role,
         theme: user.theme,
         density: user.density,
-        language: user.language
+        language: user.language,
+        planName: user.plan_name || 'FREE',
+        serviceLimit: user.service_limit || 4
       }
     });
   } catch (err) {
@@ -2978,14 +3246,16 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   }
   try {
     const totalRes = await pgPool.query('SELECT COUNT(*) FROM users');
-    const standardRes = await pgPool.query("SELECT COUNT(*) FROM users WHERE role = 'STANDARD'");
-    const proRes = await pgPool.query("SELECT COUNT(*) FROM users WHERE role = 'PRO'");
+    const registeredRes = await pgPool.query('SELECT COUNT(*) FROM users WHERE email IS NOT NULL');
+    const unregisteredRes = await pgPool.query('SELECT COUNT(*) FROM users WHERE email IS NULL');
+    const pendingRes = await pgPool.query("SELECT COUNT(*) FROM users WHERE pro_request_status = 'PENDING'");
     res.json({
       ok: true,
       stats: {
         total: parseInt(totalRes.rows[0].count),
-        standard: parseInt(standardRes.rows[0].count),
-        pro: parseInt(proRes.rows[0].count)
+        registered: parseInt(registeredRes.rows[0].count),
+        unregistered: parseInt(unregisteredRes.rows[0].count),
+        pending: parseInt(pendingRes.rows[0].count)
       }
     });
   } catch (err) {
@@ -3001,10 +3271,10 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
   }
   try {
     const standardUsers = await pgPool.query(
-      "SELECT id, name, email, device_id, registered_at, last_seen_at, heard_from, pro_request_status, pro_requested_at, pro_request_message FROM users WHERE role = 'STANDARD' ORDER BY registered_at DESC"
+      "SELECT id, name, email, device_id, registered_at, last_seen_at, heard_from, pro_request_status, pro_requested_at, pro_request_message, plan_name, service_limit, requested_plan FROM users WHERE role = 'STANDARD' ORDER BY registered_at DESC"
     );
     const proUsers = await pgPool.query(
-      "SELECT id, name, email, device_id, registered_at, pro_granted_at, last_seen_at, heard_from FROM users WHERE role = 'PRO' ORDER BY pro_granted_at DESC"
+      "SELECT id, name, email, device_id, registered_at, pro_granted_at, last_seen_at, heard_from, plan_name, service_limit, requested_plan FROM users WHERE role = 'PRO' ORDER BY pro_granted_at DESC"
     );
     res.json({
       ok: true,
@@ -3017,44 +3287,69 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
   }
 });
 
-// Admin Grant Pro
+// Admin Grant/Modify Plan
 app.post('/api/admin/grant', requireAdmin, async (req, res) => {
-  const { userId } = req.body || {};
+  const { userId, planName } = req.body || {};
   if (!userId) return res.status(400).json({ ok: false, error: 'userId is required' });
   if (!pgPool) return res.status(503).json({ ok: false, error: 'Database not available' });
   
+  const PLAN_LIMITS = {
+    'FREE': 4,
+    'BRONZE': 8,
+    'SILVER': 16,
+    'GOLD': 32,
+    'PLATINUM': 64,
+    'DIAMOND': 999999
+  };
+  
+  const plan = (planName || 'DIAMOND').toUpperCase();
+  const limit = PLAN_LIMITS[plan] ?? 4;
+  const isPro = plan !== 'FREE';
+  const role = isPro ? 'PRO' : 'STANDARD';
+
   try {
-    const userRes = await pgPool.query('SELECT name, email, device_id FROM users WHERE id = $1', [userId]);
+    const userRes = await pgPool.query('SELECT name, email, device_id, role, plan_name FROM users WHERE id = $1', [userId]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ ok: false, error: 'User not found' });
     }
-    const { name, email, device_id: deviceId } = userRes.rows[0];
+    const { name, email, device_id: deviceId, plan_name: oldPlan } = userRes.rows[0];
     
-    // 1. Update database role
+    // 1. Update database role and plan settings
     await pgPool.query(
       `UPDATE users 
-       SET role = 'PRO', pro_source = 'admin', pro_granted_at = NOW(), pro_request_status = 'APPROVED'
-       WHERE id = $1`,
-      [userId]
+       SET role = $1, plan_name = $2, service_limit = $3, pro_granted_at = CASE WHEN $1 = 'PRO' THEN NOW() ELSE pro_granted_at END, pro_request_status = CASE WHEN $1 = 'PRO' THEN 'APPROVED' ELSE 'NONE' END
+       WHERE id = $4`,
+      [role, plan, limit, userId]
     );
     
-    // 2. Add whitelist dynamically to Vercel variable (if token exists)
+    // 2. Add/remove whitelist dynamically to Vercel variable (if token exists)
     if (process.env.VERCEL_API_TOKEN) {
       try {
         const vercelRes = await getVercelDeviceWhitelist();
         if (!vercelRes.error) {
           const currentWhitelist = vercelRes.value || '';
-          const entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+          let entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+          const targetEmail = email || `unregistered-${deviceId || 'unknown'}`;
           
-          // Avoid duplicating
-          const emailIdx = entries.findIndex(item => item.split(':')[0].toLowerCase() === email.toLowerCase());
-          const timestamp = new Date().toISOString().split('.')[0] + 'Z';
-          const mappingEntry = `${email}:${deviceId || 'Unknown_Device'}:Admin_Granted:${timestamp}`;
-          
-          if (emailIdx >= 0) {
-            entries[emailIdx] = mappingEntry;
+          if (isPro) {
+            const emailIdx = entries.findIndex(item => item.split(':')[0].toLowerCase() === targetEmail.toLowerCase());
+            const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+            const mappingEntry = `${targetEmail}:${deviceId || 'Unknown_Device'}:Admin_Granted:${timestamp}`;
+            
+            if (emailIdx >= 0) {
+              entries[emailIdx] = mappingEntry;
+            } else {
+              entries.push(mappingEntry);
+            }
           } else {
-            entries.push(mappingEntry);
+            entries = entries.filter(item => {
+              const parts = item.split(':');
+              const itemEmail = parts[0];
+              const itemDevId = parts[1];
+              const emailMatches = itemEmail.toLowerCase() === targetEmail.toLowerCase();
+              const devIdMatches = deviceId && itemDevId === deviceId;
+              return !emailMatches && !devIdMatches;
+            });
           }
           await updateVercelDeviceWhitelist(entries.join(','));
         }
@@ -3065,20 +3360,33 @@ app.post('/api/admin/grant', requireAdmin, async (req, res) => {
     
     // 3. Update Redis for instant bypass
     if (redis && deviceId) {
-      await redis.sadd('allowed_device_ids', deviceId);
+      if (isPro) {
+        await redis.sadd('allowed_device_ids', deviceId);
+      } else {
+        await redis.srem('allowed_device_ids', deviceId);
+      }
     }
     
     // 4. Create Notification
+    const notifMsg = isPro 
+      ? `Your subscription has been updated to the ${plan} Plan (max ${limit === 999999 ? 'unlimited' : limit} services).`
+      : 'Your Pro access has been deactivated, and your plan reverted to Free.';
     await pgPool.query(
       `INSERT INTO notifications (user_id, title, message)
-       VALUES ($1, 'Pro Access Active', 'Your AP Vidyuth Pro access has been activated.')`,
-      [userId]
+       VALUES ($1, 'Subscription Plan Updated', $2)`,
+      [userId, notifMsg]
     );
     
-    // 5. Send approval confirmation email
-    await sendApprovalEmail(email, name || 'User', deviceId || 'N/A');
+    // 5. Send plan change confirmation email
+    if (email) {
+      try {
+        await sendPlanUpdateEmail(email, name || 'User', oldPlan || 'FREE', plan, limit);
+      } catch (err) {
+        console.error('[api] Plan update confirmation email failed:', err.message);
+      }
+    }
     
-    res.json({ ok: true, message: 'Pro access successfully granted.' });
+    res.json({ ok: true, message: `Subscription plan successfully updated to ${plan}.` });
   } catch (err) {
     console.error('[api] Admin grant failed:', err.message);
     res.status(500).json({ ok: false, error: err.message });
@@ -3101,7 +3409,7 @@ app.post('/api/admin/revoke', requireAdmin, async (req, res) => {
     // 1. Update database role
     await pgPool.query(
       `UPDATE users 
-       SET role = 'STANDARD', pro_source = NULL, pro_request_status = 'NONE'
+       SET role = 'STANDARD', pro_source = NULL, pro_request_status = 'NONE', plan_name = 'FREE', service_limit = 4
        WHERE id = $1`,
       [userId]
     );
@@ -3113,12 +3421,13 @@ app.post('/api/admin/revoke', requireAdmin, async (req, res) => {
         if (!vercelRes.error) {
           const currentWhitelist = vercelRes.value || '';
           const entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+          const targetEmail = email || `unregistered-${deviceId || 'unknown'}`;
           
           const filteredEntries = entries.filter(item => {
             const parts = item.split(':');
             const itemEmail = parts[0];
             const itemDevId = parts[1];
-            const emailMatches = email && itemEmail.toLowerCase() === email.toLowerCase();
+            const emailMatches = itemEmail.toLowerCase() === targetEmail.toLowerCase();
             const devIdMatches = deviceId && itemDevId === deviceId;
             return !emailMatches && !devIdMatches;
           });

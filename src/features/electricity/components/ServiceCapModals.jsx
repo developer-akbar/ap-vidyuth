@@ -57,6 +57,7 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
   const [email, setEmail] = useState(() => localStorage.getItem('user_email') || '');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requestedPlan, setRequestedPlan] = useState('BRONZE');
 
   const handleSubmit = useCallback(async (forcedName, forcedEmail) => {
     const finalName = forcedName || name.trim();
@@ -70,8 +71,8 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
     setIsSubmitting(true);
     try {
       const { requestProAccess } = await import('../api/servicesApi.js');
-      const defaultMessage = type === 'WITHDRAW' ? 'User requested Pro subscription withdrawal.' : 'User requested extended access for tracking >4 services.';
-      const res = await requestProAccess(type, message || defaultMessage, finalName, finalEmail);
+      const defaultMessage = type === 'WITHDRAW' ? 'User requested Pro subscription withdrawal.' : 'User requested extended access for tracking services.';
+      const res = await requestProAccess(type, message || defaultMessage, finalName, finalEmail, requestedPlan);
       if (res.ok) {
         // Save to localStorage if not already present or if changed
         localStorage.setItem('user_name', finalName);
@@ -86,7 +87,7 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
     } finally {
       setIsSubmitting(false);
     }
-  }, [name, email, message, type, onSuccess]);
+  }, [name, email, message, type, requestedPlan, onSuccess]);
 
   const autoSubmitAttempted = useRef(false);
 
@@ -107,10 +108,10 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
     window.addEventListener('app-back-button', handleBack);
     window.addEventListener('keydown', handleEsc);
 
-    // Auto-submit if profile is already complete and we haven't attempted it yet
+    // Auto-submit only if type is WITHDRAW, profile is already complete, and we haven't attempted it yet
     const savedName = localStorage.getItem('user_name');
     const savedEmail = localStorage.getItem('user_email');
-    if (savedName && savedEmail && !isSubmitting && !autoSubmitAttempted.current) {
+    if (type === 'WITHDRAW' && savedName && savedEmail && !isSubmitting && !autoSubmitAttempted.current) {
       autoSubmitAttempted.current = true;
       handleSubmit(savedName, savedEmail);
     }
@@ -119,12 +120,12 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
       window.removeEventListener('app-back-button', handleBack);
       window.removeEventListener('keydown', handleEsc);
     };
-  }, [open, onClose, isSubmitting, handleSubmit]);
+  }, [open, onClose, isSubmitting, handleSubmit, type]);
 
   if (!open) return null;
 
   // If we are auto-submitting, show a loader
-  const isAutoSubmitting = localStorage.getItem('user_name') && localStorage.getItem('user_email');
+  const isAutoSubmitting = type === 'WITHDRAW' && localStorage.getItem('user_name') && localStorage.getItem('user_email');
 
   if (isAutoSubmitting && isSubmitting) {
     return createPortal(
@@ -146,7 +147,7 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
           <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginTop: '8px' }}>
             {type === 'WITHDRAW' 
               ? 'Tell us why you want to withdraw your Pro subscription.'
-              : 'Unlock unlimited services and premium features by requesting Pro access.'}
+              : 'Unlock more services and premium features by requesting access.'}
           </p>
         </div>
         <div className="dialog__body" style={{ padding: '0 24px' }}>
@@ -177,9 +178,27 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
             <label className="field__label">Email *</label>
             <input className="field__input" type="email" placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} disabled={isSubmitting} />
           </div>
+          {type !== 'WITHDRAW' && (
+            <div className="field" style={{ marginBottom: '16px' }}>
+              <label className="field__label">Requested Subscription Tier *</label>
+              <select
+                className="field__input"
+                value={requestedPlan}
+                onChange={e => setRequestedPlan(e.target.value)}
+                disabled={isSubmitting}
+                style={{ width: '100%', background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px' }}
+              >
+                <option value="BRONZE">Bronze Plan (8 Services max)</option>
+                <option value="SILVER">Silver Plan (16 Services max)</option>
+                <option value="GOLD">Gold Plan (32 Services max)</option>
+                <option value="PLATINUM">Platinum Plan (64 Services max)</option>
+                <option value="DIAMOND">Diamond Plan (Unlimited Services)</option>
+              </select>
+            </div>
+          )}
           <div className="field" style={{ marginBottom: '16px' }}>
             <label className="field__label">Message (Optional)</label>
-            <textarea className="field__input" placeholder={type === 'WITHDRAW' ? "Reason for withdrawal..." : "How many services do you plan to track?"} rows={3} value={message} onChange={e => setMessage(e.target.value)} disabled={isSubmitting} style={{ resize: 'none' }} />
+            <textarea className="field__input" placeholder={type === 'WITHDRAW' ? "Reason for withdrawal..." : "Describe why you need this tier..."} rows={3} value={message} onChange={e => setMessage(e.target.value)} disabled={isSubmitting} style={{ resize: 'none' }} />
           </div>
           <p style={{ fontSize: '11px', color: 'var(--text-3)', fontStyle: 'italic', marginTop: '4px' }}>
             Note: Your contact details are only used to serve you better and provide access if needed. We never share your data.
@@ -197,7 +216,7 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
   );
 }
 
-export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
+export function ServiceCapModal({ open, serviceCount = 0, limit = 4, onClose }) {
   const { t } = useTranslation();
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
@@ -226,7 +245,7 @@ export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
 
   if (!open && !successState.open) return null;
 
-  const isLimitReached = serviceCount >= SERVICE_CAP;
+  const isLimitReached = serviceCount >= limit;
 
   const handleApplyCoupon = async () => {
     if (!coupon.trim()) return;
@@ -254,12 +273,6 @@ export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
   };
 
   const handleRequestAccessClick = () => {
-    const savedName = localStorage.getItem('user_name');
-    const savedEmail = localStorage.getItem('user_email');
-    if (!savedName || !savedEmail) {
-      toast.error('Please complete your profile before requesting Pro access.');
-      return;
-    }
     setRequestFormOpen(true);
   };
 
@@ -268,7 +281,6 @@ export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
     onClose();
     setSuccessState({ open: true, type, email });
   };
-
 
   if (isSuccess) {
     return createPortal(
@@ -316,7 +328,7 @@ export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
         <div className="dialog__body" style={{ textAlign: 'center', padding: '0 24px' }}>
           <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: '1.6' }}>
             {isLimitReached 
-              ? t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or request for Pro access.", { cap: SERVICE_CAP })
+              ? t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or request for Pro access.", { cap: limit })
               : 'Upgrade to Pro to add more service numbers, get unlimited tracking, and access premium features. Enter a Coupon Code or raise a request below.'
             }
           </p>
@@ -357,7 +369,7 @@ export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
   );
 }
 
-export function MandatoryCleanupModal({ services, onConfirm }) {
+export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
   const { t } = useTranslation();
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [coupon, setCoupon] = useState('');
@@ -367,8 +379,8 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
   const [successState, setSuccessState] = useState({ open: false, type: '', email: '' });
 
   useEffect(() => {
-    setSelectedIds(new Set(services.slice(0, SERVICE_CAP).map(s => s.id)));
-  }, [services]);
+    setSelectedIds(new Set(services.slice(0, limit).map(s => s.id)));
+  }, [services, limit]);
 
   const toggleSelect = (id) => {
     const isSelected = selectedIds.has(id);
@@ -379,7 +391,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
         return;
       }
     } else {
-      if (selectedIds.size >= SERVICE_CAP) {
+      if (selectedIds.size >= limit) {
         toast.error(`Standard limit reached. Enter Coupon to keep more!`, { id: 'cleanup-limit-error' });
         return;
       }
@@ -462,7 +474,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
              <h2 className="dialog__title">{t('service_limit_update', 'Service Limit Update')}</h2>
           </div>
           <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5' }}>
-            {t('service_limit_cleanup_desc', "To ensure the best experience for everyone, we've introduced a limit of {{cap}} services per user. Please choose the {{cap}} services you'd like to keep.", { cap: SERVICE_CAP })}
+            {t('service_limit_cleanup_desc', "To ensure the best experience for everyone, we've introduced a limit of {{cap}} services per user. Please choose the {{cap}} services you'd like to keep.", { cap: limit })}
           </p>
         </div>
 
@@ -534,7 +546,7 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
           </div>
 
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button className="btn btn--ghost" style={{ width: '100%', height: '40px', border: '1px solid var(--border)' }} onClick={handleConfirm} disabled={selectedIds.size === 0 || selectedIds.size > SERVICE_CAP || validating}>
+            <button className="btn btn--ghost" style={{ width: '100%', height: '40px', border: '1px solid var(--border)' }} onClick={handleConfirm} disabled={selectedIds.size === 0 || selectedIds.size > limit || validating}>
               <FiTrash2 size={16} style={{ marginRight: '8px' }} /> {t('keep_selected_trash_others', 'Keep Selected & Trash Others')}
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -555,9 +567,9 @@ export function MandatoryCleanupModal({ services, onConfirm }) {
   );
 }
 
-export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, title = 'Select Services', onConfirm, onClose }) {
+export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, limit = 4, title = 'Select Services', onConfirm, onClose }) {
   const { t } = useTranslation();
-  const remaining = Math.max(0, SERVICE_CAP - currentCount);
+  const remaining = Math.max(0, limit - currentCount);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [coupon, setCoupon] = useState('');
   const [validating, setValidating] = useState(false);
@@ -575,7 +587,7 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
     const isSelected = selectedIds.has(sn);
 
     if (!isSelected && selectedIds.size >= remaining) {
-      toast.error(`Limit reached: You can only add ${remaining} more service(s) (Limit: ${SERVICE_CAP})`, { id: 'selection-limit-error' });
+      toast.error(`Limit reached: You can only add ${remaining} more service(s) (Limit: ${limit})`, { id: 'selection-limit-error' });
       return;
     }
 
@@ -680,7 +692,7 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
             We found <strong>{entries.length} services</strong>. 
             {remaining > 0 
                 ? <> As a standard user, you can add up to <strong>{remaining} more</strong>.</>
-                : <> You've reached your limit of <strong>{SERVICE_CAP}</strong>. Please upgrade to Pro for more.</>
+                : <> You've reached your limit of <strong>{limit}</strong>. Please upgrade to Pro for more.</>
             }
           </p>
         </div>

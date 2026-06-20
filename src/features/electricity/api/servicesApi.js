@@ -380,7 +380,7 @@ export async function validateCoupon(code) {
   return apiPost('/validate-coupon', { code, deviceId });
 }
 
-export async function requestProAccess(type = 'ACCESS', message = '', name = '', userEmail = '') {
+export async function requestProAccess(type = 'ACCESS', message = '', name = '', userEmail = '', requestedPlan = '') {
   const { getDeviceId } = await import('../../../shared/utils/index.js');
   const deviceId = await getDeviceId();
 
@@ -425,7 +425,8 @@ export async function requestProAccess(type = 'ACCESS', message = '', name = '',
     deviceName,
     deviceType,
     osName,
-    userAgent
+    userAgent,
+    requestedPlan
   });
 }
 
@@ -471,10 +472,10 @@ export async function saveProfile(name, email, heardFrom) {
   return apiPost('/users/profile', { name, email, deviceId, heardFrom });
 }
 
-export async function trackUser(email) {
+export async function trackUser(email, services = []) {
   const { getDeviceId } = await import('../../../shared/utils/index.js');
   const deviceId = await getDeviceId();
-  return apiPost('/users/track', { deviceId, email });
+  return apiPost('/users/track', { deviceId, email, services });
 }
 
 export async function fetchNotifications(email) {
@@ -496,11 +497,15 @@ export async function markNotificationsAsRead(email) {
 // ── Auth APIs ──
 
 export async function registerUser(name, email, password, heardFrom) {
-  return apiPost('/auth/register', { name, email, password, heardFrom });
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/auth/register', { name, email, password, heardFrom, deviceId });
 }
 
 export async function loginUser(email, password) {
-  return apiPost('/auth/login', { email, password });
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/auth/login', { email, password, deviceId });
 }
 
 export async function forgotPassword(email) {

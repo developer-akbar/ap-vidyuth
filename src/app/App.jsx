@@ -394,7 +394,7 @@ function AppContent() {
       setUserName(user.name);
       setUserEmail(user.email);
       setHeardFrom(user.heardFrom || '');
-      
+
       const { db } = await import('../shared/db/storage.js');
       const { isSecurePro } = await import('../features/electricity/utils/billing.js');
       if (user.role === 'PRO') {
@@ -404,7 +404,9 @@ function AppContent() {
         await db.setSetting('is_pro', null);
         await db.setSetting('pro_source', null);
       }
-      
+      await db.setSetting('plan_name', user.planName || 'FREE');
+      await db.setSetting('service_limit', String(user.serviceLimit || 4));
+
       try {
         toast.loading('Syncing your data...', { id: 'auth-sync' });
         await db.syncWithPostgres();
@@ -412,10 +414,10 @@ function AppContent() {
       } catch (err) {
         toast.error('Local merge complete. Sync pending: ' + err.message, { id: 'auth-sync' });
       }
-      
+
       electricityContext.actions.reload();
     };
-    
+
     window.addEventListener('auth-success', handleAuthSuccess);
     return () => window.removeEventListener('auth-success', handleAuthSuccess);
   }, [electricityContext]);
@@ -724,7 +726,7 @@ function AppContent() {
         <ErrorBoundary>
           <main className="main">
             <Suspense fallback={<PageLoader />}>
-              {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} electricityContext={electricityContext} />}
+              {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} electricityContext={electricityContext} profileModalOpen={profileModalOpen} />}
               {activePage === 'calculation-settings' && <CalculationSettings onBack={() => setActivePage('settings')} />}
               {activePage === 'prefix-migration' && <PrefixMigration onBack={() => setActivePage('settings')} />}
               {activePage === 'appliances' && <ApplianceCalculator onBack={() => setActivePage('electricity')} />}
@@ -742,7 +744,7 @@ function AppContent() {
                   </div>
                   <div className="page__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '480px', margin: '0 auto', width: '100%' }}>
                     {!userToken ? (
-                      <div className="scard" style={{ padding: '30px', textAlign: 'center' }}>
+                      <div className="scard" style={{ padding: '30px', textAlign: 'center', alignItems: 'center' }}>
                         <FiUser size={48} style={{ color: 'var(--primary)', marginBottom: '16px', opacity: 0.8 }} />
                         <h3>Access Your Account</h3>
                         <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginBottom: '24px' }}>
@@ -768,8 +770,13 @@ function AppContent() {
                             </div>
                             <div>
                               <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', marginBottom: '4px' }}>Subscription Status</div>
-                              <div style={{ fontSize: '12px', fontWeight: '700', color: electricityContext.isPro ? 'var(--primary)' : 'var(--text-2)', display: 'inline-block', padding: '2px 8px', borderRadius: '4px', background: electricityContext.isPro ? 'rgba(99,102,241,0.15)' : 'var(--surface-2)' }}>
-                                {electricityContext.isPro ? 'PRO SUBSCRIPTION' : 'STANDARD (FREE)'}
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: '12px', fontWeight: '700', color: electricityContext.isPro ? 'var(--primary)' : 'var(--text-2)', display: 'inline-block', padding: '2px 8px', borderRadius: '4px', background: electricityContext.isPro ? 'rgba(99,102,241,0.15)' : 'var(--surface-2)' }}>
+                                  {electricityContext.isPro ? 'PRO ACCESS' : 'STANDARD (FREE)'}
+                                </div>
+                                <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-2)', display: 'inline-block', padding: '2px 8px', borderRadius: '4px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                                  {electricityContext.planName} Plan ({electricityContext.serviceLimit === 999999 ? 'Unlimited' : `${electricityContext.serviceLimit} Services`})
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -864,12 +871,12 @@ function AppContent() {
                             setUserName('');
                             setUserEmail('');
                             setHeardFrom('');
-                            
+
                             const { db } = await import('../shared/db/storage.js');
                             await db.setSetting('is_pro', null);
                             await db.setSetting('pro_source', null);
                             electricityContext.actions.reload();
-                            
+
                             toast.success('Signed out successfully');
                             setActivePage('settings');
                           }}
@@ -1023,12 +1030,12 @@ function AppContent() {
                           const allUsersList = [...(adminUsers.standard || []), ...(adminUsers.pro || [])];
                           const nowMs = Date.now();
                           const thirtyDaysAgoMs = nowMs - 30 * 24 * 60 * 60 * 1000;
-                          
+
                           const totalCount = allUsersList.length;
-                          const proCount = (adminUsers.pro || []).length;
-                          const pendingRequestsCount = (adminUsers.standard || []).filter(u => u.pro_request_status === 'PENDING').length;
-                          const standardUsersCount = (adminUsers.standard || []).filter(u => u.pro_request_status !== 'PENDING').length;
-                          
+                          const registeredCount = allUsersList.filter(u => u.email).length;
+                          const unregisteredCount = allUsersList.filter(u => !u.email).length;
+                          const pendingRequestsCount = allUsersList.filter(u => u.pro_request_status === 'PENDING').length;
+
                           const mauCount = allUsersList.filter(u => u.last_seen_at && new Date(u.last_seen_at).getTime() >= thirtyDaysAgoMs).length;
                           const monthlyRequestsCount = allUsersList.filter(u => u.pro_requested_at && new Date(u.pro_requested_at).getTime() >= thirtyDaysAgoMs).length;
 
@@ -1083,17 +1090,43 @@ function AppContent() {
                           };
 
                           // Filter and sort ASC (oldest first)
-                          const pendingRequests = (adminUsers.standard || [])
+                          const pendingRequests = allUsersList
                             .filter(u => u.pro_request_status === 'PENDING')
                             .filter(filterBySearch)
-                            .sort((a, b) => new Date(a.pro_requested_at || 0) - new Date(b.pro_requested_at || 0));
+                            .sort((a, b) => new Date(a.pro_requested_at || a.created_at || 0) - new Date(b.pro_requested_at || b.created_at || 0));
 
-                          const standardUsersOnly = (adminUsers.standard || [])
-                            .filter(u => u.pro_request_status !== 'PENDING')
+                          const freeUsers = allUsersList
+                            .filter(u => !u.email)
                             .filter(filterBySearch)
-                            .sort((a, b) => new Date(a.registered_at || 0) - new Date(b.registered_at || 0));
+                            .sort((a, b) => new Date(a.registered_at || a.created_at || 0) - new Date(b.registered_at || b.created_at || 0));
 
-                          const proUsersOnly = (adminUsers.pro || [])
+                          const standardUsersOnly = allUsersList
+                            .filter(u => u.email && (u.plan_name || 'FREE').toUpperCase() === 'FREE' && u.pro_request_status !== 'PENDING')
+                            .filter(filterBySearch)
+                            .sort((a, b) => new Date(a.registered_at || a.created_at || 0) - new Date(b.registered_at || b.created_at || 0));
+
+                          const bronzeUsers = allUsersList
+                            .filter(u => u.email && (u.plan_name || '').toUpperCase() === 'BRONZE' && u.pro_request_status !== 'PENDING')
+                            .filter(filterBySearch)
+                            .sort((a, b) => new Date(a.pro_granted_at || a.registered_at || 0) - new Date(b.pro_granted_at || b.registered_at || 0));
+
+                          const silverUsers = allUsersList
+                            .filter(u => u.email && (u.plan_name || '').toUpperCase() === 'SILVER' && u.pro_request_status !== 'PENDING')
+                            .filter(filterBySearch)
+                            .sort((a, b) => new Date(a.pro_granted_at || a.registered_at || 0) - new Date(b.pro_granted_at || b.registered_at || 0));
+
+                          const goldUsers = allUsersList
+                            .filter(u => u.email && (u.plan_name || '').toUpperCase() === 'GOLD' && u.pro_request_status !== 'PENDING')
+                            .filter(filterBySearch)
+                            .sort((a, b) => new Date(a.pro_granted_at || a.registered_at || 0) - new Date(b.pro_granted_at || b.registered_at || 0));
+
+                          const platinumUsers = allUsersList
+                            .filter(u => u.email && (u.plan_name || '').toUpperCase() === 'PLATINUM' && u.pro_request_status !== 'PENDING')
+                            .filter(filterBySearch)
+                            .sort((a, b) => new Date(a.pro_granted_at || a.registered_at || 0) - new Date(b.pro_granted_at || b.registered_at || 0));
+
+                          const diamondUsers = allUsersList
+                            .filter(u => u.email && (u.plan_name || '').toUpperCase() === 'DIAMOND' && u.pro_request_status !== 'PENDING')
                             .filter(filterBySearch)
                             .sort((a, b) => new Date(a.pro_granted_at || a.registered_at || 0) - new Date(b.pro_granted_at || b.registered_at || 0));
 
@@ -1113,112 +1146,86 @@ function AppContent() {
 
                           const renderUserRow = (user, type) => {
                             const isExpanded = expandedUsers.has(user.id);
-                            let actionBtn = null;
+                            const currentPlan = user.plan_name || 'FREE';
                             let subtitleText = '';
 
                             if (type === 'PENDING') {
-                              subtitleText = `${user.email} • Requested: ${formatDateTime(user.pro_requested_at)}`;
-                              actionBtn = (
-                                <button
-                                  className="btn btn--primary btn--xs"
-                                  style={{ background: 'var(--primary)', borderColor: 'var(--primary)', fontSize: '11px', padding: '0 8px', height: '24px' }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setConfirmState({
-                                      open: true,
-                                      title: 'Grant Pro Access',
-                                      description: `Grant Pro access to ${user.name} (${user.email})?`,
-                                      isDanger: false,
-                                      onConfirm: async () => {
-                                        setConfirmState(prev => ({ ...prev, open: false }));
-                                        try {
-                                          const headers = { 'Authorization': `Bearer ${adminToken}` };
-                                          const res = await apiPost('/admin/grant', { userId: user.id }, headers);
-                                          if (res.ok) {
-                                            toast.success('Pro access granted');
-                                            loadAdminData();
-                                          } else {
-                                            toast.error(res.error || 'Failed to grant access');
-                                          }
-                                        } catch (err) {
-                                          toast.error(err.message);
-                                        }
-                                      }
-                                    });
-                                  }}
-                                >
-                                  Grant Pro
-                                </button>
-                              );
+                              subtitleText = `${user.email || 'Anonymous'} • Requested: ${formatDateTime(user.pro_requested_at)}`;
+                            } else if (type === 'FREE') {
+                              subtitleText = `Device: ${user.device_id ? user.device_id.substring(0, 8) + '...' : 'Unknown'} • Active: ${formatDateTime(user.last_seen_at || user.created_at)}`;
                             } else if (type === 'STANDARD') {
-                              subtitleText = `${user.email} • Registered: ${formatDateTime(user.registered_at)}`;
-                              actionBtn = (
-                                <button
-                                  className="btn btn--primary btn--xs"
-                                  style={{ background: 'var(--primary)', borderColor: 'var(--primary)', fontSize: '11px', padding: '0 8px', height: '24px' }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setConfirmState({
-                                      open: true,
-                                      title: 'Grant Pro Access',
-                                      description: `Grant Pro access to ${user.name} (${user.email})?`,
-                                      isDanger: false,
-                                      onConfirm: async () => {
-                                        setConfirmState(prev => ({ ...prev, open: false }));
-                                        try {
-                                          const headers = { 'Authorization': `Bearer ${adminToken}` };
-                                          const res = await apiPost('/admin/grant', { userId: user.id }, headers);
-                                          if (res.ok) {
-                                            toast.success('Pro access granted');
-                                            loadAdminData();
-                                          } else {
-                                            toast.error(res.error || 'Failed to grant access');
-                                          }
-                                        } catch (err) {
-                                          toast.error(err.message);
-                                        }
-                                      }
-                                    });
-                                  }}
-                                >
-                                  Grant Pro
-                                </button>
-                              );
-                            } else if (type === 'PRO') {
-                              subtitleText = `${user.email} • Granted: ${formatDateTime(user.pro_granted_at)}`;
-                              actionBtn = (
-                                <button
-                                  className="btn btn--outline btn--xs"
-                                  style={{ color: 'var(--red)', borderColor: 'var(--red)', fontSize: '11px', padding: '0 8px', height: '24px' }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setConfirmState({
-                                      open: true,
-                                      title: 'Revoke Pro Access',
-                                      description: `Revoke Pro access for ${user.name} (${user.email})?`,
-                                      isDanger: true,
-                                      onConfirm: async () => {
-                                        setConfirmState(prev => ({ ...prev, open: false }));
-                                        try {
-                                          const headers = { 'Authorization': `Bearer ${adminToken}` };
-                                          const res = await apiPost('/admin/revoke', { userId: user.id }, headers);
-                                          if (res.ok) {
-                                            toast.success('Pro access revoked');
-                                            loadAdminData();
-                                          } else {
-                                            toast.error(res.error || 'Failed to revoke access');
-                                          }
-                                        } catch (err) {
-                                          toast.error(err.message);
-                                        }
-                                      }
-                                    });
-                                  }}
-                                >
-                                  Revoke Pro
-                                </button>
-                              );
+                              subtitleText = `${user.email || 'Anonymous'} • Registered: ${formatDateTime(user.registered_at || user.created_at)}`;
+                            } else {
+                              subtitleText = `${user.email || 'Anonymous'} • Granted: ${formatDateTime(user.pro_granted_at || user.registered_at)}`;
                             }
+
+                            const selectElement = (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                                <select
+                                  defaultValue={currentPlan}
+                                  id={`plan-select-${user.id}`}
+                                  style={{
+                                    background: 'var(--surface-2)',
+                                    color: 'var(--text-1)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '6px',
+                                    padding: '4px 8px',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer'
+                                  }}
+                                  onChange={(e) => {
+                                    const saveBtn = document.getElementById(`save-plan-${user.id}`);
+                                    if (saveBtn) {
+                                      if (e.target.value !== currentPlan) {
+                                        saveBtn.style.display = 'inline-flex';
+                                      } else {
+                                        saveBtn.style.display = 'none';
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <option value="FREE">FREE (4)</option>
+                                  <option value="BRONZE">BRONZE (8)</option>
+                                  <option value="SILVER">SILVER (16)</option>
+                                  <option value="GOLD">GOLD (32)</option>
+                                  <option value="PLATINUM">PLATINUM (64)</option>
+                                  <option value="DIAMOND">DIAMOND (∞)</option>
+                                </select>
+                                <button
+                                  id={`save-plan-${user.id}`}
+                                  className="btn btn--primary btn--xs"
+                                  style={{ display: 'none', fontSize: '11px', padding: '0 8px', height: '24px' }}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const selectVal = document.getElementById(`plan-select-${user.id}`).value;
+                                    setConfirmState({
+                                      open: true,
+                                      title: 'Update Plan',
+                                      description: `Change plan for ${user.name || 'Anonymous User'} (${user.email || 'No email'}) to ${selectVal}?`,
+                                      isDanger: selectVal === 'FREE',
+                                      onConfirm: async () => {
+                                        setConfirmState(prev => ({ ...prev, open: false }));
+                                        try {
+                                          const headers = { 'Authorization': `Bearer ${adminToken}` };
+                                          const res = await apiPost('/admin/grant', { userId: user.id, planName: selectVal }, headers);
+                                          if (res.ok) {
+                                            toast.success(`Plan updated to ${selectVal}`);
+                                            loadAdminData();
+                                          } else {
+                                            toast.error(res.error || 'Failed to update plan');
+                                          }
+                                        } catch (err) {
+                                          toast.error(err.message);
+                                        }
+                                      }
+                                    });
+                                  }}
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            );
 
                             return (
                               <div
@@ -1237,7 +1244,7 @@ function AppContent() {
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '12px' }}>
                                   <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', flexWrap: 'wrap' }}>
                                       <span
                                         style={{
                                           fontWeight: '600',
@@ -1248,8 +1255,16 @@ function AppContent() {
                                           whiteSpace: 'nowrap'
                                         }}
                                       >
-                                        {user.name || 'Anonymous User'}
+                                        {user.name || (type === 'FREE' ? 'Anonymous Device' : 'Anonymous User')}
                                       </span>
+                                      <span style={{ fontSize: '9px', fontWeight: '800', padding: '1px 6px', borderRadius: '10px', background: currentPlan === 'FREE' ? 'var(--surface-2)' : 'rgba(99,102,241,0.15)', color: currentPlan === 'FREE' ? 'var(--text-3)' : 'var(--primary)', border: '1px solid var(--border)', textTransform: 'uppercase', flexShrink: 0 }}>
+                                        {currentPlan}
+                                      </span>
+                                      {user.requested_plan && (
+                                        <span style={{ background: 'rgba(245,158,11,0.15)', color: 'var(--amber)', fontSize: '9px', fontWeight: '800', padding: '1px 6px', borderRadius: '10px', textTransform: 'uppercase', flexShrink: 0 }}>
+                                          Req: {user.requested_plan}
+                                        </span>
+                                      )}
                                       {type === 'PENDING' && (
                                         <span
                                           style={{
@@ -1280,7 +1295,7 @@ function AppContent() {
                                     </span>
                                   </div>
                                   <div style={{ flexShrink: 0 }}>
-                                    {actionBtn}
+                                    {selectElement}
                                   </div>
                                 </div>
 
@@ -1326,10 +1341,20 @@ function AppContent() {
                                       )}
                                     </div>
                                     <div>
-                                      <strong>Referral Keyword:</strong> {user.heard_from || 'Direct / Unknown'}
+                                      <strong>Active Plan:</strong> {user.plan_name || 'FREE'} (Limit: {user.service_limit === 999999 ? 'Unlimited' : user.service_limit})
                                     </div>
+                                    {user.requested_plan && (
+                                      <div>
+                                        <strong>Requested Plan:</strong> {user.requested_plan}
+                                      </div>
+                                    )}
+                                    {user.heard_from && (
+                                      <div>
+                                        <strong>Referral Keyword:</strong> {user.heard_from}
+                                      </div>
+                                    )}
                                     <div>
-                                      <strong>Registered At:</strong> {formatDateTime(user.registered_at)}
+                                      <strong>Registered/Discovered At:</strong> {formatDateTime(user.registered_at || user.created_at)}
                                     </div>
                                     <div>
                                       <strong>Last Seen:</strong> {formatDateTime(user.last_seen_at)}
@@ -1349,7 +1374,7 @@ function AppContent() {
                                         "{user.pro_request_message}"
                                       </div>
                                     )}
-                                    {type === 'PRO' && user.pro_granted_at && (
+                                    {user.pro_granted_at && (
                                       <div>
                                         <strong>Pro Granted At:</strong> {formatDateTime(user.pro_granted_at)}
                                       </div>
@@ -1360,14 +1385,45 @@ function AppContent() {
                             );
                           };
 
+                          const renderUserSection = (title, count, list, type, emptyText) => {
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div className="scard" style={{ overflow: 'hidden', padding: 0, border: '1px solid var(--border)' }}>
+                                  <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.05em' }}>
+                                      {title} ({count})
+                                    </h4>
+                                  </div>
+                                  {isAdminLoading && !allUsersList.length ? (
+                                    <div style={{ textAlign: 'center', padding: '24px' }}><Loader size={16} /></div>
+                                  ) : list.length === 0 ? (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
+                                      {adminSearchQuery ? 'No matching users.' : emptyText}
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                      {list.map(user => renderUserRow(user, type))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          };
+
                           return (
                             <>
                               {/* Grid containing redesigned stats cards */}
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
                                 <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Total Users</span>
+                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Registered Users</span>
                                   <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '4px 0 0', color: 'var(--text-1)' }}>
-                                    {isAdminLoading ? <Loader size={12} /> : totalCount}
+                                    {isAdminLoading ? <Loader size={12} /> : registeredCount}
+                                  </h2>
+                                </div>
+                                <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Unregistered Users</span>
+                                  <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '4px 0 0', color: 'var(--text-2)' }}>
+                                    {isAdminLoading ? <Loader size={12} /> : unregisteredCount}
                                   </h2>
                                 </div>
                                 <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -1381,14 +1437,8 @@ function AppContent() {
                                     </span>
                                   )}
                                 </div>
-                                <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Pro Users</span>
-                                  <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '4px 0 0', color: 'var(--primary)' }}>
-                                    {isAdminLoading ? <Loader size={12} /> : proCount}
-                                  </h2>
-                                </div>
                                 <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px', border: pendingRequestsCount > 0 ? '1px solid var(--amber)' : '1px solid var(--border)' }}>
-                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Pending Pro</span>
+                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Pending Requests</span>
                                   <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '4px 0 0', color: pendingRequestsCount > 0 ? 'var(--amber)' : 'var(--text-1)' }}>
                                     {isAdminLoading ? <Loader size={12} /> : pendingRequestsCount}
                                   </h2>
@@ -1533,71 +1583,15 @@ function AppContent() {
                                 </div>
                               </div>
 
-                              {/* 1. Pending Requests Section */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div className="scard" style={{ overflow: 'hidden', padding: 0, border: '1px solid var(--border)' }}>
-                                  <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.05em' }}>
-                                      Pending Requests ({pendingRequests.length})
-                                    </h4>
-                                  </div>
-                                  {isAdminLoading && !adminUsers.standard.length ? (
-                                    <div style={{ textAlign: 'center', padding: '24px' }}><Loader size={16} /></div>
-                                  ) : pendingRequests.length === 0 ? (
-                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
-                                      {adminSearchQuery ? 'No matching pending requests.' : 'No pending Pro requests.'}
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                      {pendingRequests.map(user => renderUserRow(user, 'PENDING'))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 2. Standard Users Section */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div className="scard" style={{ overflow: 'hidden', padding: 0, border: '1px solid var(--border)' }}>
-                                  <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.05em' }}>
-                                      Standard Users ({standardUsersOnly.length})
-                                    </h4>
-                                  </div>
-                                  {isAdminLoading && !adminUsers.standard.length ? (
-                                    <div style={{ textAlign: 'center', padding: '24px' }}><Loader size={16} /></div>
-                                  ) : standardUsersOnly.length === 0 ? (
-                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
-                                      {adminSearchQuery ? 'No matching standard users.' : 'No standard users registered.'}
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                      {standardUsersOnly.map(user => renderUserRow(user, 'STANDARD'))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 3. Pro Users Section */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div className="scard" style={{ overflow: 'hidden', padding: 0, border: '1px solid var(--border)' }}>
-                                  <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.05em' }}>
-                                      Pro Users ({proUsersOnly.length})
-                                    </h4>
-                                  </div>
-                                  {isAdminLoading && !adminUsers.pro.length ? (
-                                    <div style={{ textAlign: 'center', padding: '24px' }}><Loader size={16} /></div>
-                                  ) : proUsersOnly.length === 0 ? (
-                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
-                                      {adminSearchQuery ? 'No matching Pro users.' : 'No Pro users active.'}
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                      {proUsersOnly.map(user => renderUserRow(user, 'PRO'))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+                              {/* Categorized Listings */}
+                              {renderUserSection("Pending Requests", pendingRequests.length, pendingRequests, "PENDING", "No pending requests.")}
+                              {renderUserSection("Free Users (Unregistered)", freeUsers.length, freeUsers, "FREE", "No unregistered devices.")}
+                              {renderUserSection("Standard Users (Registered)", standardUsersOnly.length, standardUsersOnly, "STANDARD", "No registered standard users.")}
+                              {renderUserSection("Bronze Plan Users", bronzeUsers.length, bronzeUsers, "BRONZE", "No users on Bronze plan.")}
+                              {renderUserSection("Silver Plan Users", silverUsers.length, silverUsers, "SILVER", "No users on Silver plan.")}
+                              {renderUserSection("Gold Plan Users", goldUsers.length, goldUsers, "GOLD", "No users on Gold plan.")}
+                              {renderUserSection("Platinum Plan Users", platinumUsers.length, platinumUsers, "PLATINUM", "No users on Platinum plan.")}
+                              {renderUserSection("Diamond Plan Users", diamondUsers.length, diamondUsers, "DIAMOND", "No users on Diamond plan.")}
                             </>
                           );
                         })()}
@@ -1804,6 +1798,10 @@ function AppContent() {
         <ProfileRegistrationModal
           open={profileModalOpen}
           onClose={() => setProfileModalOpen(false)}
+          onSkip={() => {
+            localStorage.setItem('profile_prompt_shown', 'true');
+            setProfileModalOpen(false);
+          }}
         />
         <NotificationsModal
           open={notificationsModalOpen}
@@ -1823,7 +1821,7 @@ function AppContent() {
   );
 }
 
-export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login' }) {
+export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', onSkip }) {
   const [tab, setTab] = useState(defaultTab); // 'login' | 'register' | 'forgot'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -1859,7 +1857,7 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login' }
     try {
       const { loginUser } = await import('../features/electricity/api/servicesApi.js');
       const res = await loginUser(email.trim(), password);
-      
+
       localStorage.setItem('ap_vidyuth_token', res.token);
       localStorage.setItem('user_name', res.user.name);
       localStorage.setItem('user_email', res.user.email);
@@ -1928,7 +1926,7 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login' }
 
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 11000 }}>
-      <div className="dialog" role="dialog" style={{ width: '420px', maxWidth: '90vw', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}>
+      <div className="dialog" role="dialog" style={{ width: '420px', maxWidth: '90vw', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}>
         {/* Tabs Header */}
         {tab !== 'forgot' && (
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '4px' }}>
@@ -2006,7 +2004,7 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login' }
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px', marginBottom: '16px' }}>
-                <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={onClose}>Skip</button>
+                <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={onSkip || (() => { localStorage.setItem('profile_prompt_shown', 'true'); onClose(); })}>Skip</button>
                 <button type="submit" className="btn btn--primary" style={{ flex: 1.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }} disabled={loading}>
                   {loading ? 'Signing In...' : 'Sign In'}
                 </button>
@@ -2057,7 +2055,7 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login' }
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px', marginBottom: '16px' }}>
-                <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={onClose}>Skip</button>
+                <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={onSkip || (() => { localStorage.setItem('profile_prompt_shown', 'true'); onClose(); })}>Skip</button>
                 <button type="submit" className="btn btn--primary" style={{ flex: 1.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }} disabled={loading}>
                   {loading ? 'Creating...' : 'Register'}
                 </button>
