@@ -163,6 +163,7 @@ function AppContent() {
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isDecliningUserId, setIsDecliningUserId] = useState(null);
 
   // Admin Dashboard state
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('admin_token') || null);
@@ -1423,8 +1424,10 @@ function AppContent() {
                                             fontSize: '11px',
                                             height: '24px',
                                             borderRadius: '6px',
-                                            fontWeight: '600'
+                                            fontWeight: '600',
+                                            opacity: isDecliningUserId === user.id ? 0.7 : 1
                                           }}
+                                          disabled={isDecliningUserId === user.id}
                                           onClick={async (e) => {
                                             e.stopPropagation();
                                             const reasonVal = document.getElementById(`decline-reason-${user.id}`).value;
@@ -1435,6 +1438,7 @@ function AppContent() {
                                               isDanger: true,
                                               onConfirm: async () => {
                                                 setConfirmState(prev => ({ ...prev, open: false }));
+                                                setIsDecliningUserId(user.id);
                                                 try {
                                                   const headers = { 'Authorization': `Bearer ${adminToken}` };
                                                   const res = await apiPost('/admin/decline', { userId: user.id, reason: reasonVal }, headers);
@@ -1446,12 +1450,14 @@ function AppContent() {
                                                   }
                                                 } catch (err) {
                                                   toast.error(err.message);
+                                                } finally {
+                                                  setIsDecliningUserId(null);
                                                 }
                                               }
                                             });
                                           }}
                                         >
-                                          Decline Access
+                                          {isDecliningUserId === user.id ? 'Declining in progress' : 'Decline Access'}
                                         </button>
                                       </div>
                                     )}
