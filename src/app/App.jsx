@@ -21,7 +21,7 @@ import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Loader } from '../shared/components/Loader.jsx';
-import { FiZap, FiGrid, FiSettings, FiMonitor, FiUser, FiArrowLeft, FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail, FiWifiOff } from 'react-icons/fi';
+import { FiZap, FiGrid, FiSettings, FiMonitor, FiUser, FiArrowLeft, FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail, FiWifiOff, FiCopy } from 'react-icons/fi';
 
 import { useNetwork } from '../shared/hooks/useNetwork.js';
 import { db } from '../shared/db/storage.js';
@@ -166,6 +166,8 @@ function AppContent() {
   const [isAdminLoading, setIsAdminLoading] = useState(false);
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
+  const [expandedUsers, setExpandedUsers] = useState(new Set());
 
   const apiPost = async (path, body, headers = {}) => {
     const { apiBase } = await import('../features/electricity/api/servicesApi.js');
@@ -188,6 +190,25 @@ function AppContent() {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'Request failed');
     return json;
+  };
+
+  const toggleUserExpanded = (userId) => {
+    setExpandedUsers(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  const handleCopyDeviceId = (e, deviceId) => {
+    e.stopPropagation();
+    if (!deviceId) return;
+    navigator.clipboard.writeText(deviceId);
+    toast.success('Device ID copied to clipboard');
   };
 
   const saveUserInfo = async () => {
@@ -847,188 +868,589 @@ function AppContent() {
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
-                          <div className="scard" style={{ padding: '20px', textAlign: 'center' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-3)' }}>Total Users</span>
-                            <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '8px 0 0', color: 'var(--text-1)' }}>
-                              {adminStats ? adminStats.total : <Loader size={16} />}
-                            </h2>
-                          </div>
-                          <div className="scard" style={{ padding: '20px', textAlign: 'center' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-3)' }}>Standard Users</span>
-                            <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '8px 0 0', color: 'var(--blue)' }}>
-                              {adminStats ? adminStats.standard : <Loader size={16} />}
-                            </h2>
-                          </div>
-                          <div className="scard" style={{ padding: '20px', textAlign: 'center' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-3)' }}>Pro Users</span>
-                            <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '8px 0 0', color: 'var(--primary)' }}>
-                              {adminStats ? adminStats.pro : <Loader size={16} />}
-                            </h2>
-                          </div>
-                        </div>
+                        {/* Stats Cards Section */}
+                        {(() => {
+                          const allUsersList = [...(adminUsers.standard || []), ...(adminUsers.pro || [])];
+                          const nowMs = Date.now();
+                          const thirtyDaysAgoMs = nowMs - 30 * 24 * 60 * 60 * 1000;
+                          
+                          const totalCount = allUsersList.length;
+                          const proCount = (adminUsers.pro || []).length;
+                          const pendingRequestsCount = (adminUsers.standard || []).filter(u => u.pro_request_status === 'PENDING').length;
+                          const standardUsersCount = (adminUsers.standard || []).filter(u => u.pro_request_status !== 'PENDING').length;
+                          
+                          const mauCount = allUsersList.filter(u => u.last_seen_at && new Date(u.last_seen_at).getTime() >= thirtyDaysAgoMs).length;
+                          const monthlyRequestsCount = allUsersList.filter(u => u.pro_requested_at && new Date(u.pro_requested_at).getTime() >= thirtyDaysAgoMs).length;
 
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                            <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>
-                              Standard Users & Requests
-                            </h3>
-                            <button
-                              className="btn btn--ghost btn--sm"
-                              onClick={loadAdminData}
-                              disabled={isAdminLoading}
-                              style={{ padding: '4px 10px', fontSize: '12px' }}
-                            >
-                              Refresh
-                            </button>
-                          </div>
+                          // Trend Calculation
+                          const getRegistrationTrend = () => {
+                            const trend = [];
+                            const now = new Date();
+                            for (let i = 5; i >= 0; i--) {
+                              const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                              const monthLabel = d.toLocaleDateString('en-US', { month: 'short' });
+                              const yearLabel = d.getFullYear().toString().slice(-2);
+                              const label = `${monthLabel} '${yearLabel}`;
+                              const count = allUsersList.filter(u => {
+                                if (!u.registered_at) return false;
+                                const regDate = new Date(u.registered_at);
+                                return regDate.getFullYear() === d.getFullYear() && regDate.getMonth() === d.getMonth();
+                              }).length;
+                              trend.push({ label, count });
+                            }
+                            return trend;
+                          };
+                          const registrationTrend = getRegistrationTrend();
+                          const maxTrendCount = Math.max(...registrationTrend.map(t => t.count), 1);
 
-                          {isAdminLoading && !adminStats ? (
-                            <div style={{ textAlign: 'center', padding: '32px' }}><Loader size={20} /></div>
-                          ) : adminUsers.standard.length === 0 ? (
-                            <div className="scard" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-3)' }}>
-                              No standard users registered.
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                              {adminUsers.standard.map(user => {
-                                const isPending = user.pro_request_status === 'PENDING';
-                                return (
-                                  <div
-                                    key={user.id}
-                                    className="scard"
-                                    style={{
-                                      padding: '16px',
-                                      border: isPending ? '1px solid var(--amber)' : '1px solid var(--border)',
-                                      background: isPending ? 'rgba(245, 158, 11, 0.04)' : 'var(--surface-1)'
-                                    }}
-                                  >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-                                      <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                          <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-1)' }}>{user.name}</h4>
-                                          {isPending && (
-                                            <span style={{ background: 'var(--amber-light)', color: 'var(--amber)', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '12px', textTransform: 'uppercase' }}>
-                                              Pending
-                                            </span>
-                                          )}
-                                        </div>
-                                        <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--text-2)' }}>{user.email}</p>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px', fontSize: '11px', color: 'var(--text-3)' }}>
-                                          <span>Device: <span style={{ fontFamily: 'monospace' }}>{user.device_id || 'N/A'}</span></span>
-                                          <span>Last Seen: {user.last_seen_at ? new Date(user.last_seen_at).toLocaleDateString() : 'N/A'}</span>
-                                          {user.heard_from && <span>From: {user.heard_from}</span>}
-                                        </div>
-                                        {isPending && user.pro_request_message && (
-                                          <p style={{ margin: '8px 0 0', padding: '8px 12px', background: 'var(--surface-2)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-2)', fontStyle: 'italic', borderLeft: '3px solid var(--amber)' }}>
-                                            "{user.pro_request_message}"
-                                          </p>
-                                        )}
-                                      </div>
-                                      <button
-                                        className="btn btn--primary btn--sm"
-                                        style={{ background: 'var(--primary)', borderColor: 'var(--primary)' }}
-                                        onClick={() => {
-                                          setConfirmState({
-                                            open: true,
-                                            title: 'Grant Pro Access',
-                                            description: `Grant Pro access to ${user.name} (${user.email})?`,
-                                            isDanger: false,
-                                            onConfirm: async () => {
-                                              setConfirmState(prev => ({ ...prev, open: false }));
-                                              try {
-                                                const headers = { 'Authorization': `Bearer ${adminToken}` };
-                                                const res = await apiPost('/admin/grant', { userId: user.id }, headers);
-                                                if (res.ok) {
-                                                  toast.success('Pro access granted');
-                                                  loadAdminData();
-                                                } else {
-                                                  toast.error(res.error || 'Failed to grant access');
-                                                }
-                                              } catch (err) {
-                                                toast.error(err.message);
-                                              }
-                                            }
-                                          });
-                                        }}
-                                      >
-                                        Grant Pro
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
+                          // Referral Breakdown
+                          const getReferralStats = () => {
+                            const counts = {};
+                            let totalWithReferral = 0;
+                            allUsersList.forEach(u => {
+                              const source = u.heard_from || 'Direct / Unknown';
+                              counts[source] = (counts[source] || 0) + 1;
+                              totalWithReferral++;
+                            });
+                            return Object.entries(counts)
+                              .map(([source, count]) => ({
+                                source,
+                                count,
+                                percentage: totalWithReferral > 0 ? Math.round((count / totalWithReferral) * 100) : 0
+                              }))
+                              .sort((a, b) => b.count - a.count);
+                          };
+                          const referralStats = getReferralStats();
 
-                        <div>
-                          <h3 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>
-                            Pro Users
-                          </h3>
-                          {isAdminLoading && !adminStats ? (
-                            <div style={{ textAlign: 'center', padding: '32px' }}><Loader size={20} /></div>
-                          ) : adminUsers.pro.length === 0 ? (
-                            <div className="scard" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-3)' }}>
-                              No Pro users active.
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                              {adminUsers.pro.map(user => (
-                                <div
-                                  key={user.id}
-                                  className="scard"
-                                  style={{
-                                    padding: '16px',
-                                    border: '1px solid var(--primary)',
-                                    background: 'var(--surface-1)'
+                          // Search Filter logic
+                          const filterBySearch = (u) => {
+                            if (!adminSearchQuery) return true;
+                            const q = adminSearchQuery.toLowerCase();
+                            const nameMatch = u.name ? u.name.toLowerCase().includes(q) : false;
+                            const emailMatch = u.email ? u.email.toLowerCase().includes(q) : false;
+                            const deviceMatch = u.device_id ? u.device_id.toLowerCase().includes(q) : false;
+                            return nameMatch || emailMatch || deviceMatch;
+                          };
+
+                          // Filter and sort ASC (oldest first)
+                          const pendingRequests = (adminUsers.standard || [])
+                            .filter(u => u.pro_request_status === 'PENDING')
+                            .filter(filterBySearch)
+                            .sort((a, b) => new Date(a.pro_requested_at || 0) - new Date(b.pro_requested_at || 0));
+
+                          const standardUsersOnly = (adminUsers.standard || [])
+                            .filter(u => u.pro_request_status !== 'PENDING')
+                            .filter(filterBySearch)
+                            .sort((a, b) => new Date(a.registered_at || 0) - new Date(b.registered_at || 0));
+
+                          const proUsersOnly = (adminUsers.pro || [])
+                            .filter(filterBySearch)
+                            .sort((a, b) => new Date(a.pro_granted_at || a.registered_at || 0) - new Date(b.pro_granted_at || b.registered_at || 0));
+
+                          // Row Render Helper
+                          const formatDateTime = (dtStr) => {
+                            if (!dtStr) return 'N/A';
+                            const d = new Date(dtStr);
+                            if (isNaN(d.getTime())) return 'N/A';
+                            return d.toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+                          };
+
+                          const renderUserRow = (user, type) => {
+                            const isExpanded = expandedUsers.has(user.id);
+                            let actionBtn = null;
+                            let subtitleText = '';
+
+                            if (type === 'PENDING') {
+                              subtitleText = `${user.email} • Requested: ${formatDateTime(user.pro_requested_at)}`;
+                              actionBtn = (
+                                <button
+                                  className="btn btn--primary btn--xs"
+                                  style={{ background: 'var(--primary)', borderColor: 'var(--primary)', fontSize: '11px', padding: '0 8px', height: '24px' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmState({
+                                      open: true,
+                                      title: 'Grant Pro Access',
+                                      description: `Grant Pro access to ${user.name} (${user.email})?`,
+                                      isDanger: false,
+                                      onConfirm: async () => {
+                                        setConfirmState(prev => ({ ...prev, open: false }));
+                                        try {
+                                          const headers = { 'Authorization': `Bearer ${adminToken}` };
+                                          const res = await apiPost('/admin/grant', { userId: user.id }, headers);
+                                          if (res.ok) {
+                                            toast.success('Pro access granted');
+                                            loadAdminData();
+                                          } else {
+                                            toast.error(res.error || 'Failed to grant access');
+                                          }
+                                        } catch (err) {
+                                          toast.error(err.message);
+                                        }
+                                      }
+                                    });
                                   }}
                                 >
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-                                    <div>
-                                      <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-1)' }}>{user.name}</h4>
-                                      <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--text-2)' }}>{user.email}</p>
-                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px', fontSize: '11px', color: 'var(--text-3)' }}>
-                                        <span>Device: <span style={{ fontFamily: 'monospace' }}>{user.device_id || 'N/A'}</span></span>
-                                        <span>Granted: {user.pro_granted_at ? new Date(user.pro_granted_at).toLocaleDateString() : 'N/A'}</span>
-                                        <span>Last Seen: {user.last_seen_at ? new Date(user.last_seen_at).toLocaleDateString() : 'N/A'}</span>
-                                      </div>
-                                    </div>
-                                    <button
-                                      className="btn btn--outline btn--sm"
-                                      style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
-                                      onClick={() => {
-                                        setConfirmState({
-                                          open: true,
-                                          title: 'Revoke Pro Access',
-                                          description: `Revoke Pro access for ${user.name} (${user.email})?`,
-                                          isDanger: true,
-                                          onConfirm: async () => {
-                                            setConfirmState(prev => ({ ...prev, open: false }));
-                                            try {
-                                              const headers = { 'Authorization': `Bearer ${adminToken}` };
-                                              const res = await apiPost('/admin/revoke', { userId: user.id }, headers);
-                                              if (res.ok) {
-                                                toast.success('Pro access revoked');
-                                                loadAdminData();
-                                              } else {
-                                                toast.error(res.error || 'Failed to revoke access');
-                                              }
-                                            } catch (err) {
-                                              toast.error(err.message);
-                                            }
+                                  Grant Pro
+                                </button>
+                              );
+                            } else if (type === 'STANDARD') {
+                              subtitleText = `${user.email} • Registered: ${formatDateTime(user.registered_at)}`;
+                              actionBtn = (
+                                <button
+                                  className="btn btn--primary btn--xs"
+                                  style={{ background: 'var(--primary)', borderColor: 'var(--primary)', fontSize: '11px', padding: '0 8px', height: '24px' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmState({
+                                      open: true,
+                                      title: 'Grant Pro Access',
+                                      description: `Grant Pro access to ${user.name} (${user.email})?`,
+                                      isDanger: false,
+                                      onConfirm: async () => {
+                                        setConfirmState(prev => ({ ...prev, open: false }));
+                                        try {
+                                          const headers = { 'Authorization': `Bearer ${adminToken}` };
+                                          const res = await apiPost('/admin/grant', { userId: user.id }, headers);
+                                          if (res.ok) {
+                                            toast.success('Pro access granted');
+                                            loadAdminData();
+                                          } else {
+                                            toast.error(res.error || 'Failed to grant access');
                                           }
-                                        });
+                                        } catch (err) {
+                                          toast.error(err.message);
+                                        }
+                                      }
+                                    });
+                                  }}
+                                >
+                                  Grant Pro
+                                </button>
+                              );
+                            } else if (type === 'PRO') {
+                              subtitleText = `${user.email} • Granted: ${formatDateTime(user.pro_granted_at)}`;
+                              actionBtn = (
+                                <button
+                                  className="btn btn--outline btn--xs"
+                                  style={{ color: 'var(--red)', borderColor: 'var(--red)', fontSize: '11px', padding: '0 8px', height: '24px' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmState({
+                                      open: true,
+                                      title: 'Revoke Pro Access',
+                                      description: `Revoke Pro access for ${user.name} (${user.email})?`,
+                                      isDanger: true,
+                                      onConfirm: async () => {
+                                        setConfirmState(prev => ({ ...prev, open: false }));
+                                        try {
+                                          const headers = { 'Authorization': `Bearer ${adminToken}` };
+                                          const res = await apiPost('/admin/revoke', { userId: user.id }, headers);
+                                          if (res.ok) {
+                                            toast.success('Pro access revoked');
+                                            loadAdminData();
+                                          } else {
+                                            toast.error(res.error || 'Failed to revoke access');
+                                          }
+                                        } catch (err) {
+                                          toast.error(err.message);
+                                        }
+                                      }
+                                    });
+                                  }}
+                                >
+                                  Revoke Pro
+                                </button>
+                              );
+                            }
+
+                            return (
+                              <div
+                                key={user.id}
+                                onClick={() => toggleUserExpanded(user.id)}
+                                style={{
+                                  padding: '10px 14px',
+                                  borderBottom: '1px solid var(--border)',
+                                  cursor: 'pointer',
+                                  background: isExpanded ? 'var(--surface-2)' : 'var(--surface-1)',
+                                  transition: 'background 0.2s',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '4px'
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '12px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                                      <span
+                                        style={{
+                                          fontWeight: '600',
+                                          fontSize: '14px',
+                                          color: 'var(--text-1)',
+                                          textOverflow: 'ellipsis',
+                                          overflow: 'hidden',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        {user.name || 'Anonymous User'}
+                                      </span>
+                                      {type === 'PENDING' && (
+                                        <span
+                                          style={{
+                                            background: 'var(--amber-dim)',
+                                            color: 'var(--amber)',
+                                            fontSize: '9px',
+                                            fontWeight: '800',
+                                            padding: '1px 6px',
+                                            borderRadius: '10px',
+                                            textTransform: 'uppercase',
+                                            flexShrink: 0
+                                          }}
+                                        >
+                                          Pending
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span
+                                      style={{
+                                        fontSize: '11px',
+                                        color: 'var(--text-3)',
+                                        textOverflow: 'ellipsis',
+                                        overflow: 'hidden',
+                                        whiteSpace: 'nowrap'
                                       }}
                                     >
-                                      Revoke Pro
-                                    </button>
+                                      {subtitleText}
+                                    </span>
+                                  </div>
+                                  <div style={{ flexShrink: 0 }}>
+                                    {actionBtn}
                                   </div>
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+
+                                {isExpanded && (
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      marginTop: '8px',
+                                      padding: '10px',
+                                      borderRadius: '8px',
+                                      background: 'var(--surface-3)',
+                                      border: '1px solid var(--border)',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '8px',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                      <span>
+                                        <strong>Device ID:</strong>{' '}
+                                        <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', wordBreak: 'break-all' }}>
+                                          {user.device_id || 'N/A'}
+                                        </span>
+                                      </span>
+                                      {user.device_id && (
+                                        <button
+                                          onClick={(e) => handleCopyDeviceId(e, user.device_id)}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            color: 'var(--primary)',
+                                            padding: '4px',
+                                            borderRadius: '4px'
+                                          }}
+                                          title="Copy Device ID"
+                                          aria-label="Copy Device ID"
+                                        >
+                                          <FiCopy size={13} />
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <strong>Referral Keyword:</strong> {user.heard_from || 'Direct / Unknown'}
+                                    </div>
+                                    <div>
+                                      <strong>Registered At:</strong> {formatDateTime(user.registered_at)}
+                                    </div>
+                                    <div>
+                                      <strong>Last Seen:</strong> {formatDateTime(user.last_seen_at)}
+                                    </div>
+                                    {type === 'PENDING' && user.pro_request_message && (
+                                      <div
+                                        style={{
+                                          marginTop: '4px',
+                                          padding: '8px',
+                                          background: 'var(--surface-1)',
+                                          borderRadius: '6px',
+                                          fontStyle: 'italic',
+                                          borderLeft: '3px solid var(--amber)',
+                                          color: 'var(--text-2)'
+                                        }}
+                                      >
+                                        "{user.pro_request_message}"
+                                      </div>
+                                    )}
+                                    {type === 'PRO' && user.pro_granted_at && (
+                                      <div>
+                                        <strong>Pro Granted At:</strong> {formatDateTime(user.pro_granted_at)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          };
+
+                          return (
+                            <>
+                              {/* Grid containing redesigned stats cards */}
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+                                <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Total Users</span>
+                                  <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '4px 0 0', color: 'var(--text-1)' }}>
+                                    {isAdminLoading ? <Loader size={12} /> : totalCount}
+                                  </h2>
+                                </div>
+                                <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Active (MAU)</span>
+                                  <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '4px 0 0', color: 'var(--green)' }}>
+                                    {isAdminLoading ? <Loader size={12} /> : mauCount}
+                                  </h2>
+                                  {totalCount > 0 && (
+                                    <span style={{ fontSize: '9px', color: 'var(--text-3)', marginTop: '2px' }}>
+                                      {Math.round((mauCount / totalCount) * 100)}% of total
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Pro Users</span>
+                                  <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '4px 0 0', color: 'var(--primary)' }}>
+                                    {isAdminLoading ? <Loader size={12} /> : proCount}
+                                  </h2>
+                                </div>
+                                <div className="scard" style={{ padding: '12px 14px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px', border: pendingRequestsCount > 0 ? '1px solid var(--amber)' : '1px solid var(--border)' }}>
+                                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>Pending Pro</span>
+                                  <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '4px 0 0', color: pendingRequestsCount > 0 ? 'var(--amber)' : 'var(--text-1)' }}>
+                                    {isAdminLoading ? <Loader size={12} /> : pendingRequestsCount}
+                                  </h2>
+                                  {monthlyRequestsCount > 0 && (
+                                    <span style={{ fontSize: '9px', color: 'var(--text-3)', marginTop: '2px' }}>
+                                      +{monthlyRequestsCount} in 30d
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Grid containing trends and referrals */}
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                                {/* Registration Trends (Last 6 Months) */}
+                                <div className="scard" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                  <h4 style={{ margin: 0, fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>
+                                    Registration Trend (Last 6 Months)
+                                  </h4>
+                                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: '110px', paddingTop: '10px', position: 'relative' }}>
+                                    {registrationTrend.map((t, idx) => {
+                                      const barHeight = (t.count / maxTrendCount) * 80; // scale to max 80%
+                                      return (
+                                        <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '6px' }}>
+                                          <span style={{ fontSize: '9px', fontWeight: '700', color: 'var(--text-2)' }}>
+                                            {t.count > 0 ? t.count : ''}
+                                          </span>
+                                          <div
+                                            style={{
+                                              width: '24px',
+                                              height: `${Math.max(barHeight, 2)}px`,
+                                              background: 'linear-gradient(180deg, var(--primary) 0%, var(--primary-hi) 100%)',
+                                              borderRadius: '4px 4px 0 0',
+                                              transition: 'height 0.3s ease',
+                                              minHeight: '2px'
+                                            }}
+                                          />
+                                          <span style={{ fontSize: '9px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                                            {t.label}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Referral Keywords Distribution */}
+                                <div className="scard" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                  <h4 style={{ margin: 0, fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>
+                                    Referral Channels (`heard_from`)
+                                  </h4>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '110px', overflowY: 'auto', paddingRight: '4px' }}>
+                                    {referralStats.length === 0 ? (
+                                      <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-3)', fontSize: '12px' }}>No registration metadata.</div>
+                                    ) : (
+                                      referralStats.map((item, idx) => (
+                                        <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: '600' }}>
+                                            <span style={{ color: 'var(--text-2)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '75%' }}>
+                                              {item.source}
+                                            </span>
+                                            <span style={{ color: 'var(--text-3)' }}>
+                                              {item.count} ({item.percentage}%)
+                                            </span>
+                                          </div>
+                                          <div style={{ background: 'var(--surface-2)', height: '5px', borderRadius: '3px', overflow: 'hidden', width: '100%' }}>
+                                            <div
+                                              style={{
+                                                background: idx % 2 === 0 ? 'var(--blue)' : 'var(--primary)',
+                                                width: `${item.percentage}%`,
+                                                height: '100%',
+                                                borderRadius: '3px',
+                                                transition: 'width 0.3s ease'
+                                              }}
+                                            />
+                                          </div>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Search & Actions Header */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>
+                                    Users List & Access Controls
+                                  </h3>
+                                  <button
+                                    className="btn btn--ghost btn--sm"
+                                    onClick={loadAdminData}
+                                    disabled={isAdminLoading}
+                                    style={{ padding: '4px 10px', fontSize: '12px' }}
+                                  >
+                                    Refresh
+                                  </button>
+                                </div>
+
+                                {/* Modern Search box */}
+                                <div style={{ position: 'relative', width: '100%' }}>
+                                  <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '0 12px',
+                                    height: '38px',
+                                    background: 'var(--surface-2)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '10px',
+                                    color: 'var(--text-2)',
+                                    transition: 'all 0.2s'
+                                  }}>
+                                    <span style={{ fontSize: '14px' }}>🔍</span>
+                                    <input
+                                      type="text"
+                                      placeholder="Search standard, pending, or pro users (Name, Email, Device ID)..."
+                                      value={adminSearchQuery}
+                                      onChange={e => setAdminSearchQuery(e.target.value)}
+                                      style={{
+                                        flex: 1,
+                                        background: 'none',
+                                        border: 'none',
+                                        outline: 'none',
+                                        color: 'var(--text-1)',
+                                        fontSize: '13px'
+                                      }}
+                                    />
+                                    {adminSearchQuery && (
+                                      <button
+                                        onClick={() => setAdminSearchQuery('')}
+                                        style={{
+                                          fontSize: '13px',
+                                          color: 'var(--text-3)',
+                                          cursor: 'pointer',
+                                          padding: '4px'
+                                        }}
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* 1. Pending Requests Section */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div className="scard" style={{ overflow: 'hidden', padding: 0, border: '1px solid var(--border)' }}>
+                                  <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.05em' }}>
+                                      Pending Requests ({pendingRequests.length})
+                                    </h4>
+                                  </div>
+                                  {isAdminLoading && !adminUsers.standard.length ? (
+                                    <div style={{ textAlign: 'center', padding: '24px' }}><Loader size={16} /></div>
+                                  ) : pendingRequests.length === 0 ? (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
+                                      {adminSearchQuery ? 'No matching pending requests.' : 'No pending Pro requests.'}
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                      {pendingRequests.map(user => renderUserRow(user, 'PENDING'))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* 2. Standard Users Section */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div className="scard" style={{ overflow: 'hidden', padding: 0, border: '1px solid var(--border)' }}>
+                                  <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.05em' }}>
+                                      Standard Users ({standardUsersOnly.length})
+                                    </h4>
+                                  </div>
+                                  {isAdminLoading && !adminUsers.standard.length ? (
+                                    <div style={{ textAlign: 'center', padding: '24px' }}><Loader size={16} /></div>
+                                  ) : standardUsersOnly.length === 0 ? (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
+                                      {adminSearchQuery ? 'No matching standard users.' : 'No standard users registered.'}
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                      {standardUsersOnly.map(user => renderUserRow(user, 'STANDARD'))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* 3. Pro Users Section */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div className="scard" style={{ overflow: 'hidden', padding: 0, border: '1px solid var(--border)' }}>
+                                  <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.05em' }}>
+                                      Pro Users ({proUsersOnly.length})
+                                    </h4>
+                                  </div>
+                                  {isAdminLoading && !adminUsers.pro.length ? (
+                                    <div style={{ textAlign: 'center', padding: '24px' }}><Loader size={16} /></div>
+                                  ) : proUsersOnly.length === 0 ? (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
+                                      {adminSearchQuery ? 'No matching Pro users.' : 'No Pro users active.'}
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                      {proUsersOnly.map(user => renderUserRow(user, 'PRO'))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
