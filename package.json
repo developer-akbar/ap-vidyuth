@@ -73,7 +73,7 @@
   },
   "description": "AP Vidyuth — track APSPDCL electricity bills, dues, and trends",
   "homepage": "https://github.com/developer-akbar/my-dashboard-mobile",
-  "author": "Akbar <mail.akbarmulla@gmail.com>",
+  "author": "Akbar <mail.developer.akbar@gmail.com>",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=18.0.0"

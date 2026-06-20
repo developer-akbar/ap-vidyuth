@@ -37,12 +37,25 @@ import { initDb } from './migrations.js';
 dotenv.config();
 
 let pgPool = null;
+let initDbPromise = null;
 
-initDb().then(p => {
-  pgPool = p;
-}).catch(err => {
-  console.error('[api] Failed to initialize DB pool:', err.message);
-});
+async function ensureDb() {
+  if (pgPool) return pgPool;
+  if (!initDbPromise) {
+    initDbPromise = initDb().then(p => {
+      pgPool = p;
+      return p;
+    }).catch(err => {
+      console.error('[api] Failed to initialize DB pool:', err.message);
+      initDbPromise = null; // reset to allow retry on next request
+      return null;
+    });
+  }
+  return initDbPromise;
+}
+
+// Start DB initialization in the background
+ensureDb().catch(() => {});
 
 // ── Vercel & Access Grant Utilities ──────────────────────────────────────────
 
@@ -301,6 +314,16 @@ const PORT = process.env.API_PORT || 4100;
 
 app.use(cors());
 app.use(express.json());
+
+// Ensure database pool is initialized before handling requests
+app.use(async (req, res, next) => {
+  try {
+    await ensureDb();
+  } catch (err) {
+    console.error('[api] DB initialization middleware error:', err.message);
+  }
+  next();
+});
 
 // ── APSPDCL raw client (server-side only) ─────────────────────────────────────
 

@@ -48,13 +48,13 @@ export function PrivacyPolicy({ onBack }) {
           <p>The web version may collect anonymous, non-personal usage analytics (page views, feature usage counts) via Vercel Analytics. No personal data or device identifiers are included. The Android app does not include analytics SDKs.</p>
 
           <h2 style={{ fontSize: '18px', marginTop: '32px', color: 'var(--text-1)' }}>5. Data Deletion</h2>
-          <p>Registered users can withdraw their account, delete tracked services, or contact us to request permanent removal of their cloud profiles. For unregistered users, all local data can be cleared by removing services inside the app or uninstalling the application. You can clear the app's cache in Settings → Apps → AP Vidyuth → Storage to wipe local identifiers. To request deletion of profile database records, email us at <a href="mailto:mail.akbarmulla@gmail.com" style={{ color: 'var(--primary)' }}>mail.akbarmulla@gmail.com</a>.</p>
+          <p>Registered users can withdraw their account, delete tracked services, or contact us to request permanent removal of their cloud profiles. For unregistered users, all local data can be cleared by removing services inside the app or uninstalling the application. You can clear the app's cache in Settings → Apps → AP Vidyuth → Storage to wipe local identifiers. To request deletion of profile database records, email us at <a href="mailto:mail.developer.akbar@gmail.com" style={{ color: 'var(--primary)' }}>mail.developer.akbar@gmail.com</a>.</p>
 
           <h2 style={{ fontSize: '18px', marginTop: '32px', color: 'var(--text-1)' }}>6. Security</h2>
           <p>All communication between the app, databases, and external servers uses HTTPS/SSL encryption. No cleartext HTTP traffic is permitted.</p>
 
           <h2 style={{ fontSize: '18px', marginTop: '32px', color: 'var(--text-1)' }}>7. Contact Us</h2>
-          <p>For any privacy-related questions or data deletion requests, contact: <a href="mailto:mail.akbarmulla@gmail.com" style={{ color: 'var(--primary)' }}>mail.akbarmulla@gmail.com</a></p>
+          <p>For any privacy-related questions or data deletion requests, contact: <a href="mailto:mail.developer.akbar@gmail.com" style={{ color: 'var(--primary)' }}>mail.developer.akbar@gmail.com</a></p>
 
           <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid var(--border)', fontSize: '12px', color: 'var(--text-3)', fontStyle: 'italic' }}>
             <p><strong>Disclaimer:</strong> AP Vidyuth is an independent, unofficial application. It is not affiliated with, authorized by, or endorsed by APSPDCL, BillDesk, or any government entity. All product and company names are trademarks™ or registered® trademarks of their respective holders.</p>
