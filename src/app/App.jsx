@@ -699,7 +699,7 @@ function AppContent() {
                       <h2 className="page__title">User Profile</h2>
                     </div>
                   </div>
-                  <div className="page__body" style={{ padding: '24px' }}>
+                  <div className="page__body">
                     {(!userName || !userEmail || showUserInfo) ? (
                       <div className="scard" style={{ padding: '24px' }}>
                         <div className="field" style={{ marginBottom: '16px' }}>
@@ -787,9 +787,9 @@ function AppContent() {
                       )}
                     </div>
                   </div>
-                  <div className="page__body" style={{ padding: '24px' }}>
+                  <div className="page__body">
                     {!adminToken ? (
-                      <div className="scard" style={{ maxWidth: '400px', margin: '40px auto 0', padding: '32px' }}>
+                      <div className="scard" style={{ maxWidth: '400px', margin: '40px auto 0', padding: '20px' }}>
                         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                           <FiShield size={40} color="var(--red)" style={{ marginBottom: '12px' }} />
                           <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>Admin Authentication</h3>
