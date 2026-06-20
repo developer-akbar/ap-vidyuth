@@ -1371,17 +1371,30 @@ app.post('/api/request-access', async (req, res) => {
     try {
       if (type === 'WITHDRAW') {
         await pgPool.query(
-          `UPDATE users 
-           SET role = 'STANDARD', pro_source = NULL, pro_request_status = 'WITHDRAWN'
-           WHERE email = $1 OR device_id = $2`,
-          [userEmail, deviceId || null]
+          `INSERT INTO users (name, email, device_id, role, profile_completed, registered_at, last_seen_at, pro_request_status)
+           VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW(), 'WITHDRAWN')
+           ON CONFLICT (email)
+           DO UPDATE SET
+             role = 'STANDARD',
+             pro_source = NULL,
+             pro_request_status = 'WITHDRAWN',
+             last_seen_at = NOW()`,
+          [name || 'User', userEmail, deviceId || null]
         );
       } else {
         await pgPool.query(
-          `UPDATE users 
-           SET pro_request_status = 'PENDING', pro_requested_at = NOW(), pro_request_message = $1 
-           WHERE email = $2 OR device_id = $3`,
-          [message || 'No message', userEmail, deviceId || null]
+          `INSERT INTO users (name, email, device_id, role, profile_completed, registered_at, last_seen_at, pro_request_status, pro_requested_at, pro_request_message)
+           VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW(), 'PENDING', NOW(), $4)
+           ON CONFLICT (email)
+           DO UPDATE SET 
+             name = COALESCE(users.name, EXCLUDED.name),
+             device_id = COALESCE(users.device_id, EXCLUDED.device_id),
+             profile_completed = true,
+             last_seen_at = NOW(),
+             pro_request_status = 'PENDING',
+             pro_requested_at = NOW(),
+             pro_request_message = EXCLUDED.pro_request_message`,
+          [name || 'User', userEmail, deviceId || null, message || 'No message']
         );
         // Also insert an admin notification about the request
         await pgPool.query(
@@ -1782,6 +1795,44 @@ app.get('/api/grant-access', async (req, res) => {
 
         // 5. Send approval confirmation email to the user
         await sendApprovalEmail(email, name || 'User', deviceId);
+      }
+
+      // Update Postgres Database with PRO role
+      if (pgPool) {
+        try {
+          await pgPool.query(
+            `INSERT INTO users (name, email, device_id, role, profile_completed, registered_at, pro_granted_at, last_seen_at, pro_request_status)
+             VALUES ($1, $2, $3, 'PRO', true, NOW(), NOW(), NOW(), 'APPROVED')
+             ON CONFLICT (email)
+             DO UPDATE SET
+               name = COALESCE(users.name, EXCLUDED.name),
+               device_id = COALESCE(users.device_id, EXCLUDED.device_id),
+               role = 'PRO',
+               profile_completed = true,
+               pro_granted_at = NOW(),
+               last_seen_at = NOW(),
+               pro_request_status = 'APPROVED'`,
+            [name || 'User', email, deviceId || null]
+          );
+          
+          // Fetch user ID to create notification
+          const userRes = await pgPool.query('SELECT id FROM users WHERE email = $1', [email]);
+          if (userRes.rows.length > 0) {
+            const notifCheck = await pgPool.query(
+              "SELECT id FROM notifications WHERE user_id = $1 AND title = 'Pro Access Active'",
+              [userRes.rows[0].id]
+            );
+            if (notifCheck.rows.length === 0) {
+              await pgPool.query(
+                `INSERT INTO notifications (user_id, title, message)
+                 VALUES ($1, 'Pro Access Active', 'Your AP Vidyuth Pro access has been activated.')`,
+                [userRes.rows[0].id]
+              );
+            }
+          }
+        } catch (err) {
+          console.error('[api] Failed to update role in Postgres on grant-access:', err.message);
+        }
       }
 
       // Mark this request/token as processed in memory
