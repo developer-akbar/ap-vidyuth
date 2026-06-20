@@ -1764,7 +1764,7 @@ function AppContent() {
                     <div>
                       <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Support & Legal</h3>
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                        <SettingsItem icon={FiMail} label={t('contact_developer')} description="Report bugs or suggest features" onClick={() => window.location.href = "mailto:mail.akbarmulla@gmail.com?subject=AP Vidyuth App Feedback"} color="var(--primary)" />
+                        <SettingsItem icon={FiMail} label={t('contact_developer')} description="Report bugs or suggest features" onClick={() => window.location.href = "mailto:mail.developer.akbar@gmail.com?subject=AP Vidyuth App Feedback"} color="var(--primary)" />
                         <SettingsItem icon={FiShield} label="Privacy Policy" description="How we handle your data" onClick={() => setActivePage('privacy')} color="var(--text-2)" />
                       </div>
                     </div>

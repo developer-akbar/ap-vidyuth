@@ -4,9 +4,14 @@ import { createPool } from '@vercel/postgres';
  * Initializes/Migrates Postgres database tables.
  */
 export async function initDb() {
-  if (!process.env.POSTGRES_URL) {
-    console.warn('[db] POSTGRES_URL environment variable is missing. Database functions will be bypassed.');
+  const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.warn('[db] Neither POSTGRES_URL nor DATABASE_URL environment variable is configured. Database functions will be bypassed.');
     return null;
+  }
+
+  if (!process.env.POSTGRES_URL) {
+    process.env.POSTGRES_URL = connectionString;
   }
 
   const pool = createPool();
@@ -15,8 +20,12 @@ export async function initDb() {
     const client = await pool.connect();
     console.log('[db] Connected to Postgres. Starting schema migrations...');
 
-    // Enable UUID extension if not already present
-    await client.sql`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`;
+    // Enable UUID extension if not already present (catch permission issues on managed instances)
+    try {
+      await client.sql`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`;
+    } catch (e) {
+      console.warn('[db] Pre-check or creation of pgcrypto extension bypassed:', e.message);
+    }
 
     // 1. Create users table
     await client.sql`
