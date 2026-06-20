@@ -67,12 +67,21 @@ A privacy-first electricity bill tracking app for APSPDCL consumers, built with 
 - **Privacy Policy** — Accessible in-app without login
 - **Offline Support** — All cached data remains accessible with no internet connection
 
-### 👤 Pro Subscription
-- **Service Capacity Unlock** — Upgrade to Pro for unlimited service tracking (free plan limited to 4 services)
-- **Device Whitelisting** — Securely manage which devices can access your account with automatic device registration and verification
-- **Account Management** — Manage your Pro subscription, linked devices, and account settings from your user profile
-- **Coupon Redemption** — Redeem coupon codes to unlock Pro features and skip the service cap
-- **Email Notifications** — Receive subscription status updates and device management notifications at your registered email
+### 👤 Pro Subscription & Profile Management
+- **Profile Registration** — Opt-in profile registration captures Name, Email, and growth attribution referral metadata ("How did you hear about us?").
+- **Service Capacity Unlock** — Upgrade to Pro for unlimited service tracking (free plan limited to 4 services).
+- **Vercel Postgres Integration** — Relational database engine maps roles, request audit trails, tracking logs, and inbox notifications.
+- **Double Whitelist Bypass** — Blends Vercel environment variables with a fast relational cache backend to keep Pro status persistent even if the database is temporarily offline.
+- **Device Whitelisting** — Securely manage which devices can access your account with automatic device registration and verification.
+- **Coupon Redemption** — Redeem coupon codes to dynamically activate Pro status.
+- **Email Confirmations** — Transmits automated SMTP activation/revocation confirmations to users.
+
+### 🛡️ Admin Dashboard (`/admin`)
+- **Secure Authentication** — Protects admin data via server-side token challenge validation.
+- **SaaS Metric Panels** — Renders Total Users, Active Users (MAU), Pro Users, and Pending Pro Requests in a compact card grid.
+- **Dynamic Charts** — Visualizes 6-month registration trends and referral keyword distributions using pure CSS vertical/horizontal progress charts.
+- **Search and Sorting** — Features global metadata search (Name, Email, Device ID) and oldest-first (ASC) list sorting to optimize queue management.
+- **Compact Accordion Rows** — Displays names, contact info, and controls inside single-line tables that expand to reveal copyable Device IDs and detailed logs.
 
 ### 🧪 Experimental
 - **Dynamic UPI QR Payments** — Reverse-engineered APSPDCL UPI logic generates dynamic payment QR codes. Requires Bill Generation Time (HHMM) for a valid VPA. Manual override available. *Do not use for high-value payments without validation — official "Pay Now" redirection remains the primary safe method.*
@@ -87,9 +96,11 @@ A privacy-first electricity bill tracking app for APSPDCL consumers, built with 
 | **Mobile Bridge** | Capacitor 6 |
 | **Local Storage** | IndexedDB (`idb`) for Web, SQLite for Android |
 | **Backend Proxy** | Node.js + Express (scraping, CORS bypass, OCR) |
+| **Database & Caching**| Vercel Postgres, Upstash Redis |
 | **Image Processing** | `sharp` (noise reduction), `tesseract.js` (OCR) |
 | **Internationalisation** | i18next (English + Telugu) |
 | **Push Notifications** | `@capacitor/push-notifications` |
+| **Email Deliverability**| Nodemailer (SMTP integration) |
 
 ---
 
