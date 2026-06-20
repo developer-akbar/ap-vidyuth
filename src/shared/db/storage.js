@@ -355,7 +355,7 @@ async function createService(data) {
          billBreakup, billHistory, paymentHistory, trendData, insights,
          category, closingRdg, ctrLoad,
          divisionCode, divisionName, circleName, sectionName, uniqueServiceNumber,
-         pinned, pinnedAt, isDeleted, deleted_at, createdAt, updatedAt)
+         pinned, pinnedAt, isDeleted, deletedAt, createdAt, updatedAt)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         ser.id, ser.serviceNumber, ser.label, ser.customerName,
@@ -398,7 +398,7 @@ async function updateService(id, patch) {
         paymentHistory=?, trendData=?, insights=?,
         category=?, closingRdg=?, ctrLoad=?,
         divisionCode=?, divisionName=?, circleName=?, sectionName=?, uniqueServiceNumber=?,
-        pinned=?, pinnedAt=?, isDeleted=?, deleted_at=?, updatedAt=?
+        pinned=?, pinnedAt=?, isDeleted=?, deletedAt=?, updatedAt=?
        WHERE id=?`,
       [
         ser.serviceNumber, ser.label, ser.customerName, ser.lastBillDate,
@@ -585,7 +585,7 @@ async function syncWithPostgres() {
                billBreakup, billHistory, paymentHistory, trendData, insights,
                category, closingRdg, ctrLoad,
                divisionCode, divisionName, circleName, sectionName, uniqueServiceNumber,
-               pinned, pinnedAt, isDeleted, deleted_at, createdAt, updatedAt)
+               pinned, pinnedAt, isDeleted, deletedAt, createdAt, updatedAt)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
               ser.id, ser.serviceNumber, ser.label, ser.customerName,
