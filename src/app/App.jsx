@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { App as CapApp } from '@capacitor/app';
@@ -82,8 +83,9 @@ const NAV = [
 
 function AppContent() {
   const [activePage, setActivePage] = useState(() => {
-    if (typeof window !== 'undefined' && window.location.pathname === '/privacy') {
-      return 'privacy';
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname === '/privacy') return 'privacy';
+      if (window.location.pathname === '/admin') return 'admin';
     }
     return 'electricity';
   });
@@ -148,12 +150,138 @@ function AppContent() {
 
   const [userName, setUserName] = useState(() => localStorage.getItem('user_name') || '');
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem('user_email') || '');
+  const [heardFrom, setHeardFrom] = useState(() => localStorage.getItem('user_heard_from') || '');
 
-  const saveUserInfo = () => {
-    localStorage.setItem('user_name', userName.trim());
-    localStorage.setItem('user_email', userEmail.trim());
-    toast.success('User info saved');
-    setShowUserInfo(false);
+  // Profile modal trigger
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+
+  // User notifications
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
+
+  // Admin Dashboard state
+  const [adminToken, setAdminToken] = useState(() => localStorage.getItem('admin_token') || null);
+  const [adminStats, setAdminStats] = useState(null);
+  const [adminUsers, setAdminUsers] = useState({ standard: [], pro: [] });
+  const [isAdminLoading, setIsAdminLoading] = useState(false);
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+
+  const apiPost = async (path, body, headers = {}) => {
+    const { apiBase } = await import('../features/electricity/api/servicesApi.js');
+    const res = await fetch(`${apiBase()}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Request failed');
+    return json;
+  };
+
+  const apiGet = async (path, headers = {}) => {
+    const { apiBase } = await import('../features/electricity/api/servicesApi.js');
+    const res = await fetch(`${apiBase()}${path}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json', ...headers }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Request failed');
+    return json;
+  };
+
+  const saveUserInfo = async () => {
+    const trimmedName = userName.trim();
+    const trimmedEmail = userEmail.trim();
+
+    if (!trimmedName || !trimmedEmail) {
+      toast.error('Name and Email are required.');
+      return;
+    }
+
+    try {
+      const { saveProfile } = await import('../features/electricity/api/servicesApi.js');
+      const res = await saveProfile(trimmedName, trimmedEmail, heardFrom || null);
+      localStorage.setItem('user_name', trimmedName);
+      localStorage.setItem('user_email', trimmedEmail);
+      if (heardFrom) {
+        localStorage.setItem('user_heard_from', heardFrom);
+      }
+      
+      // Update local Pro status if database has a role for this email
+      if (res && res.user && res.user.role) {
+        const { db } = await import('../shared/db/storage.js');
+        const { isSecurePro } = await import('../features/electricity/utils/billing.js');
+        if (res.user.role === 'PRO') {
+          await db.setSetting('is_pro', isSecurePro('WHITELISTED'));
+          await db.setSetting('pro_source', res.user.pro_source || 'admin');
+        } else {
+          await db.setSetting('is_pro', null);
+          await db.setSetting('pro_source', null);
+        }
+        electricityContext.actions.reload();
+      }
+
+      toast.success('User info saved and synced');
+      setShowUserInfo(false);
+    } catch (err) {
+      console.warn('[profile] Profile sync failed, saving locally:', err.message);
+      localStorage.setItem('user_name', trimmedName);
+      localStorage.setItem('user_email', trimmedEmail);
+      if (heardFrom) {
+        localStorage.setItem('user_heard_from', heardFrom);
+      }
+      toast.success('User info saved locally');
+      setShowUserInfo(false);
+    }
+  };
+
+  const handleProfileSave = async (name, email, source) => {
+    try {
+      const { saveProfile } = await import('../features/electricity/api/servicesApi.js');
+      const res = await saveProfile(name, email, source);
+      
+      localStorage.setItem('user_name', name);
+      localStorage.setItem('user_email', email);
+      if (source) {
+        localStorage.setItem('user_heard_from', source);
+      }
+      localStorage.setItem('profile_prompt_shown', 'true');
+      
+      setUserName(name);
+      setUserEmail(email);
+      setHeardFrom(source || '');
+      setProfileModalOpen(false);
+
+      if (res && res.user && res.user.role) {
+        const { db } = await import('../shared/db/storage.js');
+        const { isSecurePro } = await import('../features/electricity/utils/billing.js');
+        if (res.user.role === 'PRO') {
+          await db.setSetting('is_pro', isSecurePro('WHITELISTED'));
+          await db.setSetting('pro_source', res.user.pro_source || 'admin');
+        } else {
+          await db.setSetting('is_pro', null);
+          await db.setSetting('pro_source', null);
+        }
+        electricityContext.actions.reload();
+      }
+
+      toast.success('Profile created successfully!');
+    } catch (err) {
+      console.warn('[profile] Sync failed on launch, saving locally:', err.message);
+      localStorage.setItem('user_name', name);
+      localStorage.setItem('user_email', email);
+      if (source) {
+        localStorage.setItem('user_heard_from', source);
+      }
+      localStorage.setItem('profile_prompt_shown', 'true');
+      
+      setUserName(name);
+      setUserEmail(email);
+      setHeardFrom(source || '');
+      setProfileModalOpen(false);
+      toast.success('Profile saved locally!');
+    }
   };
 
   const handleWithdrawPro = () => {
@@ -201,6 +329,87 @@ function AppContent() {
     }
     setSuccessState({ open: true, type, email });
   };
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const { fetchNotifications } = await import('../features/electricity/api/servicesApi.js');
+      const email = localStorage.getItem('user_email');
+      const res = await fetchNotifications(email);
+      if (res.ok) {
+        setNotifications(res.notifications || []);
+      }
+    } catch (err) {
+      console.error('[notifications] Load failed:', err.message);
+    }
+  }, []);
+
+  const loadAdminData = useCallback(async () => {
+    if (!adminToken) return;
+    setIsAdminLoading(true);
+    try {
+      const headers = { 'Authorization': `Bearer ${adminToken}` };
+      const statsRes = await apiGet('/admin/stats', headers);
+      const usersRes = await apiGet('/admin/users', headers);
+      if (statsRes.ok && usersRes.ok) {
+        setAdminStats(statsRes.stats);
+        setAdminUsers(usersRes);
+      }
+    } catch (err) {
+      console.error('[admin] Fetch failed:', err.message);
+      if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+        localStorage.removeItem('admin_token');
+        setAdminToken(null);
+        setAdminStats(null);
+        setAdminUsers({ standard: [], pro: [] });
+        toast.error('Admin session expired');
+      }
+    } finally {
+      setIsAdminLoading(false);
+    }
+  }, [adminToken]);
+
+  useEffect(() => {
+    if (activePage === 'admin' && adminToken) {
+      loadAdminData();
+    }
+  }, [activePage, adminToken, loadAdminData]);
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    const checkProfile = setTimeout(() => {
+      const promptShown = localStorage.getItem('profile_prompt_shown') === 'true';
+      const savedName = localStorage.getItem('user_name');
+      const savedEmail = localStorage.getItem('user_email');
+      if (!promptShown && (!savedName || !savedEmail)) {
+        setProfileModalOpen(true);
+      }
+    }, 1500);
+    return () => clearTimeout(checkProfile);
+  }, []);
+
+  useEffect(() => {
+    if (activePage === 'admin') {
+      document.title = 'AP Vidyuth - Admin Portal';
+      let meta = document.querySelector('meta[name="robots"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'robots';
+        document.head.appendChild(meta);
+      }
+      meta.content = 'noindex,nofollow';
+    } else {
+      document.title = 'AP Vidyuth';
+      const meta = document.querySelector('meta[name="robots"]');
+      if (meta) {
+        meta.content = 'index,follow';
+      }
+    }
+  }, [activePage]);
 
   useEffect(() => {
     const updateCount = async () => {
@@ -314,7 +523,7 @@ function AppContent() {
       if (backEvent.detail.handled) return;
 
       const curr = activePageRef.current;
-      if (['privacy', 'prefix-migration', 'calculation-settings', 'appliances', 'user-profile'].includes(curr)) {
+      if (['privacy', 'prefix-migration', 'calculation-settings', 'appliances', 'user-profile', 'admin'].includes(curr)) {
         setActivePage(curr === 'appliances' ? 'electricity' : 'settings');
         return;
       }
@@ -352,7 +561,7 @@ function AppContent() {
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key !== 'Escape') return;
-      if (['appliances', 'privacy', 'prefix-migration', 'calculation-settings', 'user-profile'].includes(activePage)) {
+      if (['appliances', 'privacy', 'prefix-migration', 'calculation-settings', 'user-profile', 'admin'].includes(activePage)) {
         setActivePage(activePage === 'appliances' ? 'electricity' : 'settings');
       }
     };
@@ -501,6 +710,22 @@ function AppContent() {
                           <label className="field__label">Email Address</label>
                           <input className="field__input" type="email" placeholder="Enter your email" value={userEmail} onChange={e => setUserEmail(e.target.value)} />
                         </div>
+                        <div className="field" style={{ marginBottom: '16px' }}>
+                          <label className="field__label">How did you hear about AP Vidyuth? (Optional)</label>
+                          <select 
+                            className="field__input" 
+                            value={heardFrom} 
+                            onChange={e => setHeardFrom(e.target.value)}
+                            style={{ width: '100%', background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px' }}
+                          >
+                            <option value="">Select an option</option>
+                            <option value="WhatsApp Groups">WhatsApp Groups</option>
+                            <option value="Friends">Friends</option>
+                            <option value="APSPDCL Searches">APSPDCL Searches</option>
+                            <option value="Social Media">Social Media</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
                         <div style={{ display: 'flex', gap: '12px' }}>
                           {userName && userEmail && (
                              <button className="btn btn--ghost" style={{ flex: 1 }} onClick={() => setShowUserInfo(false)}>Cancel</button>
@@ -517,13 +742,293 @@ function AppContent() {
                           <label style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase' }}>Saved Name</label>
                           <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-1)', marginTop: '4px' }}>{userName}</p>
                         </div>
-                        <div style={{ marginBottom: '24px' }}>
+                        <div style={{ marginBottom: '20px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase' }}>Saved Email</label>
                           <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-1)', marginTop: '4px' }}>{userEmail}</p>
                         </div>
+                        {heardFrom && (
+                          <div style={{ marginBottom: '24px' }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase' }}>How you heard about us</label>
+                            <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-1)', marginTop: '4px' }}>{heardFrom}</p>
+                          </div>
+                        )}
                         <button className="btn btn--outline" style={{ width: '100%', borderColor: 'var(--border)' }} onClick={() => setShowUserInfo(true)}>
                           Edit Profile Details
                         </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {activePage === 'admin' && (
+                <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
+                  <div className="page__header page__header--sticky">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button className="btn btn--icon" onClick={() => setActivePage('settings')} aria-label="Back">
+                          <FiArrowLeft size={20} />
+                        </button>
+                        <h2 className="page__title">Admin Portal</h2>
+                      </div>
+                      {adminToken && (
+                        <button 
+                          className="btn btn--outline" 
+                          style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+                          onClick={() => {
+                            localStorage.removeItem('admin_token');
+                            setAdminToken(null);
+                            setAdminStats(null);
+                            setAdminUsers({ standard: [], pro: [] });
+                            toast.success('Logged out');
+                          }}
+                        >
+                          Logout
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="page__body" style={{ padding: '24px' }}>
+                    {!adminToken ? (
+                      <div className="scard" style={{ maxWidth: '400px', margin: '40px auto 0', padding: '32px' }}>
+                        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                          <FiShield size={40} color="var(--red)" style={{ marginBottom: '12px' }} />
+                          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>Admin Authentication</h3>
+                          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-3)' }}>Enter credentials to access dashboard</p>
+                        </div>
+                        <form onSubmit={async (e) => {
+                          e.preventDefault();
+                          if (!adminUsername.trim() || !adminPassword.trim()) return;
+                          setIsAdminLoading(true);
+                          try {
+                            const res = await apiPost('/admin/login', { username: adminUsername, password: adminPassword });
+                            if (res.ok && res.token) {
+                              localStorage.setItem('admin_token', res.token);
+                              setAdminToken(res.token);
+                              toast.success('Authenticated successfully');
+                              setAdminUsername('');
+                              setAdminPassword('');
+                            } else {
+                              toast.error(res.error || 'Authentication failed');
+                            }
+                          } catch (err) {
+                            toast.error(err.message || 'Login failed');
+                          } finally {
+                            setIsAdminLoading(false);
+                          }
+                        }}>
+                          <div className="field" style={{ marginBottom: '16px' }}>
+                            <label className="field__label">Username</label>
+                            <input 
+                              className="field__input" 
+                              value={adminUsername} 
+                              onChange={e => setAdminUsername(e.target.value)} 
+                              required 
+                            />
+                          </div>
+                          <div className="field" style={{ marginBottom: '24px' }}>
+                            <label className="field__label">Password</label>
+                            <input 
+                              className="field__input" 
+                              type="password" 
+                              value={adminPassword} 
+                              onChange={e => setAdminPassword(e.target.value)} 
+                              required 
+                            />
+                          </div>
+                          <button 
+                            className="btn btn--primary" 
+                            type="submit" 
+                            style={{ width: '100%', background: 'var(--red)', borderColor: 'var(--red)' }}
+                            disabled={isAdminLoading}
+                          >
+                            {isAdminLoading ? 'Authenticating...' : 'Sign In'}
+                          </button>
+                        </form>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
+                          <div className="scard" style={{ padding: '20px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-3)' }}>Total Users</span>
+                            <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '8px 0 0', color: 'var(--text-1)' }}>
+                              {adminStats ? adminStats.total : <Loader size={16} />}
+                            </h2>
+                          </div>
+                          <div className="scard" style={{ padding: '20px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-3)' }}>Standard Users</span>
+                            <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '8px 0 0', color: 'var(--blue)' }}>
+                              {adminStats ? adminStats.standard : <Loader size={16} />}
+                            </h2>
+                          </div>
+                          <div className="scard" style={{ padding: '20px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-3)' }}>Pro Users</span>
+                            <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '8px 0 0', color: 'var(--primary)' }}>
+                              {adminStats ? adminStats.pro : <Loader size={16} />}
+                            </h2>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>
+                              Standard Users & Requests
+                            </h3>
+                            <button 
+                              className="btn btn--ghost btn--sm" 
+                              onClick={loadAdminData}
+                              disabled={isAdminLoading}
+                              style={{ padding: '4px 10px', fontSize: '12px' }}
+                            >
+                              Refresh
+                            </button>
+                          </div>
+                          
+                          {isAdminLoading && !adminStats ? (
+                            <div style={{ textAlign: 'center', padding: '32px' }}><Loader size={20} /></div>
+                          ) : adminUsers.standard.length === 0 ? (
+                            <div className="scard" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-3)' }}>
+                              No standard users registered.
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                              {adminUsers.standard.map(user => {
+                                const isPending = user.pro_request_status === 'PENDING';
+                                return (
+                                  <div 
+                                    key={user.id} 
+                                    className="scard" 
+                                    style={{ 
+                                      padding: '16px', 
+                                      border: isPending ? '1px solid var(--amber)' : '1px solid var(--border)',
+                                      background: isPending ? 'rgba(245, 158, 11, 0.04)' : 'var(--surface-1)'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                          <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-1)' }}>{user.name}</h4>
+                                          {isPending && (
+                                            <span style={{ background: 'var(--amber-light)', color: 'var(--amber)', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '12px', textTransform: 'uppercase' }}>
+                                              Pending
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--text-2)' }}>{user.email}</p>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px', fontSize: '11px', color: 'var(--text-3)' }}>
+                                          <span>Device: <span style={{ fontFamily: 'monospace' }}>{user.device_id || 'N/A'}</span></span>
+                                          <span>Last Seen: {user.last_seen_at ? new Date(user.last_seen_at).toLocaleDateString() : 'N/A'}</span>
+                                          {user.heard_from && <span>From: {user.heard_from}</span>}
+                                        </div>
+                                        {isPending && user.pro_request_message && (
+                                          <p style={{ margin: '8px 0 0', padding: '8px 12px', background: 'var(--surface-2)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-2)', fontStyle: 'italic', borderLeft: '3px solid var(--amber)' }}>
+                                            "{user.pro_request_message}"
+                                          </p>
+                                        )}
+                                      </div>
+                                      <button 
+                                        className="btn btn--primary btn--sm" 
+                                        style={{ background: 'var(--primary)', borderColor: 'var(--primary)' }}
+                                        onClick={() => {
+                                          setConfirmState({
+                                            open: true,
+                                            title: 'Grant Pro Access',
+                                            description: `Grant Pro access to ${user.name} (${user.email})?`,
+                                            isDanger: false,
+                                            onConfirm: async () => {
+                                              setConfirmState(prev => ({ ...prev, open: false }));
+                                              try {
+                                                const headers = { 'Authorization': `Bearer ${adminToken}` };
+                                                const res = await apiPost('/admin/grant', { userId: user.id }, headers);
+                                                if (res.ok) {
+                                                  toast.success('Pro access granted');
+                                                  loadAdminData();
+                                                } else {
+                                                  toast.error(res.error || 'Failed to grant access');
+                                                }
+                                              } catch (err) {
+                                                toast.error(err.message);
+                                              }
+                                            }
+                                          });
+                                        }}
+                                      >
+                                        Grant Pro
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <h3 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-3)', letterSpacing: '0.05em' }}>
+                            Pro Users
+                          </h3>
+                          {isAdminLoading && !adminStats ? (
+                            <div style={{ textAlign: 'center', padding: '32px' }}><Loader size={20} /></div>
+                          ) : adminUsers.pro.length === 0 ? (
+                            <div className="scard" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-3)' }}>
+                              No Pro users active.
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                              {adminUsers.pro.map(user => (
+                                  <div 
+                                    key={user.id} 
+                                    className="scard" 
+                                    style={{ 
+                                      padding: '16px', 
+                                      border: '1px solid var(--primary)',
+                                      background: 'var(--surface-1)'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                                      <div>
+                                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-1)' }}>{user.name}</h4>
+                                        <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--text-2)' }}>{user.email}</p>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px', fontSize: '11px', color: 'var(--text-3)' }}>
+                                          <span>Device: <span style={{ fontFamily: 'monospace' }}>{user.device_id || 'N/A'}</span></span>
+                                          <span>Granted: {user.pro_granted_at ? new Date(user.pro_granted_at).toLocaleDateString() : 'N/A'}</span>
+                                          <span>Last Seen: {user.last_seen_at ? new Date(user.last_seen_at).toLocaleDateString() : 'N/A'}</span>
+                                        </div>
+                                      </div>
+                                      <button 
+                                        className="btn btn--outline btn--sm" 
+                                        style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
+                                        onClick={() => {
+                                          setConfirmState({
+                                            open: true,
+                                            title: 'Revoke Pro Access',
+                                            description: `Revoke Pro access for ${user.name} (${user.email})?`,
+                                            isDanger: true,
+                                            onConfirm: async () => {
+                                              setConfirmState(prev => ({ ...prev, open: false }));
+                                              try {
+                                                const headers = { 'Authorization': `Bearer ${adminToken}` };
+                                                const res = await apiPost('/admin/revoke', { userId: user.id }, headers);
+                                                if (res.ok) {
+                                                  toast.success('Pro access revoked');
+                                                  loadAdminData();
+                                                } else {
+                                                  toast.error(res.error || 'Failed to revoke access');
+                                                }
+                                              } catch (err) {
+                                                toast.error(err.message);
+                                              }
+                                            }
+                                          });
+                                        }}
+                                      >
+                                        Revoke Pro
+                                      </button>
+                                    </div>
+                                  </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -534,18 +1039,70 @@ function AppContent() {
                   <div className="page__header page__header--sticky">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <h2 className="page__title">{t('settings')}</h2>
-                      {electricityContext.isPro && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                          <div style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--primary)' }}>
-                            <FiZap size={14} fill="currentColor" /> PRO
-                          </div>
-                          {electricityContext.proSource && (
-                            <span style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase', marginRight: '4px' }}>
-                              via {electricityContext.proSource === 'request' ? 'Request Access' : 'Coupon Code'}
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {/* Notification Bell */}
+                        <button 
+                          className="btn btn--icon" 
+                          onClick={async () => {
+                            setNotificationsModalOpen(true);
+                            const email = localStorage.getItem('user_email');
+                            const unreadCount = notifications.filter(n => !n.is_read).length;
+                            if (unreadCount > 0) {
+                              try {
+                                const { markNotificationsAsRead } = await import('../features/electricity/api/servicesApi.js');
+                                await markNotificationsAsRead(email);
+                                setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                              } catch (err) {
+                                console.error('[notifications] Mark read failed:', err.message);
+                              }
+                            }
+                          }}
+                          style={{ 
+                            position: 'relative', 
+                            background: 'transparent', 
+                            border: 'none', 
+                            color: notifications.some(n => !n.is_read) ? 'var(--primary)' : 'var(--text-2)', 
+                            padding: '8px', 
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          aria-label="Notifications"
+                        >
+                          <FiBell size={20} />
+                          {notifications.some(n => !n.is_read) && (
+                            <span style={{ 
+                              position: 'absolute', 
+                              top: '2px', 
+                              right: '2px', 
+                              background: 'var(--red)', 
+                              color: 'white', 
+                              borderRadius: '50%', 
+                              fontSize: '9px', 
+                              fontWeight: 'bold', 
+                              padding: '1px 5px', 
+                              lineHeight: 1 
+                            }}>
+                              {notifications.filter(n => !n.is_read).length}
                             </span>
                           )}
-                        </div>
-                      )}
+                        </button>
+
+                        {electricityContext.isPro && (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                            <div style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--primary)' }}>
+                              <FiZap size={14} fill="currentColor" /> PRO
+                            </div>
+                            {electricityContext.proSource && (
+                              <span style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase', marginRight: '4px' }}>
+                                via {electricityContext.proSource === 'request' ? 'Request Access' : 'Coupon Code'}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div style={{ flex: 1 }}>
@@ -576,6 +1133,18 @@ function AppContent() {
                             onClick={handleWithdrawPro} 
                             color="var(--text-3)" 
                           />
+                        )}
+                        {adminToken && (
+                          <>
+                            <div style={{ height: '1px', background: 'var(--border)', margin: '0 16px' }} />
+                            <SettingsItem 
+                              icon={FiShield} 
+                              label="Administration" 
+                              description="Manage users and track dashboard stats" 
+                              onClick={() => setActivePage('admin')} 
+                              color="var(--red)" 
+                            />
+                          </>
                         )}
                       </div>
                     </div>
@@ -660,6 +1229,16 @@ function AppContent() {
         />
         <RequestAccessForm open={withdrawFormOpen} type="WITHDRAW" onClose={() => setWithdrawFormOpen(false)} onSuccess={handleRequestSuccess} />
         <RequestSuccessModal {...successState} onClose={() => setSuccessState({ open: false, type: '', email: '' })} />
+        <ProfileRegistrationModal 
+          open={profileModalOpen} 
+          onClose={() => setProfileModalOpen(false)} 
+          onSave={handleProfileSave} 
+        />
+        <NotificationsModal 
+          open={notificationsModalOpen} 
+          notifications={notifications} 
+          onClose={() => setNotificationsModalOpen(false)} 
+        />
         <ConfirmDialog 
           open={confirmState.open} 
           title={confirmState.title} 
@@ -670,6 +1249,143 @@ function AppContent() {
         />
       </div>
     </div>
+  );
+}
+
+export function ProfileRegistrationModal({ open, onClose, onSave }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [heardFrom, setHeardFrom] = useState('');
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (open) {
+      window.addEventListener('keydown', handleEsc);
+    }
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const handleSave = () => {
+    if (!name.trim() || !email.trim()) return;
+    onSave(name.trim(), email.trim(), heardFrom || null);
+  };
+
+  const handleSkip = () => {
+    localStorage.setItem('profile_prompt_shown', 'true');
+    onClose();
+  };
+
+  return createPortal(
+    <div className="overlay overlay--center" style={{ zIndex: 11000 }}>
+      <div className="dialog" role="dialog" style={{ width: '420px', maxWidth: '90vw' }}>
+        <div className="dialog__header" style={{ padding: '24px 24px 16px' }}>
+          <h2 className="dialog__title">Complete Your Profile</h2>
+          <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginTop: '8px' }}>
+            Set up your profile to enable personalized updates, notification alerts, and seamless Pro access requests.
+          </p>
+        </div>
+        <div className="dialog__body" style={{ padding: '0 24px' }}>
+          <div className="field" style={{ marginBottom: '16px' }}>
+            <label className="field__label">Full Name *</label>
+            <input className="field__input" placeholder="e.g. Akbar Mulla" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div className="field" style={{ marginBottom: '16px' }}>
+            <label className="field__label">Email Address *</label>
+            <input className="field__input" type="email" placeholder="e.g. name@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+          </div>
+          <div className="field" style={{ marginBottom: '16px' }}>
+            <label className="field__label">How did you hear about AP Vidyuth? (Optional)</label>
+            <select 
+              className="field__input" 
+              value={heardFrom} 
+              onChange={e => setHeardFrom(e.target.value)}
+              style={{ width: '100%', background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px' }}
+            >
+              <option value="">Select an option</option>
+              <option value="WhatsApp Groups">WhatsApp Groups</option>
+              <option value="Friends">Friends</option>
+              <option value="APSPDCL Searches">APSPDCL Searches</option>
+              <option value="Social Media">Social Media</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <p style={{ fontSize: '11px', color: 'var(--text-3)', lineHeight: '1.4', margin: '12px 0 0' }}>
+            Privacy Note: We only use your information for app synchronization and notification alerts. We never sell your data.
+          </p>
+        </div>
+        <div className="dialog__footer" style={{ padding: '20px 24px 24px', display: 'flex', gap: '12px' }}>
+          <button className="btn btn--ghost" style={{ flex: 1 }} onClick={handleSkip}>Skip for Now</button>
+          <button className="btn btn--primary" style={{ flex: 1.5 }} onClick={handleSave} disabled={!name.trim() || !email.trim()}>Save details</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+export function NotificationsModal({ open, notifications, onClose }) {
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (open) {
+      window.addEventListener('keydown', handleEsc);
+    }
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div className="overlay overlay--center" style={{ zIndex: 11000 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="dialog" role="dialog" style={{ width: '480px', maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="dialog__header" style={{ padding: '24px 24px 16px', flexShrink: 0 }}>
+          <h2 className="dialog__title">Inbox Notifications</h2>
+        </div>
+        <div className="dialog__body" style={{ padding: '0 24px 24px', overflowY: 'auto', flex: 1 }}>
+          {notifications.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-3)' }}>
+              <FiBell size={36} style={{ marginBottom: '12px', opacity: 0.5 }} />
+              <p style={{ margin: 0, fontSize: '14px' }}>You're all caught up! No notifications yet.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {notifications.map(n => (
+                <div 
+                  key={n.id} 
+                  style={{ 
+                    padding: '16px', 
+                    borderRadius: '12px', 
+                    border: '1px solid var(--border)', 
+                    background: n.is_read ? 'var(--surface-1)' : 'var(--primary-light)',
+                    borderColor: n.is_read ? 'var(--border)' : 'var(--primary)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-1)' }}>{n.title}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-3)' }}>
+                      {new Date(n.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-2)', lineHeight: '1.4' }}>{n.message}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="dialog__footer" style={{ padding: '20px 24px 24px', flexShrink: 0 }}>
+          <button className="btn btn--primary" style={{ width: '100%' }} onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 

@@ -419,3 +419,58 @@ export async function requestProAccess(type = 'ACCESS', message = '', name = '',
     userAgent
   });
 }
+
+export async function apiGet(path, customHeaders = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  const url = `${apiBase()}${path}`;
+  console.log(`[servicesApi] GET ${url}`);
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json', ...customHeaders },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || `API error ${res.status}`);
+    return json;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError' || err.message.includes('Timeout')) {
+      throw new Error('Server request timed out. Please try again.');
+    }
+    throw err;
+  }
+}
+
+export async function saveProfile(name, email, heardFrom) {
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/users/profile', { name, email, deviceId, heardFrom });
+}
+
+export async function trackUser(email) {
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/users/track', { deviceId, email });
+}
+
+export async function fetchNotifications(email) {
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  const query = new URLSearchParams({
+    deviceId,
+    email: email || ''
+  }).toString();
+  return apiGet(`/users/notifications?${query}`);
+}
+
+export async function markNotificationsAsRead(email) {
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/users/notifications/read', { deviceId, email });
+}

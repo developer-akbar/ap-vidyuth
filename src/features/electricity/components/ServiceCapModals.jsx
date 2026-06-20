@@ -254,6 +254,12 @@ export function ServiceCapModal({ open, serviceCount = 0, onClose }) {
   };
 
   const handleRequestAccessClick = () => {
+    const savedName = localStorage.getItem('user_name');
+    const savedEmail = localStorage.getItem('user_email');
+    if (!savedName || !savedEmail) {
+      toast.error('Please complete your profile before requesting Pro access.');
+      return;
+    }
     setRequestFormOpen(true);
   };
 

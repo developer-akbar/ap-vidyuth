@@ -103,6 +103,13 @@ export function useElectricityServices() {
       // Sync push notifications state with server
       syncPushTokenWithServer().catch(err => console.error("Push sync failed", err));
       
+      // Active user tracking
+      if (typeof window !== 'undefined') {
+        const email = localStorage.getItem('user_email');
+        const { trackUser } = await import('../api/servicesApi.js');
+        trackUser(email).catch(err => console.error('[api] Track user failed:', err.message));
+      }
+      
       return services; // return so auto-refresh can inspect them
     } catch (e) {
       console.error("[useElectricityServices] Failed to load services:", e);
