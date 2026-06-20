@@ -162,6 +162,8 @@ function AppContent() {
   const [notifications, setNotifications] = useState([]);
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
   // Admin Dashboard state
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('admin_token') || null);
   const [adminStats, setAdminStats] = useState(null);
@@ -797,8 +799,10 @@ function AppContent() {
                           </div>
                           <button
                             className="btn btn--outline"
-                            style={{ width: '100%', borderColor: 'var(--border)' }}
+                            style={{ width: '100%', borderColor: 'var(--border)', opacity: isSyncing ? 0.7 : 1 }}
+                            disabled={isSyncing}
                             onClick={async () => {
+                              setIsSyncing(true);
                               const syncToast = toast.loading('Syncing with PostgreSQL database...');
                               try {
                                 const { db } = await import('../shared/db/storage.js');
@@ -806,10 +810,12 @@ function AppContent() {
                                 toast.success('Data merge and synchronization complete!', { id: syncToast });
                               } catch (err) {
                                 toast.error('Cloud sync failed: ' + err.message, { id: syncToast });
+                              } finally {
+                                setIsSyncing(false);
                               }
                             }}
                           >
-                            Sync with Database
+                            {isSyncing ? 'Syncing...' : 'Sync with Database'}
                           </button>
                         </div>
 

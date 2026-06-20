@@ -626,7 +626,7 @@ async function syncWithPostgres() {
           if (cursor.key.startsWith('readings_')) {
             await cursor.delete();
           }
-          await cursor.continue();
+          cursor = await cursor.continue();
         }
         for (const [sn, list] of Object.entries(readings)) {
           await store.put({ key: `readings_${sn}`, value: list });
