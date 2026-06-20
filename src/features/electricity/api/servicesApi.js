@@ -41,10 +41,19 @@ export async function apiPost(path, body, customHeaders = {}) {
   const url = `${apiBase()}${path}`;
   console.log(`[servicesApi] POST ${url}`);
 
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ap_vidyuth_token') : null;
+  const headers = { 
+    'Content-Type': 'application/json', 
+    ...customHeaders 
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...customHeaders },
+      headers,
       body: JSON.stringify(body),
       signal: controller.signal
     });
@@ -371,7 +380,7 @@ export async function validateCoupon(code) {
   return apiPost('/validate-coupon', { code, deviceId });
 }
 
-export async function requestProAccess(type = 'ACCESS', message = '', name = '', userEmail = '') {
+export async function requestProAccess(type = 'ACCESS', message = '', name = '', userEmail = '', requestedPlan = '') {
   const { getDeviceId } = await import('../../../shared/utils/index.js');
   const deviceId = await getDeviceId();
 
@@ -416,7 +425,8 @@ export async function requestProAccess(type = 'ACCESS', message = '', name = '',
     deviceName,
     deviceType,
     osName,
-    userAgent
+    userAgent,
+    requestedPlan
   });
 }
 
@@ -427,10 +437,19 @@ export async function apiGet(path, customHeaders = {}) {
   const url = `${apiBase()}${path}`;
   console.log(`[servicesApi] GET ${url}`);
 
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ap_vidyuth_token') : null;
+  const headers = { 
+    'Content-Type': 'application/json', 
+    ...customHeaders 
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const res = await fetch(url, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json', ...customHeaders },
+      headers,
       signal: controller.signal
     });
     
@@ -453,10 +472,10 @@ export async function saveProfile(name, email, heardFrom) {
   return apiPost('/users/profile', { name, email, deviceId, heardFrom });
 }
 
-export async function trackUser(email) {
+export async function trackUser(email, services = []) {
   const { getDeviceId } = await import('../../../shared/utils/index.js');
   const deviceId = await getDeviceId();
-  return apiPost('/users/track', { deviceId, email });
+  return apiPost('/users/track', { deviceId, email, services });
 }
 
 export async function fetchNotifications(email) {
@@ -473,4 +492,52 @@ export async function markNotificationsAsRead(email) {
   const { getDeviceId } = await import('../../../shared/utils/index.js');
   const deviceId = await getDeviceId();
   return apiPost('/users/notifications/read', { deviceId, email });
+}
+
+// ── Auth APIs ──
+
+export async function registerUser(name, email, password, heardFrom) {
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/auth/register', { name, email, password, heardFrom, deviceId });
+}
+
+export async function loginUser(email, password) {
+  const { getDeviceId } = await import('../../../shared/utils/index.js');
+  const deviceId = await getDeviceId();
+  return apiPost('/auth/login', { email, password, deviceId });
+}
+
+export async function forgotPassword(email) {
+  return apiPost('/auth/forgot-password', { email });
+}
+
+export async function resetPassword(email, token, newPassword) {
+  return apiPost('/auth/reset-password', { email, token, newPassword });
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  return apiPost('/auth/change-password', { currentPassword, newPassword });
+}
+
+export async function updateUserSettings({ theme, density, language }) {
+  return apiPost('/users/settings', { theme, density, language });
+}
+
+// ── Data Sync APIs ──
+
+export async function syncMerge(services, readings) {
+  return apiPost('/sync/merge', { services, readings });
+}
+
+export async function syncPushService(service) {
+  return apiPost('/sync/push-service', { service });
+}
+
+export async function syncDeleteService(serviceNumber, permanent) {
+  return apiPost('/sync/delete-service', { serviceNumber, permanent });
+}
+
+export async function syncPushReadings(serviceNumber, readings) {
+  return apiPost('/sync/push-readings', { serviceNumber, readings });
 }

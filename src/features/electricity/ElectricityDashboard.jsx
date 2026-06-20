@@ -40,13 +40,13 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { useNetwork } from '../../shared/hooks/useNetwork.js';
 import { Virtuoso } from 'react-virtuoso';
 
-export function ElectricityDashboard({ onOpenCalcSettings, electricityContext }) {
+export function ElectricityDashboard({ onOpenCalcSettings, electricityContext, profileModalOpen }) {
   const isWeb = Capacitor.getPlatform() === 'web';
   const { t } = useTranslation();
   const { isOffline } = useNetwork({
     onReconnect: () => toast.success(t('back_online'), { duration: 2000 })
   });
-  const { services, trash, loading, refreshingIds, actions, isPro } = electricityContext;
+  const { services, trash, loading, refreshingIds, actions, isPro, serviceLimit = 4 } = electricityContext;
   const [filters, setFilters] = useState({ query: '', status: '', sort: 'amount' });
   const [cardStyle, setCardStyle] = useState(localStorage.getItem('appearance_card_style') || 'classic'); 
   const [activeView, setActiveView] = useState('active');
@@ -165,7 +165,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       if (window.history.replaceState) window.history.replaceState({}, '', '/');
       return true;
     } else {
-      if (services.length >= SERVICE_CAP && !isPro) {
+      if (services.length >= serviceLimit) {
         setCapModalOpen(true);
         if (window.history.replaceState) window.history.replaceState({}, '', '/');
         return false;
@@ -315,10 +315,14 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
   }, [loading]);
 
   useEffect(() => {
-    if (!loading && services.length > SERVICE_CAP && !isPro) {
+    const isProfilePending = typeof window !== 'undefined' && 
+                             !localStorage.getItem('profile_prompt_shown') && 
+                             (!localStorage.getItem('user_name') || !localStorage.getItem('user_email'));
+                             
+    if (!loading && services.length > serviceLimit && !profileModalOpen && !isProfilePending) {
       setCleanupModalOpen(true);
     }
-  }, [loading, services.length, isPro]);
+  }, [loading, services.length, serviceLimit, profileModalOpen]);
 
   useEffect(() => { if (!isWeb) updateUnread(); }, [inboxOpen]);
 
@@ -484,7 +488,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       }
       const totalAfter = services.length + entries.length;
       
-      if (totalAfter > SERVICE_CAP) {
+      if (totalAfter > serviceLimit) {
         setSelectionModal({ open: true, entries, type: 'bulk' });
         return;
       }
@@ -497,7 +501,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       try { await actions.update(dialog.service.id, { label: payload.label }); toast.success('Updated'); } catch(e) { toast.error(`Update failed: ${e?.message || 'Unknown error'}`); }
       finally { setIsProcessing(false); window.dispatchEvent(new CustomEvent('global-progress', { detail: null })); }
     } else {
-      if (services.length >= SERVICE_CAP && !isPro) {
+      if (services.length >= serviceLimit) {
         setCapModalOpen(true);
         return;
       }
@@ -526,7 +530,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
     const actionText = action === 'trash' ? 'move to trash' : action === 'restore' ? 'restore' : 'permanently delete';
     const isDanger = action === 'trash' || action === 'purge';
 
-    if (action === 'restore' && (services.length + ids.length) > SERVICE_CAP && !isPro) {
+    if (action === 'restore' && (services.length + ids.length) > serviceLimit) {
       setCapModalOpen(true);
       return;
     }
@@ -625,7 +629,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       {activeView === 'active' && services.length > 0 && !loading && <DailyTip />}
 
       <Toolbar filters={filters} onFiltersChange={setFilters} onAdd={() => {
-        if (services.length >= SERVICE_CAP && !isPro) setCapModalOpen(true);
+        if (services.length >= serviceLimit) setCapModalOpen(true);
         else setDialog({ open: true, service: null });
       }}
  onRefreshAll={() => handleRefreshAll()} refreshingAll={refreshingAny} activeView={activeView} onViewChange={handleViewChange} trashCount={trash.length} hasServices={services.length > 0 && !loading} services={services} cardStyle={cardStyle} onToggleCardStyle={toggleCardStyle} />
@@ -653,7 +657,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       )}
 
       {activeView === 'trash' && <TrashView services={trash} selectedIds={selectedIds} selecting={selectedIds.size > 0} onToggleSelect={toggleSelect} onRestore={id => { 
-        if (services.length >= SERVICE_CAP && !isPro) {
+        if (services.length >= serviceLimit) {
           setCapModalOpen(true);
           return;
         }
@@ -671,10 +675,11 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
       <ConfirmDialog open={autoBackupPrompt} title="Backup Recommended" description="You have saved a lot of services! We recommend taking a backup of your data so you don't lose it if you change devices. Would you like to go to Data Management now?" isDanger={false} confirmText="Go to Backup" cancelText="Not Now" onClose={() => { setAutoBackupPrompt(false); db.setSetting('auto_backup_prompt_snoozed_until', Date.now() + 7 * 24 * 60 * 60 * 1000); }} onConfirm={() => { setAutoBackupPrompt(false); db.setSetting('has_seen_auto_backup_prompt', true); window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'settings' } })); }} />
       <ConfirmDialog open={notificationPrompt} title="Get Bill Alerts" description="We'll notify you when a new bill is generated or if a due date is approaching. Turn on notifications?" isDanger={false} confirmText="Enable Alerts" cancelText="Maybe Later" onClose={() => { setNotificationPrompt(false); db.setSetting('has_seen_notification_prompt', true); }} onConfirm={() => { setNotificationPrompt(false); db.setSetting('has_seen_notification_prompt', true); import('./utils/notifications.js').then(m => m.setupPushNotifications(true)); }} />
 
-      <ServiceCapModal open={capModalOpen} onClose={() => setCapModalOpen(false)} />
+      <ServiceCapModal open={capModalOpen} serviceCount={services.length} limit={serviceLimit} onClose={() => setCapModalOpen(false)} />
       {cleanupModalOpen && (
         <MandatoryCleanupModal 
           services={services} 
+          limit={serviceLimit}
           onConfirm={async (keepIds, deleteIds) => {
             const tst = toast.loading('Cleaning up...');
             try {
@@ -693,6 +698,7 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext })
         entries={selectionModal.entries}
         isPro={isPro}
         currentCount={services.length}
+        limit={serviceLimit}
         title={selectionModal.type === 'bulk' ? 'Select Services to Add' : 'Select Services to Restore'}
         onClose={() => setSelectionModal({ open: false, entries: [], meta: null, type: 'restore' })}
         onConfirm={(selected) => {

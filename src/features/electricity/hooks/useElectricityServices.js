@@ -36,12 +36,23 @@ const initialState = {
   refreshingIds: new Set(),
   isPro: false,
   proSource: null,
+  planName: 'FREE',
+  serviceLimit: 4,
 };
 
 function reducer(state, action) {
   switch (action.type) {
     case 'LOAD':
-      return { ...state, services: action.services, trash: action.trash, isPro: action.isPro, proSource: action.proSource || null, loading: false };
+      return { 
+        ...state, 
+        services: action.services, 
+        trash: action.trash, 
+        isPro: action.isPro, 
+        proSource: action.proSource || null, 
+        planName: action.planName || 'FREE',
+        serviceLimit: action.serviceLimit || 4,
+        loading: false 
+      };
 
     case 'REFRESHING_ADD': {
       const next = new Set(state.refreshingIds);
@@ -71,15 +82,24 @@ export function useElectricityServices() {
   const reload = useCallback(async () => {
     try {
       const { db } = await import('../../../shared/db/storage.js');
-      const [services, trash, isProValue, proSourceValue] = await Promise.all([
+      const [services, trash, isProValue, proSourceValue, planNameValue, serviceLimitValue] = await Promise.all([
         listServices(), 
         listTrash(),
         db.getSetting('is_pro'),
-        db.getSetting('pro_source')
+        db.getSetting('pro_source'),
+        db.getSetting('plan_name'),
+        db.getSetting('service_limit')
       ]);
 
       let isPro = !!isProValue;
       let proSource = proSourceValue || null;
+      let planName = planNameValue || 'FREE';
+      let serviceLimit = serviceLimitValue ? parseInt(serviceLimitValue) : 4;
+
+      if (isPro) {
+        if (planName === 'FREE') planName = 'DIAMOND';
+        if (serviceLimit <= 4) serviceLimit = 999999;
+      }
 
       // Silent whitelist check if not already Pro
       if (!isPro) {
@@ -98,7 +118,7 @@ export function useElectricityServices() {
         }
       }
 
-      dispatch({ type: 'LOAD', services, trash, isPro, proSource });
+      dispatch({ type: 'LOAD', services, trash, isPro, proSource, planName, serviceLimit });
       
       // Sync push notifications state with server
       syncPushTokenWithServer().catch(err => console.error("Push sync failed", err));
@@ -107,7 +127,43 @@ export function useElectricityServices() {
       if (typeof window !== 'undefined') {
         const email = localStorage.getItem('user_email');
         const { trackUser } = await import('../api/servicesApi.js');
-        trackUser(email).catch(err => console.error('[api] Track user failed:', err.message));
+        trackUser(email, services)
+          .then(async (res) => {
+            if (res && res.ok && res.user) {
+              const { db } = await import('../../../shared/db/storage.js');
+              const { isSecurePro } = await import('../utils/billing.js');
+              
+              const currentPro = await db.getSetting('is_pro');
+              const currentPlan = await db.getSetting('plan_name');
+              const currentLimit = await db.getSetting('service_limit');
+              
+              let changed = false;
+              if (res.user.role === 'PRO' && !currentPro) {
+                await db.setSetting('is_pro', isSecurePro('GRANTED_BY_SERVER'));
+                await db.setSetting('pro_source', 'admin');
+                changed = true;
+              } else if (res.user.role === 'STANDARD' && currentPro) {
+                await db.setSetting('is_pro', '');
+                await db.setSetting('pro_source', '');
+                changed = true;
+              }
+              
+              if (res.user.planName !== currentPlan) {
+                await db.setSetting('plan_name', res.user.planName);
+                changed = true;
+              }
+              const parsedLimit = String(res.user.serviceLimit);
+              if (parsedLimit !== String(currentLimit)) {
+                await db.setSetting('service_limit', parsedLimit);
+                changed = true;
+              }
+              
+              if (changed) {
+                setTimeout(() => reload(), 0);
+              }
+            }
+          })
+          .catch(err => console.error('[api] Track user failed:', err.message));
       }
       
       return services; // return so auto-refresh can inspect them
@@ -300,13 +356,15 @@ export function useElectricityServices() {
     return res;
   }, [reload]);
 
-  const requestProAccess = useCallback(async (type, message, name, email) => {
-    return requestProAccessApi(type, message, name, email);
+  const requestProAccess = useCallback(async (type, message, name, email, requestedPlan) => {
+    return requestProAccessApi(type, message, name, email, requestedPlan);
   }, []);
 
   return {
     ...state,
     isPro: state.isPro,
+    planName: state.planName,
+    serviceLimit: state.serviceLimit,
     actions: { reload, add, refresh, refreshAll, update, remove, bulkRemove, restore, bulkRestore, purge, bulkPurge, validateCoupon, requestProAccess },
   };
   }

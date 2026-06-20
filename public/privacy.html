@@ -37,24 +37,24 @@
   </p>
 
   <div class="highlight">
-    <strong>Summary:</strong> AP Vidyuth does not collect, store, or share any personal data on external servers. All your bill data stays on your device.
+    <strong>Summary:</strong> By default, all AP Vidyuth data is stored locally on your device. If you register a profile, your name, email, credentials, and synchronized bills/readings are securely stored on our cloud servers. Unregistered usage statistics (such as services added) are tracked anonymously via unique device IDs to compile aggregated usage metrics. We never sell or share your data.
   </div>
 
   <h2>1. What Data We Collect</h2>
-  <p>AP Vidyuth does <strong>not</strong> collect personally identifiable information. The following data is stored <strong>locally on your device only</strong>:</p>
+  <p>AP Vidyuth allows completely local, offline tracking by default. However, we collect and store the following data if you use our cloud features:</p>
   <ul>
-    <li>APSPDCL service numbers you add (stored in SQLite on Android / IndexedDB in browser)</li>
-    <li>Bill history and payment records fetched from APSPDCL public APIs on your behalf</li>
-    <li>App preferences — theme (dark/light) and language (English/Telugu)</li>
-    <li>Temporary BillDesk session tokens (held in device memory, never sent to our servers)</li>
+    <li><strong>Profile & Accounts:</strong> If you register or log in, we securely store your Name, Email, password hash (hashed using secure PBKDF2), and growth referral responses (e.g. how you heard about us).</li>
+    <li><strong>Cloud Synchronization:</strong> For registered users, all added APSPDCL service numbers, custom labels, bill histories, and meter reading logs are backed up and synced to our secure cloud database (PostgreSQL) so they remain accessible across your devices.</li>
+    <li><strong>Unregistered User Tracking:</strong> For users who use the app without registering an account, we generate a unique device ID to track the number of services you monitor. This helps us gauge active usage metrics and limit database resource consumption. The device ID and service list are securely stored in our cloud backend, but contain no email, name, or other personally identifying details.</li>
   </ul>
 
   <h2>2. Third-Party Services</h2>
-  <p>The app communicates with these external services to fetch your bill data:</p>
+  <p>The app communicates with these external services to fetch your bill data and support app functions:</p>
   <ul>
     <li><strong>APSPDCL</strong> (<code>apspdcl.in</code>) — public API to fetch electricity bill and payment history</li>
     <li><strong>BillDesk</strong> (<code>payments.billdesk.com</code>) — to fetch current bill demand amount</li>
-    <li><strong>Vercel</strong> — our processing API server. Handles requests to APSPDCL/BillDesk on your behalf. Does not store user data.</li>
+    <li><strong>Vercel & Postgres Database</strong> — hosts our secure backend API and database where registered accounts, cloud-sync data, and unregistered device tracking logs are securely stored.</li>
+    <li><strong>Upstash Redis</strong> — holds an encrypted cache of whitelisted device IDs to verify premium Pro access.</li>
     <li><strong>Firebase Cloud Messaging</strong> — for optional bill due-date notifications</li>
   </ul>
 
@@ -62,23 +62,18 @@
   <p>If you grant notification permission, the app schedules local and push notifications for bill due-date reminders. Your device notification token is stored only in association with your bill data and is not used for advertising or shared with third parties.</p>
 
   <h2>4. Analytics & Monitoring</h2>
-  <p>This app uses the following third-party services to understand usage patterns and improve performance. No personally identifiable information (name, email, Aadhaar, phone number) is collected. Analytics data is anonymous and aggregated.</p>
+  <p>This app uses the following third-party services to understand usage patterns and improve performance. No personally identifiable information is collected for analytics. Analytics data is anonymous and aggregated.</p>
   <ul>
-    <li><strong>PostHog</strong> — records page navigation events (which tab was visited). No bill data, service numbers, or personal details are included. Data is stored on PostHog's servers. <a href="https://posthog.com/privacy" target="_blank" rel="noopener">posthog.com/privacy</a></li>
+    <li><strong>PostHog</strong> — records page navigation events (which tab was visited). No bill data, service numbers, or credentials are included. Data is stored on PostHog's servers. <a href="https://posthog.com/privacy" target="_blank" rel="noopener">posthog.com/privacy</a></li>
     <li><strong>Vercel Analytics & Speed Insights</strong> — monitors app load performance and Core Web Vitals. No user content is captured. <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">vercel.com/legal/privacy-policy</a></li>
   </ul>
   <p>You can disable JavaScript in your browser to prevent analytics collection, though this will also prevent the app from functioning.</p>
 
   <h2>5. Data Sharing</h2>
-  <p>We do not sell, trade, or share your data with any third parties. Your APSPDCL service numbers and bill data never leave your device except to fetch data directly from APSPDCL and BillDesk.</p>
+  <p>We do not sell, trade, rent, or share your data with any third parties. Your credentials, service numbers, bill data, and usage details are exclusively utilized to provide tracking features, multi-device backup sync, and gauge app capacity metrics.</p>
 
   <h2>6. Data Deletion</h2>
-  <p>All data is stored locally. To delete it:</p>
-  <ul>
-    <li>Remove individual services using the Trash feature in the app</li>
-    <li>Uninstall the app (permanently deletes all local data)</li>
-    <li>Clear app storage in your device Settings → Apps → AP Vidyuth → Storage</li>
-  </ul>
+  <p>Registered users can withdraw their account, delete tracked services, or contact us to request permanent removal of their cloud profiles. For unregistered users, all local data can be cleared by removing services inside the app or uninstalling the application. You can clear the app's cache in Settings → Apps → AP Vidyuth → Storage to wipe local identifiers.</p>
 
   <h2>7. Children's Privacy</h2>
   <p>This app is not directed at children under 13. We do not knowingly collect data from children.</p>
