@@ -32,8 +32,17 @@ import { Redis } from '@upstash/redis';
 import admin from 'firebase-admin';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import { initDb } from './migrations.js';
 
 dotenv.config();
+
+let pgPool = null;
+
+initDb().then(p => {
+  pgPool = p;
+}).catch(err => {
+  console.error('[api] Failed to initialize DB pool:', err.message);
+});
 
 // ── Vercel & Access Grant Utilities ──────────────────────────────────────────
 
@@ -1351,6 +1360,40 @@ app.get('/api/notifications/check', async (req, res) => {
 
 app.post('/api/request-access', async (req, res) => {
   const { deviceId, message, type, name, userEmail, deviceName, deviceType, osName, userAgent } = req.body || {};
+
+  // Pro requests/withdrawals require profile name and email completed
+  if (!userEmail || !name) {
+    return res.status(400).json({ ok: false, error: 'Please complete your profile before requesting Pro access.' });
+  }
+
+  // Update request status in Postgres if database pool is active
+  if (pgPool) {
+    try {
+      if (type === 'WITHDRAW') {
+        await pgPool.query(
+          `UPDATE users 
+           SET role = 'STANDARD', pro_source = NULL, pro_request_status = 'WITHDRAWN'
+           WHERE email = $1 OR device_id = $2`,
+          [userEmail, deviceId || null]
+        );
+      } else {
+        await pgPool.query(
+          `UPDATE users 
+           SET pro_request_status = 'PENDING', pro_requested_at = NOW(), pro_request_message = $1 
+           WHERE email = $2 OR device_id = $3`,
+          [message || 'No message', userEmail, deviceId || null]
+        );
+        // Also insert an admin notification about the request
+        await pgPool.query(
+          `INSERT INTO notifications (user_id, title, message)
+           VALUES (NULL, 'Pro Request Pending', $1)`,
+          [`User ${name} (${userEmail}) has requested Pro access. Reason: "${message || 'None'}"`]
+        );
+      }
+    } catch (err) {
+      console.error('[api] Failed to update request status in Vercel Postgres:', err.message);
+    }
+  }
   const { 
     VITE_SMTP_HOST, 
     VITE_SMTP_PORT, 
@@ -1945,6 +1988,22 @@ app.post('/api/validate-coupon', async (req, res) => {
   
   // 1. Device Whitelist Bypass (Works even if code is empty)
   if (deviceId) {
+    // Check Vercel Postgres first if database pool is active
+    if (pgPool) {
+      try {
+        const userRes = await pgPool.query(
+          "SELECT role, pro_source FROM users WHERE device_id = $1",
+          [deviceId]
+        );
+        if (userRes.rows.length > 0 && userRes.rows[0].role === 'PRO') {
+          const source = userRes.rows[0].pro_source || 'admin';
+          return res.json({ ok: true, message: 'Pro Access Granted (Device Whitelisted)', source });
+        }
+      } catch (err) {
+        console.error('[api] Postgres whitelist check failed in validate-coupon:', err.message);
+      }
+    }
+
     // If Redis is configured, treat it as the primary real-time whitelist database
     if (redis) {
       try {
@@ -2004,6 +2063,348 @@ app.post('/api/validate-coupon', async (req, res) => {
     res.json({ ok: true, message: 'Pro Access Granted' });
   } else {
     res.status(401).json({ ok: false, error: 'Invalid Coupon Code' });
+  }
+});
+
+// ── Admin Authentication Helpers & Middleware ─────────────────────────────────
+
+function getExpectedAdminToken() {
+  const secret = process.env.INTERNAL_SECRET || 'fallback-secret-ap-vidyuth';
+  const user = process.env.ADMIN_USER || 'admin';
+  const pass = process.env.ADMIN_PASSWORD || 'super-secret-password';
+  return crypto.createHmac('sha256', secret)
+    .update(`${user}:${pass}`)
+    .digest('hex');
+}
+
+function verifyAdminToken(token) {
+  if (!token) return false;
+  const expected = getExpectedAdminToken();
+  return token === expected;
+}
+
+function requireAdmin(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized Access' });
+  }
+  const token = authHeader.split(' ')[1];
+  if (!verifyAdminToken(token)) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized Access' });
+  }
+  next();
+}
+
+// ── Profile, Tracking & Admin API Endpoints ────────────────────────────────────
+
+// Save user profile details (registers Standard users)
+app.post('/api/users/profile', async (req, res) => {
+  const { name, email, deviceId, heardFrom } = req.body || {};
+  if (!name || !email) {
+    return res.status(400).json({ ok: false, error: 'Name and email are required' });
+  }
+  if (!pgPool) {
+    return res.json({ ok: true, offline: true, message: 'Profile saved locally (Database offline)' });
+  }
+  try {
+    const result = await pgPool.query(
+      `INSERT INTO users (name, email, device_id, role, profile_completed, registered_at, last_seen_at, heard_from)
+       VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW(), $4)
+       ON CONFLICT (email) 
+       DO UPDATE SET 
+         name = EXCLUDED.name,
+         device_id = EXCLUDED.device_id,
+         profile_completed = true,
+         last_seen_at = NOW(),
+         heard_from = COALESCE(EXCLUDED.heard_from, users.heard_from)
+       RETURNING *`,
+      [name, email, deviceId || null, heardFrom || null]
+    );
+    res.json({ ok: true, user: result.rows[0] });
+  } catch (err) {
+    console.error('[api] Save profile failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Update last_seen_at for active user tracking
+app.post('/api/users/track', async (req, res) => {
+  const { deviceId, email } = req.body || {};
+  if (!deviceId && !email) {
+    return res.status(400).json({ ok: false, error: 'DeviceId or email is required' });
+  }
+  if (!pgPool) {
+    return res.json({ ok: true, offline: true });
+  }
+  try {
+    await pgPool.query(
+      `UPDATE users 
+       SET last_seen_at = NOW() 
+       WHERE (email = $1 OR (device_id = $2 AND device_id IS NOT NULL))`,
+      [email || null, deviceId || null]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[api] User tracking failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Fetch active user notifications
+app.get('/api/users/notifications', async (req, res) => {
+  const { deviceId, email } = req.query;
+  if (!deviceId && !email) {
+    return res.status(400).json({ ok: false, error: 'DeviceId or email is required' });
+  }
+  if (!pgPool) {
+    return res.json({ ok: true, notifications: [], offline: true });
+  }
+  try {
+    const result = await pgPool.query(
+      `SELECT n.* FROM notifications n
+       JOIN users u ON n.user_id = u.id
+       WHERE u.device_id = $1 OR u.email = $2
+       ORDER BY n.created_at DESC`,
+      [deviceId || null, email || null]
+    );
+    res.json({ ok: true, notifications: result.rows });
+  } catch (err) {
+    console.error('[api] Fetch notifications failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Mark user notifications as read
+app.post('/api/users/notifications/read', async (req, res) => {
+  const { deviceId, email } = req.body || {};
+  if (!deviceId && !email) {
+    return res.status(400).json({ ok: false, error: 'DeviceId or email is required' });
+  }
+  if (!pgPool) {
+    return res.json({ ok: true, offline: true });
+  }
+  try {
+    await pgPool.query(
+      `UPDATE notifications 
+       SET is_read = true 
+       WHERE user_id IN (SELECT id FROM users WHERE device_id = $1 OR email = $2)`,
+      [deviceId || null, email || null]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[api] Read notifications failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Admin Authentication Login
+app.post('/api/admin/login', async (req, res) => {
+  const { username, password } = req.body || {};
+  const expectedUser = process.env.ADMIN_USER || 'admin';
+  const expectedPass = process.env.ADMIN_PASSWORD || 'super-secret-password';
+  if (username === expectedUser && password === expectedPass) {
+    res.json({ ok: true, token: getExpectedAdminToken() });
+  } else {
+    res.status(401).json({ ok: false, error: 'Unauthorized Access' });
+  }
+});
+
+// Admin Stats
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  try {
+    const totalRes = await pgPool.query('SELECT COUNT(*) FROM users');
+    const standardRes = await pgPool.query("SELECT COUNT(*) FROM users WHERE role = 'STANDARD'");
+    const proRes = await pgPool.query("SELECT COUNT(*) FROM users WHERE role = 'PRO'");
+    res.json({
+      ok: true,
+      stats: {
+        total: parseInt(totalRes.rows[0].count),
+        standard: parseInt(standardRes.rows[0].count),
+        pro: parseInt(proRes.rows[0].count)
+      }
+    });
+  } catch (err) {
+    console.error('[api] Admin stats failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Admin Users list
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  try {
+    const standardUsers = await pgPool.query(
+      "SELECT id, name, email, device_id, registered_at, last_seen_at, heard_from, pro_request_status, pro_requested_at, pro_request_message FROM users WHERE role = 'STANDARD' ORDER BY registered_at DESC"
+    );
+    const proUsers = await pgPool.query(
+      "SELECT id, name, email, device_id, registered_at, pro_granted_at, last_seen_at, heard_from FROM users WHERE role = 'PRO' ORDER BY pro_granted_at DESC"
+    );
+    res.json({
+      ok: true,
+      standard: standardUsers.rows,
+      pro: proUsers.rows
+    });
+  } catch (err) {
+    console.error('[api] Admin fetch users failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Admin Grant Pro
+app.post('/api/admin/grant', requireAdmin, async (req, res) => {
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ ok: false, error: 'userId is required' });
+  if (!pgPool) return res.status(503).json({ ok: false, error: 'Database not available' });
+  
+  try {
+    const userRes = await pgPool.query('SELECT name, email, device_id FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'User not found' });
+    }
+    const { name, email, device_id: deviceId } = userRes.rows[0];
+    
+    // 1. Update database role
+    await pgPool.query(
+      `UPDATE users 
+       SET role = 'PRO', pro_source = 'admin', pro_granted_at = NOW(), pro_request_status = 'APPROVED'
+       WHERE id = $1`,
+      [userId]
+    );
+    
+    // 2. Add whitelist dynamically to Vercel variable (if token exists)
+    if (process.env.VERCEL_API_TOKEN) {
+      try {
+        const vercelRes = await getVercelDeviceWhitelist();
+        if (!vercelRes.error) {
+          const currentWhitelist = vercelRes.value || '';
+          const entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+          
+          // Avoid duplicating
+          const emailIdx = entries.findIndex(item => item.split(':')[0].toLowerCase() === email.toLowerCase());
+          const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+          const mappingEntry = `${email}:${deviceId || 'Unknown_Device'}:Admin_Granted:${timestamp}`;
+          
+          if (emailIdx >= 0) {
+            entries[emailIdx] = mappingEntry;
+          } else {
+            entries.push(mappingEntry);
+          }
+          await updateVercelDeviceWhitelist(entries.join(','));
+        }
+      } catch (err) {
+        console.error('[api] Admin grant Vercel update failed:', err.message);
+      }
+    }
+    
+    // 3. Update Redis for instant bypass
+    if (redis && deviceId) {
+      await redis.sadd('allowed_device_ids', deviceId);
+    }
+    
+    // 4. Create Notification
+    await pgPool.query(
+      `INSERT INTO notifications (user_id, title, message)
+       VALUES ($1, 'Pro Access Active', 'Your AP Vidyuth Pro access has been activated.')`,
+      [userId]
+    );
+    
+    // 5. Send approval confirmation email
+    await sendApprovalEmail(email, name || 'User', deviceId || 'N/A');
+    
+    res.json({ ok: true, message: 'Pro access successfully granted.' });
+  } catch (err) {
+    console.error('[api] Admin grant failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Admin Revoke Pro
+app.post('/api/admin/revoke', requireAdmin, async (req, res) => {
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ ok: false, error: 'userId is required' });
+  if (!pgPool) return res.status(503).json({ ok: false, error: 'Database not available' });
+  
+  try {
+    const userRes = await pgPool.query('SELECT name, email, device_id FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'User not found' });
+    }
+    const { name, email, device_id: deviceId } = userRes.rows[0];
+    
+    // 1. Update database role
+    await pgPool.query(
+      `UPDATE users 
+       SET role = 'STANDARD', pro_source = NULL, pro_request_status = 'NONE'
+       WHERE id = $1`,
+      [userId]
+    );
+    
+    // 2. Remove from Vercel variable (if token exists)
+    if (process.env.VERCEL_API_TOKEN) {
+      try {
+        const vercelRes = await getVercelDeviceWhitelist();
+        if (!vercelRes.error) {
+          const currentWhitelist = vercelRes.value || '';
+          const entries = currentWhitelist.split(',').map(item => item.trim()).filter(Boolean);
+          
+          const filteredEntries = entries.filter(item => {
+            const parts = item.split(':');
+            const itemEmail = parts[0];
+            const itemDevId = parts[1];
+            const emailMatches = email && itemEmail.toLowerCase() === email.toLowerCase();
+            const devIdMatches = deviceId && itemDevId === deviceId;
+            return !emailMatches && !devIdMatches;
+          });
+          await updateVercelDeviceWhitelist(filteredEntries.join(','));
+        }
+      } catch (err) {
+        console.error('[api] Admin revoke Vercel update failed:', err.message);
+      }
+    }
+    
+    // 3. Remove from Redis
+    if (redis && deviceId) {
+      await redis.srem('allowed_device_ids', deviceId);
+    }
+    
+    // 4. Create Notification
+    await pgPool.query(
+      `INSERT INTO notifications (user_id, title, message)
+       VALUES ($1, 'Pro Access Revoked', 'Your AP Vidyuth Pro access has been revoked.')`,
+      [userId]
+    );
+    
+    // 5. Send revocation email
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.VITE_SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.VITE_SMTP_PORT || '465'),
+        secure: (process.env.VITE_SMTP_PORT || '465') === '465',
+        auth: {
+          user: process.env.VITE_SMTP_USER,
+          pass: process.env.VITE_SMTP_PASSWORD,
+        },
+      });
+      await transporter.sendMail({
+        from: `"AP Vidyuth App" <${process.env.VITE_SMTP_USER}>`,
+        to: email,
+        subject: 'Pro Subscription Withdrawn - AP Vidyuth',
+        text: `Hi ${name || 'User'},\n\nYour AP Vidyuth Pro subscription has been withdrawn by the administrator.\n\nBest regards,\nAP Vidyuth Team`,
+        html: `<div style="font-family: sans-serif; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; max-width: 500px;"><h2 style="color:#ef4444;margin-top:0;">Pro Access Revoked</h2><p>Hi <strong>${name || 'User'}</strong>,</p><p>Your <strong>AP Vidyuth Pro</strong> access has been deactivated by the administrator.</p></div>`
+      });
+    } catch (err) {
+      console.error('[api] Revoke confirmation email failed:', err.message);
+    }
+    
+    res.json({ ok: true, message: 'Pro access successfully revoked.' });
+  } catch (err) {
+    console.error('[api] Admin revoke failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
