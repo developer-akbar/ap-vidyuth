@@ -41,10 +41,19 @@ export async function apiPost(path, body, customHeaders = {}) {
   const url = `${apiBase()}${path}`;
   console.log(`[servicesApi] POST ${url}`);
 
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ap_vidyuth_token') : null;
+  const headers = { 
+    'Content-Type': 'application/json', 
+    ...customHeaders 
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...customHeaders },
+      headers,
       body: JSON.stringify(body),
       signal: controller.signal
     });
@@ -427,10 +436,19 @@ export async function apiGet(path, customHeaders = {}) {
   const url = `${apiBase()}${path}`;
   console.log(`[servicesApi] GET ${url}`);
 
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ap_vidyuth_token') : null;
+  const headers = { 
+    'Content-Type': 'application/json', 
+    ...customHeaders 
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const res = await fetch(url, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json', ...customHeaders },
+      headers,
       signal: controller.signal
     });
     
@@ -473,4 +491,48 @@ export async function markNotificationsAsRead(email) {
   const { getDeviceId } = await import('../../../shared/utils/index.js');
   const deviceId = await getDeviceId();
   return apiPost('/users/notifications/read', { deviceId, email });
+}
+
+// ── Auth APIs ──
+
+export async function registerUser(name, email, password, heardFrom) {
+  return apiPost('/auth/register', { name, email, password, heardFrom });
+}
+
+export async function loginUser(email, password) {
+  return apiPost('/auth/login', { email, password });
+}
+
+export async function forgotPassword(email) {
+  return apiPost('/auth/forgot-password', { email });
+}
+
+export async function resetPassword(email, token, newPassword) {
+  return apiPost('/auth/reset-password', { email, token, newPassword });
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  return apiPost('/auth/change-password', { currentPassword, newPassword });
+}
+
+export async function updateUserSettings({ theme, density, language }) {
+  return apiPost('/users/settings', { theme, density, language });
+}
+
+// ── Data Sync APIs ──
+
+export async function syncMerge(services, readings) {
+  return apiPost('/sync/merge', { services, readings });
+}
+
+export async function syncPushService(service) {
+  return apiPost('/sync/push-service', { service });
+}
+
+export async function syncDeleteService(serviceNumber, permanent) {
+  return apiPost('/sync/delete-service', { serviceNumber, permanent });
+}
+
+export async function syncPushReadings(serviceNumber, readings) {
+  return apiPost('/sync/push-readings', { serviceNumber, readings });
 }

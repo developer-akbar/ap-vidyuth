@@ -2248,6 +2248,717 @@ app.post('/api/users/notifications/read', async (req, res) => {
   }
 });
 
+// ── User Authentication & Database Synchronization Endpoints ───────────────────
+
+// Password Hashing helpers using native Node crypto.pbkdf2Sync
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, storedPasswordHash) {
+  if (!storedPasswordHash) return false;
+  const parts = storedPasswordHash.split(':');
+  if (parts.length !== 2) return false;
+  const [salt, hash] = parts;
+  const checkHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return hash === checkHash;
+}
+
+// Stateless HMAC session token helpers
+function generateUserToken(userId, email, role) {
+  const secret = process.env.INTERNAL_SECRET || 'fallback-secret-ap-vidyuth';
+  const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+  const payload = JSON.stringify({ userId, email, role, expiresAt });
+  const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  return Buffer.from(JSON.stringify({ payload, signature })).toString('base64');
+}
+
+function verifyUserToken(token) {
+  try {
+    if (!token) return null;
+    const raw = Buffer.from(token, 'base64').toString('utf8');
+    const { payload, signature } = JSON.parse(raw);
+    const secret = process.env.INTERNAL_SECRET || 'fallback-secret-ap-vidyuth';
+    const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    if (signature !== expectedSignature) return null;
+    const data = JSON.parse(payload);
+    if (Date.now() > data.expiresAt) return null;
+    return data;
+  } catch (err) {
+    return null;
+  }
+}
+
+// User session verification middleware
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized Session' });
+  }
+  const token = authHeader.split(' ')[1];
+  const session = verifyUserToken(token);
+  if (!session) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized Session' });
+  }
+  req.user = session;
+  next();
+}
+
+// Serialize service record to database query parameters
+function dbSerializeService(s) {
+  return [
+    s.serviceNumber || s.service_number,
+    s.label || null,
+    s.customerName || s.customer_name || null,
+    s.lastBillDate || s.last_bill_date || null,
+    s.lastDueDate || s.last_due_date || null,
+    s.lastAmountDue != null ? parseFloat(s.lastAmountDue) : null,
+    s.lastBilledUnits != null ? parseFloat(s.lastBilledUnits) : null,
+    s.lastThreeAmounts ? (typeof s.lastThreeAmounts === 'string' ? s.lastThreeAmounts : JSON.stringify(s.lastThreeAmounts)) : '[]',
+    s.lastStatus || s.last_status || 'UNKNOWN',
+    s.lastFetchedAt || s.last_fetched_at || null,
+    s.historyFetchedAt || s.history_fetched_at || null,
+    s.lastReportedBillDate || s.last_reported_bill_date || null,
+    s.billTime || s.bill_time || null,
+    s.billNoPrefix || s.bill_no_prefix || null,
+    s.lastRefreshedDate || s.last_refreshed_date || null,
+    s.lastError || s.last_error || null,
+    s.isPaid === true || s.is_paid === true,
+    s.paidDate || s.paid_date || null,
+    s.receiptNumber || s.receipt_number || null,
+    s.paidAmount != null ? parseFloat(s.paidAmount) : null,
+    s.billBreakup ? (typeof s.billBreakup === 'string' ? s.billBreakup : JSON.stringify(s.billBreakup)) : null,
+    s.billHistory ? (typeof s.billHistory === 'string' ? s.billHistory : JSON.stringify(s.billHistory)) : '[]',
+    s.paymentHistory ? (typeof s.paymentHistory === 'string' ? s.paymentHistory : JSON.stringify(s.paymentHistory)) : '[]',
+    s.trendData ? (typeof s.trendData === 'string' ? s.trendData : JSON.stringify(s.trendData)) : '[]',
+    s.insights ? (typeof s.insights === 'string' ? s.insights : JSON.stringify(s.insights)) : null,
+    s.category || null,
+    s.closingRdg != null ? parseFloat(s.closingRdg) : null,
+    s.ctrLoad != null ? parseFloat(s.ctrLoad) : null,
+    s.divisionCode || s.division_code || null,
+    s.divisionName || s.division_name || null,
+    s.circleName || s.circle_name || null,
+    s.sectionName || s.section_name || null,
+    s.uniqueServiceNumber || s.unique_service_number || s.serviceNumber || s.service_number || null,
+    s.pinned === true,
+    s.pinnedAt || s.pinned_at || null,
+    s.isDeleted === true || s.is_deleted === true,
+    s.deletedAt || s.deleted_at || null,
+    s.createdAt || s.created_at || new Date().toISOString(),
+    s.updatedAt || s.updated_at || new Date().toISOString()
+  ];
+}
+
+// Deserialize service row back to camelCase frontend model
+function dbDeserializeService(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    serviceNumber: row.service_number,
+    label: row.label,
+    customerName: row.customer_name,
+    lastBillDate: row.last_bill_date ? new Date(row.last_bill_date).toISOString() : null,
+    lastDueDate: row.last_due_date ? new Date(row.last_due_date).toISOString() : null,
+    lastAmountDue: row.last_amount_due != null ? parseFloat(row.last_amount_due) : null,
+    lastBilledUnits: row.last_billed_units != null ? parseFloat(row.last_billed_units) : null,
+    lastThreeAmounts: typeof row.last_three_amounts === 'string' ? JSON.parse(row.last_three_amounts) : row.last_three_amounts || [],
+    lastStatus: row.last_status,
+    lastFetchedAt: row.last_fetched_at ? new Date(row.last_fetched_at).toISOString() : null,
+    historyFetchedAt: row.history_fetched_at ? new Date(row.history_fetched_at).toISOString() : null,
+    lastReportedBillDate: row.last_reported_bill_date ? new Date(row.last_reported_bill_date).toISOString() : null,
+    billTime: row.bill_time,
+    billNoPrefix: row.bill_no_prefix,
+    lastRefreshedDate: row.last_refreshed_date ? new Date(row.last_refreshed_date).toISOString() : null,
+    lastError: row.last_error,
+    isPaid: !!row.is_paid,
+    paidDate: row.paid_date ? new Date(row.paid_date).toISOString() : null,
+    receiptNumber: row.receipt_number,
+    paidAmount: row.paid_amount != null ? parseFloat(row.paid_amount) : null,
+    billBreakup: typeof row.bill_breakup === 'string' ? JSON.parse(row.bill_breakup) : row.bill_breakup || null,
+    billHistory: typeof row.bill_history === 'string' ? JSON.parse(row.bill_history) : row.bill_history || [],
+    paymentHistory: typeof row.payment_history === 'string' ? JSON.parse(row.payment_history) : row.payment_history || [],
+    trendData: typeof row.trend_data === 'string' ? JSON.parse(row.trend_data) : row.trend_data || [],
+    insights: typeof row.insights === 'string' ? JSON.parse(row.insights) : row.insights || null,
+    category: row.category,
+    closingRdg: row.closing_rdg != null ? parseFloat(row.closing_rdg) : null,
+    ctrLoad: row.ctr_load != null ? parseFloat(row.ctr_load) : null,
+    divisionCode: row.division_code,
+    divisionName: row.division_name,
+    circleName: row.circle_name,
+    sectionName: row.section_name,
+    uniqueServiceNumber: row.unique_service_number,
+    pinned: !!row.pinned,
+    pinnedAt: row.pinned_at ? new Date(row.pinned_at).toISOString() : null,
+    isDeleted: !!row.is_deleted,
+    deletedAt: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null
+  };
+}
+
+// ── Auth Endpoints ──
+
+// User Registration Route
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, password, heardFrom } = req.body || {};
+  if (!name || !email || !password) {
+    return res.status(400).json({ ok: false, error: 'Name, email, and password are required' });
+  }
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  try {
+    const checkRes = await pgPool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (checkRes.rows.length > 0) {
+      const existingUser = checkRes.rows[0];
+      if (existingUser.password_hash) {
+        return res.status(400).json({ ok: false, error: 'Email already registered. Please log in.' });
+      }
+      // Adopt existing user details without password
+      const passHash = hashPassword(password);
+      const updateRes = await pgPool.query(
+        `UPDATE users
+         SET name = $1, password_hash = $2, profile_completed = true, last_seen_at = NOW()
+         WHERE email = $3
+         RETURNING *`,
+        [name, passHash, email]
+      );
+      const user = updateRes.rows[0];
+      const token = generateUserToken(user.id, user.email, user.role);
+      return res.json({
+        ok: true,
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          theme: user.theme,
+          density: user.density,
+          language: user.language
+        }
+      });
+    }
+
+    // New user signup
+    const passHash = hashPassword(password);
+    const result = await pgPool.query(
+      `INSERT INTO users (name, email, password_hash, role, profile_completed, registered_at, last_seen_at, heard_from)
+       VALUES ($1, $2, $3, 'STANDARD', true, NOW(), NOW(), $4)
+       RETURNING *`,
+      [name, email, passHash, heardFrom || null]
+    );
+    const user = result.rows[0];
+    const token = generateUserToken(user.id, user.email, user.role);
+    res.json({
+      ok: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        theme: user.theme,
+        density: user.density,
+        language: user.language
+      }
+    });
+  } catch (err) {
+    console.error('[api] Register failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// User Login Route
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ ok: false, error: 'Email and password are required' });
+  }
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  try {
+    const result = await pgPool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ ok: false, error: 'Invalid email or password' });
+    }
+    const user = result.rows[0];
+    if (!user.password_hash) {
+      return res.status(400).json({ ok: false, error: 'Account registered but password not set. Please sign up again.' });
+    }
+    if (!verifyPassword(password, user.password_hash)) {
+      return res.status(401).json({ ok: false, error: 'Invalid email or password' });
+    }
+    // Update active connection
+    await pgPool.query('UPDATE users SET last_seen_at = NOW() WHERE id = $1', [user.id]);
+    const token = generateUserToken(user.id, user.email, user.role);
+    res.json({
+      ok: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        theme: user.theme,
+        density: user.density,
+        language: user.language
+      }
+    });
+  } catch (err) {
+    console.error('[api] Login failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Forgot Password Route
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) {
+    return res.status(400).json({ ok: false, error: 'Email is required' });
+  }
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  try {
+    const checkRes = await pgPool.query('SELECT id, name FROM users WHERE email = $1', [email]);
+    if (checkRes.rows.length === 0) {
+      // Return success even if email is not registered for security
+      return res.json({ ok: true, message: 'If that email is registered, we have sent a reset password link.' });
+    }
+    const user = checkRes.rows[0];
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 3600000); // 1 hour
+
+    await pgPool.query(
+      'UPDATE users SET reset_token = $1, reset_expires = $2 WHERE id = $3',
+      [token, expires, user.id]
+    );
+
+    const frontendUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173';
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || `"AP Vidyuth" <noreply@apvidyuth.in>`,
+      to: email,
+      subject: 'Reset Password Request - AP Vidyuth',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+          <h2 style="color: #6366f1; text-align: center;">AP Vidyuth Password Reset</h2>
+          <p>Hello ${user.name || 'User'},</p>
+          <p>We received a request to reset the password for your AP Vidyuth account.</p>
+          <p>Please click the button below to set a new password. This link will expire in 1 hour:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Reset Password</a>
+          </div>
+          <p>If you did not request a password reset, please ignore this email.</p>
+          <p style="font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 10px; margin-top: 30px;">
+            This is an automated message, please do not reply directly.
+          </p>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ ok: true, message: 'If that email is registered, we have sent a reset password link.' });
+  } catch (err) {
+    console.error('[api] Forgot password failed:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to process forgot password request: ' + err.message });
+  }
+});
+
+// Reset Password Route
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, token, newPassword } = req.body || {};
+  if (!email || !token || !newPassword) {
+    return res.status(400).json({ ok: false, error: 'Email, token, and new password are required' });
+  }
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  try {
+    const result = await pgPool.query(
+      'SELECT id, reset_token, reset_expires FROM users WHERE email = $1',
+      [email]
+    );
+    if (result.rows.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Invalid request or token has expired.' });
+    }
+    const user = result.rows[0];
+    if (!user.reset_token || user.reset_token !== token) {
+      return res.status(400).json({ ok: false, error: 'Invalid reset token' });
+    }
+    if (new Date() > new Date(user.reset_expires)) {
+      return res.status(400).json({ ok: false, error: 'Reset token has expired' });
+    }
+
+    const passHash = hashPassword(newPassword);
+    await pgPool.query(
+      `UPDATE users
+       SET password_hash = $1, reset_token = NULL, reset_expires = NULL, last_seen_at = NOW()
+       WHERE id = $2`,
+      [passHash, user.id]
+    );
+
+    res.json({ ok: true, message: 'Password has been reset successfully.' });
+  } catch (err) {
+    console.error('[api] Reset password failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Change Password Route
+app.post('/api/auth/change-password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ ok: false, error: 'Current password and new password are required' });
+  }
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  try {
+    const userId = req.user.userId;
+    const result = await pgPool.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'User not found' });
+    }
+    const user = result.rows[0];
+    if (!verifyPassword(currentPassword, user.password_hash)) {
+      return res.status(401).json({ ok: false, error: 'Incorrect current password' });
+    }
+
+    const newHash = hashPassword(newPassword);
+    await pgPool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, userId]);
+    res.json({ ok: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('[api] Change password failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Update User Settings Route
+app.post('/api/users/settings', requireAuth, async (req, res) => {
+  const { theme, density, language } = req.body || {};
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  const userId = req.user.userId;
+  try {
+    await pgPool.query(
+      `UPDATE users 
+       SET 
+         theme = COALESCE($1, theme), 
+         density = COALESCE($2, density), 
+         language = COALESCE($3, language) 
+       WHERE id = $4`,
+      [theme || null, density || null, language || null, userId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[api] Update user settings failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Database Sync Endpoints ──
+
+// Sync and Merge Data Route
+app.post('/api/sync/merge', requireAuth, async (req, res) => {
+  const { services, readings } = req.body || {};
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  const userId = req.user.userId;
+  try {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Merge services
+      if (Array.isArray(services)) {
+        for (const s of services) {
+          const serviceNum = s.serviceNumber;
+          if (!serviceNum) continue;
+
+          const existRes = await client.query(
+            'SELECT id, updated_at FROM user_services WHERE user_id = $1 AND service_number = $2',
+            [userId, serviceNum]
+          );
+
+          if (existRes.rows.length === 0) {
+            const params = [userId, ...dbSerializeService(s)];
+            await client.query(
+              `INSERT INTO user_services (
+                user_id, service_number, label, customer_name, last_bill_date, last_due_date,
+                last_amount_due, last_billed_units, last_three_amounts, last_status, last_fetched_at,
+                history_fetched_at, last_reported_bill_date, bill_time, bill_no_prefix, last_refreshed_date, last_error,
+                is_paid, paid_date, receipt_number, paid_amount, bill_breakup, bill_history,
+                payment_history, trend_data, insights, category, closing_rdg, ctr_load,
+                division_code, division_name, circle_name, section_name, unique_service_number,
+                pinned, pinned_at, is_deleted, deleted_at, created_at, updated_at
+              ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
+              )`,
+              params
+            );
+          } else {
+            const dbUpdatedAt = new Date(existRes.rows[0].updated_at);
+            const localUpdatedAt = s.updatedAt ? new Date(s.updatedAt) : new Date(0);
+
+            if (localUpdatedAt > dbUpdatedAt) {
+              const params = dbSerializeService(s);
+              params.push(userId, serviceNum);
+              await client.query(
+                `UPDATE user_services SET
+                  label=$1, customer_name=$2, last_bill_date=$3, last_due_date=$4,
+                  last_amount_due=$5, last_billed_units=$6, last_three_amounts=$7, last_status=$8,
+                  last_fetched_at=$9, history_fetched_at=$10, last_reported_bill_date=$11, bill_time=$12, bill_no_prefix=$13, last_refreshed_date=$14, last_error=$15, is_paid=$16, paid_date=$17,
+                  receipt_number=$18, paid_amount=$19, bill_breakup=$20, bill_history=$21,
+                  payment_history=$22, trend_data=$23, insights=$24,
+                  category=$25, closing_rdg=$26, ctr_load=$27,
+                  division_code=$28, division_name=$29, circle_name=$30, section_name=$31, unique_service_number=$32,
+                  pinned=$33, pinned_at=$34, is_deleted=$35, deleted_at=$36, created_at=$37, updated_at=$38
+                 WHERE user_id=$39 AND service_number=$40`,
+                params
+              );
+            }
+          }
+        }
+      }
+
+      // 2. Merge readings
+      if (readings && typeof readings === 'object') {
+        for (const [serviceNum, readingList] of Object.entries(readings)) {
+          if (!Array.isArray(readingList)) continue;
+          for (const r of readingList) {
+            const dateVal = r.date ? new Date(r.date) : new Date();
+            const readingVal = parseFloat(r.reading);
+            const remarks = r.unitsSoFar ? `unitsSoFar:${r.unitsSoFar}` : null;
+            if (!isNaN(readingVal)) {
+              await client.query(
+                `INSERT INTO user_readings (user_id, service_number, reading_date, reading_value, remarks)
+                 VALUES ($1, $2, $3, $4, $5)
+                 ON CONFLICT (user_id, service_number, reading_date)
+                 DO UPDATE SET
+                   reading_value = EXCLUDED.reading_value,
+                   remarks = COALESCE(EXCLUDED.remarks, user_readings.remarks)`,
+                [userId, serviceNum, dateVal, readingVal, remarks]
+              );
+            }
+          }
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // 3. Retrieve all services and readings for returning
+    const servicesRes = await pgPool.query(
+      'SELECT * FROM user_services WHERE user_id = $1',
+      [userId]
+    );
+    const readingsRes = await pgPool.query(
+      'SELECT * FROM user_readings WHERE user_id = $1',
+      [userId]
+    );
+
+    const mergedServices = servicesRes.rows.map(dbDeserializeService);
+    const mergedReadings = {};
+    for (const r of readingsRes.rows) {
+      const sn = r.service_number;
+      if (!mergedReadings[sn]) mergedReadings[sn] = [];
+      let unitsSoFar = 0;
+      if (r.remarks && r.remarks.startsWith('unitsSoFar:')) {
+        unitsSoFar = parseFloat(r.remarks.split(':')[1]) || 0;
+      }
+      mergedReadings[sn].push({
+        date: new Date(r.reading_date).toISOString(),
+        reading: parseFloat(r.reading_value),
+        unitsSoFar
+      });
+    }
+
+    res.json({
+      ok: true,
+      services: mergedServices,
+      readings: mergedReadings
+    });
+  } catch (err) {
+    console.error('[api] Merge failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Single Service Push Route
+app.post('/api/sync/push-service', requireAuth, async (req, res) => {
+  const { service } = req.body || {};
+  if (!service) {
+    return res.status(400).json({ ok: false, error: 'Service is required' });
+  }
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  const userId = req.user.userId;
+  try {
+    const params = [userId, ...dbSerializeService(service)];
+    const query = `
+      INSERT INTO user_services (
+        user_id, service_number, label, customer_name, last_bill_date, last_due_date,
+        last_amount_due, last_billed_units, last_three_amounts, last_status, last_fetched_at,
+        history_fetched_at, last_reported_bill_date, bill_time, bill_no_prefix, last_refreshed_date, last_error,
+        is_paid, paid_date, receipt_number, paid_amount, bill_breakup, bill_history,
+        payment_history, trend_data, insights, category, closing_rdg, ctr_load,
+        division_code, division_name, circle_name, section_name, unique_service_number,
+        pinned, pinned_at, is_deleted, deleted_at, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
+      )
+      ON CONFLICT (user_id, service_number)
+      DO UPDATE SET
+        label = EXCLUDED.label,
+        customer_name = EXCLUDED.customer_name,
+        last_bill_date = EXCLUDED.last_bill_date,
+        last_due_date = EXCLUDED.last_due_date,
+        last_amount_due = EXCLUDED.last_amount_due,
+        last_billed_units = EXCLUDED.last_billed_units,
+        last_three_amounts = EXCLUDED.last_three_amounts,
+        last_status = EXCLUDED.last_status,
+        last_fetched_at = EXCLUDED.last_fetched_at,
+        history_fetched_at = EXCLUDED.history_fetched_at,
+        last_reported_bill_date = EXCLUDED.last_reported_bill_date,
+        bill_time = EXCLUDED.bill_time,
+        bill_no_prefix = EXCLUDED.bill_no_prefix,
+        last_refreshed_date = EXCLUDED.last_refreshed_date,
+        last_error = EXCLUDED.last_error,
+        is_paid = EXCLUDED.is_paid,
+        paid_date = EXCLUDED.paid_date,
+        receipt_number = EXCLUDED.receipt_number,
+        paid_amount = EXCLUDED.paid_amount,
+        bill_breakup = EXCLUDED.bill_breakup,
+        bill_history = EXCLUDED.bill_history,
+        payment_history = EXCLUDED.payment_history,
+        trend_data = EXCLUDED.trend_data,
+        insights = EXCLUDED.insights,
+        category = EXCLUDED.category,
+        closing_rdg = EXCLUDED.closing_rdg,
+        ctr_load = EXCLUDED.ctr_load,
+        division_code = EXCLUDED.division_code,
+        division_name = EXCLUDED.division_name,
+        circle_name = EXCLUDED.circle_name,
+        section_name = EXCLUDED.section_name,
+        unique_service_number = EXCLUDED.unique_service_number,
+        pinned = EXCLUDED.pinned,
+        pinned_at = EXCLUDED.pinned_at,
+        is_deleted = EXCLUDED.is_deleted,
+        deleted_at = EXCLUDED.deleted_at,
+        updated_at = EXCLUDED.updated_at
+      RETURNING *`;
+
+    const result = await pgPool.query(query, params);
+    res.json({ ok: true, service: dbDeserializeService(result.rows[0]) });
+  } catch (err) {
+    console.error('[api] Push service failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Single Service Delete Sync Route
+app.post('/api/sync/delete-service', requireAuth, async (req, res) => {
+  const { serviceNumber, permanent } = req.body || {};
+  if (!serviceNumber) {
+    return res.status(400).json({ ok: false, error: 'serviceNumber is required' });
+  }
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  const userId = req.user.userId;
+  try {
+    if (permanent) {
+      await pgPool.query(
+        'DELETE FROM user_services WHERE user_id = $1 AND service_number = $2',
+        [userId, serviceNumber]
+      );
+    } else {
+      await pgPool.query(
+        `UPDATE user_services
+         SET is_deleted = true, deleted_at = NOW(), pinned = false, pinned_at = null, updated_at = NOW()
+         WHERE user_id = $1 AND service_number = $2`,
+        [userId, serviceNumber]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[api] Delete service failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Push Readings Sync Route
+app.post('/api/sync/push-readings', requireAuth, async (req, res) => {
+  const { serviceNumber, readings } = req.body || {};
+  if (!serviceNumber || !Array.isArray(readings)) {
+    return res.status(400).json({ ok: false, error: 'serviceNumber and readings array are required' });
+  }
+  if (!pgPool) {
+    return res.status(503).json({ ok: false, error: 'Database not available' });
+  }
+  const userId = req.user.userId;
+  try {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      // Delete existing readings for this service number
+      await client.query(
+        'DELETE FROM user_readings WHERE user_id = $1 AND service_number = $2',
+        [userId, serviceNumber]
+      );
+      // Insert new values
+      for (const r of readings) {
+        const dateVal = r.date ? new Date(r.date) : new Date();
+        const readingVal = parseFloat(r.reading);
+        const remarks = r.unitsSoFar ? `unitsSoFar:${r.unitsSoFar}` : null;
+        if (!isNaN(readingVal)) {
+          await client.query(
+            `INSERT INTO user_readings (user_id, service_number, reading_date, reading_value, remarks)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (user_id, service_number, reading_date)
+             DO UPDATE SET reading_value = EXCLUDED.reading_value, remarks = EXCLUDED.remarks`,
+            [userId, serviceNumber, dateVal, readingVal, remarks]
+          );
+        }
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[api] Push readings failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Admin Authentication Login
 app.post('/api/admin/login', async (req, res) => {
   const { username, password } = req.body || {};

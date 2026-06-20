@@ -39,6 +39,76 @@ export async function initDb() {
       );
     `;
 
+    // Surgical updates for user accounts, settings, and password recovery
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);");
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme VARCHAR(20) DEFAULT 'system';");
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS density VARCHAR(20) DEFAULT 'comfortable';");
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(10) DEFAULT 'en';");
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);");
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_expires TIMESTAMP;");
+
+    // 1.5 Create user_services table to sync IndexedDB services to cloud
+    await client.sql`
+      CREATE TABLE IF NOT EXISTS user_services (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        service_number VARCHAR(50) NOT NULL,
+        label VARCHAR(255),
+        customer_name VARCHAR(255),
+        last_bill_date TIMESTAMP,
+        last_due_date TIMESTAMP,
+        last_amount_due NUMERIC,
+        last_billed_units NUMERIC,
+        last_three_amounts TEXT,
+        last_status VARCHAR(50) DEFAULT 'UNKNOWN',
+        last_fetched_at TIMESTAMP,
+        history_fetched_at TIMESTAMP,
+        last_reported_bill_date TIMESTAMP,
+        bill_time VARCHAR(20),
+        bill_no_prefix VARCHAR(50),
+        last_refreshed_date TIMESTAMP,
+        last_error TEXT,
+        is_paid BOOLEAN DEFAULT FALSE,
+        paid_date TIMESTAMP,
+        receipt_number VARCHAR(255),
+        paid_amount NUMERIC,
+        bill_breakup TEXT,
+        bill_history TEXT,
+        payment_history TEXT,
+        trend_data TEXT,
+        insights TEXT,
+        category VARCHAR(100),
+        closing_rdg NUMERIC,
+        ctr_load NUMERIC,
+        division_code VARCHAR(100),
+        division_name VARCHAR(255),
+        circle_name VARCHAR(255),
+        section_name VARCHAR(255),
+        unique_service_number VARCHAR(50),
+        pinned BOOLEAN DEFAULT FALSE,
+        pinned_at TIMESTAMP,
+        is_deleted BOOLEAN DEFAULT FALSE,
+        deleted_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, service_number)
+      );
+    `;
+
+    // 1.6 Create user_readings table to sync IndexedDB manual meter logs to cloud
+    await client.sql`
+      CREATE TABLE IF NOT EXISTS user_readings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        service_number VARCHAR(50) NOT NULL,
+        reading_date DATE NOT NULL,
+        reading_value NUMERIC NOT NULL,
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, service_number, reading_date)
+      );
+    `;
+
     // 2. Create notifications table
     await client.sql`
       CREATE TABLE IF NOT EXISTS notifications (

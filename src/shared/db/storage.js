@@ -345,79 +345,82 @@ async function createService(data) {
   };
 
   if (platform === 'android') {
-  const db = await getSqlite();
-  const ser = serializeRecord(record);
-  await db.run(
-    `INSERT INTO electricity_services
-      (id, serviceNumber, label, customerName, lastBillDate, lastDueDate,
-       lastAmountDue, lastBilledUnits, lastThreeAmounts, lastStatus, lastFetchedAt,
-       historyFetchedAt, lastReportedBillDate, billTime, billNoPrefix, lastRefreshedDate, lastError, isPaid, paidDate, receiptNumber, paidAmount,
-       billBreakup, billHistory, paymentHistory, trendData, insights,
-       category, closingRdg, ctrLoad,
-       divisionCode, divisionName, circleName, sectionName, uniqueServiceNumber,
-       pinned, pinnedAt, isDeleted, deletedAt, createdAt, updatedAt)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      ser.id, ser.serviceNumber, ser.label, ser.customerName,
-      ser.lastBillDate, ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits,
-      ser.lastThreeAmounts, ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.billNoPrefix, ser.lastRefreshedDate,
-      ser.lastError, ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
-      ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
-      ser.category, ser.closingRdg, ser.ctrLoad,
-      ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
-      ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.createdAt, ser.updatedAt
-    ]
-  );
-  await sqliteSave();
+    const db = await getSqlite();
+    const ser = serializeRecord(record);
+    await db.run(
+      `INSERT INTO electricity_services
+        (id, serviceNumber, label, customerName, lastBillDate, lastDueDate,
+         lastAmountDue, lastBilledUnits, lastThreeAmounts, lastStatus, lastFetchedAt,
+         historyFetchedAt, lastReportedBillDate, billTime, billNoPrefix, lastRefreshedDate, lastError, isPaid, paidDate, receiptNumber, paidAmount,
+         billBreakup, billHistory, paymentHistory, trendData, insights,
+         category, closingRdg, ctrLoad,
+         divisionCode, divisionName, circleName, sectionName, uniqueServiceNumber,
+         pinned, pinnedAt, isDeleted, deleted_at, createdAt, updatedAt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        ser.id, ser.serviceNumber, ser.label, ser.customerName,
+        ser.lastBillDate, ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits,
+        ser.lastThreeAmounts, ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.billNoPrefix, ser.lastRefreshedDate,
+        ser.lastError, ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
+        ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
+        ser.category, ser.closingRdg, ser.ctrLoad,
+        ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
+        ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.createdAt, ser.updatedAt
+      ]
+    );
+    await sqliteSave();
   } else {
-  const db = await getIdb();
-  await db.add(STORE, record);
+    const db = await getIdb();
+    await db.add(STORE, record);
   }
+  pushServiceToCloud(record);
   return record;
-  }
+}
 
-  /**
-  * Updates an existing service record with a partial patch.
-  */
-  async function updateService(id, patch) {
+/**
+ * Updates an existing service record with a partial patch.
+ */
+async function updateService(id, patch) {
   const platform = await getPlatform();
   const now = new Date().toISOString();
 
   if (platform === 'android') {
-  const existing = await getServiceById(id);
-  if (!existing) throw new Error('Service not found');
-  const updated = { ...existing, ...patch, updatedAt: now };
-  const ser = serializeRecord(updated);
-  await (await getSqlite()).run(
-    `UPDATE electricity_services SET
-      serviceNumber=?, label=?, customerName=?, lastBillDate=?, lastDueDate=?,
-      lastAmountDue=?, lastBilledUnits=?, lastThreeAmounts=?, lastStatus=?,
-      lastFetchedAt=?, historyFetchedAt=?, lastReportedBillDate=?, billTime=?, billNoPrefix=?, lastRefreshedDate=?, lastError=?, isPaid=?, paidDate=?,
-      receiptNumber=?, paidAmount=?, billBreakup=?, billHistory=?,
-      paymentHistory=?, trendData=?, insights=?,
-      category=?, closingRdg=?, ctrLoad=?,
-      divisionCode=?, divisionName=?, circleName=?, sectionName=?, uniqueServiceNumber=?,
-      pinned=?, pinnedAt=?, isDeleted=?, deletedAt=?, updatedAt=?
-     WHERE id=?`,
-    [
-      ser.serviceNumber, ser.label, ser.customerName, ser.lastBillDate,
-      ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits, ser.lastThreeAmounts,
-      ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.billNoPrefix, ser.lastRefreshedDate, ser.lastError,
-      ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
-      ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
-      ser.category, ser.closingRdg, ser.ctrLoad,
-      ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
-      ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.updatedAt, ser.id
-    ]
-  );
-  await sqliteSave();
-  return updated;
+    const existing = await getServiceById(id);
+    if (!existing) throw new Error('Service not found');
+    const updated = { ...existing, ...patch, updatedAt: now };
+    const ser = serializeRecord(updated);
+    await (await getSqlite()).run(
+      `UPDATE electricity_services SET
+        serviceNumber=?, label=?, customerName=?, lastBillDate=?, lastDueDate=?,
+        lastAmountDue=?, lastBilledUnits=?, lastThreeAmounts=?, lastStatus=?,
+        lastFetchedAt=?, historyFetchedAt=?, lastReportedBillDate=?, billTime=?, billNoPrefix=?, lastRefreshedDate=?, lastError=?, isPaid=?, paidDate=?,
+        receiptNumber=?, paidAmount=?, billBreakup=?, billHistory=?,
+        paymentHistory=?, trendData=?, insights=?,
+        category=?, closingRdg=?, ctrLoad=?,
+        divisionCode=?, divisionName=?, circleName=?, sectionName=?, uniqueServiceNumber=?,
+        pinned=?, pinnedAt=?, isDeleted=?, deleted_at=?, updatedAt=?
+       WHERE id=?`,
+      [
+        ser.serviceNumber, ser.label, ser.customerName, ser.lastBillDate,
+        ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits, ser.lastThreeAmounts,
+        ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.billNoPrefix, ser.lastRefreshedDate, ser.lastError,
+        ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
+        ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
+        ser.category, ser.closingRdg, ser.ctrLoad,
+        ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
+        ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.updatedAt, ser.id
+      ]
+    );
+    await sqliteSave();
+    pushServiceToCloud(updated);
+    return updated;
   } else {
     const db = await getIdb();
     const existing = await db.get(STORE, id);
     if (!existing) throw new Error('Service not found');
     const updated = { ...existing, ...patch, updatedAt: now };
     await db.put(STORE, updated);
+    pushServiceToCloud(updated);
     return updated;
   }
 }
@@ -427,6 +430,9 @@ async function createService(data) {
  */
 async function deleteService(id, permanent = false) {
   const platform = await getPlatform();
+  const service = await getServiceById(id);
+  const serviceNumber = service ? service.serviceNumber : null;
+
   if (permanent) {
     if (platform === 'android') {
       const db = await getSqlite();
@@ -436,6 +442,9 @@ async function deleteService(id, permanent = false) {
       const db = await getIdb();
       await db.delete(STORE, id);
     }
+    if (serviceNumber) {
+      deleteServiceFromCloud(serviceNumber, true);
+    }
   } else {
     await updateService(id, { 
       isDeleted: true, 
@@ -443,6 +452,9 @@ async function deleteService(id, permanent = false) {
       pinned: false,
       pinnedAt: null,
     });
+    if (serviceNumber) {
+      deleteServiceFromCloud(serviceNumber, false);
+    }
   }
 }
 
@@ -475,6 +487,161 @@ async function setSetting(key, value) {
     const db = await getIdb();
     await db.put(SETTINGS_STORE, { key, value });
   }
+
+  if (key.startsWith('readings_')) {
+    const serviceNumber = key.replace('readings_', '');
+    pushReadingsToCloud(serviceNumber, value);
+  }
+}
+
+// ── Cloud Sync Helpers ──
+
+async function pushServiceToCloud(service) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ap_vidyuth_token') : null;
+  if (!token) return;
+  try {
+    const { syncPushService } = await import('../../features/electricity/api/servicesApi.js');
+    await syncPushService(service);
+  } catch (err) {
+    console.warn('[sync] Failed to push service to cloud:', err.message);
+  }
+}
+
+async function deleteServiceFromCloud(serviceNumber, permanent) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ap_vidyuth_token') : null;
+  if (!token) return;
+  try {
+    const { syncDeleteService } = await import('../../features/electricity/api/servicesApi.js');
+    await syncDeleteService(serviceNumber, permanent);
+  } catch (err) {
+    console.warn('[sync] Failed to delete service from cloud:', err.message);
+  }
+}
+
+async function pushReadingsToCloud(serviceNumber, readings) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ap_vidyuth_token') : null;
+  if (!token) return;
+  try {
+    const { syncPushReadings } = await import('../../features/electricity/api/servicesApi.js');
+    await syncPushReadings(serviceNumber, readings);
+  } catch (err) {
+    console.warn('[sync] Failed to push readings to cloud:', err.message);
+  }
+}
+
+async function syncWithPostgres() {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ap_vidyuth_token') : null;
+  if (!token) return null;
+
+  try {
+    const localServices = [];
+    const platform = await getPlatform();
+    if (platform === 'android') {
+      const dbInstance = await getSqlite();
+      const res = await dbInstance.query(`SELECT * FROM electricity_services`);
+      localServices.push(...(res.values || []).map(deserializeRow));
+    } else {
+      const dbInstance = await getIdb();
+      localServices.push(...(await dbInstance.getAll(STORE)));
+    }
+
+    const localReadings = {};
+    if (platform === 'android') {
+      const dbInstance = await getSqlite();
+      const res = await dbInstance.query(`SELECT * FROM settings WHERE key LIKE 'readings_%'`);
+      for (const row of (res.values || [])) {
+        const sn = row.key.replace('readings_', '');
+        try {
+          localReadings[sn] = JSON.parse(row.value);
+        } catch {}
+      }
+    } else {
+      const dbInstance = await getIdb();
+      const allSettings = await dbInstance.getAll(SETTINGS_STORE);
+      for (const s of allSettings) {
+        if (s.key && s.key.startsWith('readings_')) {
+          const sn = s.key.replace('readings_', '');
+          localReadings[sn] = s.value;
+        }
+      }
+    }
+
+    const { syncMerge } = await import('../../features/electricity/api/servicesApi.js');
+    const response = await syncMerge(localServices, localReadings);
+    
+    if (response && response.ok) {
+      const { services, readings } = response;
+
+      if (platform === 'android') {
+        const dbInstance = await getSqlite();
+        await dbInstance.run(`DELETE FROM electricity_services`);
+        for (const s of services) {
+          const ser = serializeRecord(s);
+          await dbInstance.run(
+            `INSERT INTO electricity_services
+              (id, serviceNumber, label, customerName, lastBillDate, lastDueDate,
+               lastAmountDue, lastBilledUnits, lastThreeAmounts, lastStatus, lastFetchedAt,
+               historyFetchedAt, lastReportedBillDate, billTime, billNoPrefix, lastRefreshedDate, lastError, isPaid, paidDate, receiptNumber, paidAmount,
+               billBreakup, billHistory, paymentHistory, trendData, insights,
+               category, closingRdg, ctrLoad,
+               divisionCode, divisionName, circleName, sectionName, uniqueServiceNumber,
+               pinned, pinnedAt, isDeleted, deleted_at, createdAt, updatedAt)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [
+              ser.id, ser.serviceNumber, ser.label, ser.customerName,
+              ser.lastBillDate, ser.lastDueDate, ser.lastAmountDue, ser.lastBilledUnits,
+              ser.lastThreeAmounts, ser.lastStatus, ser.lastFetchedAt, ser.historyFetchedAt, ser.lastReportedBillDate, ser.billTime, ser.billNoPrefix, ser.lastRefreshedDate,
+              ser.lastError, ser.isPaid, ser.paidDate, ser.receiptNumber, ser.paidAmount,
+              ser.billBreakup, ser.billHistory, ser.paymentHistory, ser.trendData, ser.insights,
+              ser.category, ser.closingRdg, ser.ctrLoad,
+              ser.divisionCode, ser.divisionName, ser.circleName, ser.sectionName, ser.uniqueServiceNumber,
+              ser.pinned, ser.pinnedAt, ser.isDeleted, ser.deletedAt, ser.createdAt, ser.updatedAt
+            ]
+          );
+        }
+        await sqliteSave();
+      } else {
+        const dbInstance = await getIdb();
+        await dbInstance.clear(STORE);
+        for (const s of services) {
+          await dbInstance.put(STORE, s);
+        }
+      }
+
+      if (platform === 'android') {
+        const dbInstance = await getSqlite();
+        await dbInstance.run(`DELETE FROM settings WHERE key LIKE 'readings_%'`);
+        for (const [sn, list] of Object.entries(readings)) {
+          const valStr = JSON.stringify(list);
+          await dbInstance.run(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, [`readings_${sn}`, valStr]);
+        }
+        await sqliteSave();
+      } else {
+        const dbInstance = await getIdb();
+        const tx = dbInstance.transaction(SETTINGS_STORE, 'readwrite');
+        const store = tx.objectStore(SETTINGS_STORE);
+        
+        let cursor = await store.openCursor();
+        while (cursor) {
+          if (cursor.key.startsWith('readings_')) {
+            await cursor.delete();
+          }
+          await cursor.continue();
+        }
+        for (const [sn, list] of Object.entries(readings)) {
+          await store.put({ key: `readings_${sn}`, value: list });
+        }
+        await tx.done;
+      }
+
+      window.dispatchEvent(new Event('db-updated'));
+      return { ok: true, services, readings };
+    }
+  } catch (err) {
+    console.error('[sync] Sync with postgres failed:', err);
+    throw err;
+  }
+  return null;
 }
 
 /**
@@ -499,4 +666,5 @@ export const db = {
   getPlatform,
   getSetting,
   setSetting,
+  syncWithPostgres,
 };

@@ -21,7 +21,7 @@ import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Loader } from '../shared/components/Loader.jsx';
-import { FiZap, FiGrid, FiSettings, FiMonitor, FiUser, FiArrowLeft, FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail, FiWifiOff, FiCopy } from 'react-icons/fi';
+import { FiZap, FiGrid, FiSettings, FiMonitor, FiUser, FiArrowLeft, FiShuffle, FiLayers, FiActivity, FiGlobe, FiLayout, FiBell, FiShield, FiMail, FiWifiOff, FiCopy, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
 
 import { useNetwork } from '../shared/hooks/useNetwork.js';
 import { db } from '../shared/db/storage.js';
@@ -151,6 +151,8 @@ function AppContent() {
   const [userName, setUserName] = useState(() => localStorage.getItem('user_name') || '');
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem('user_email') || '');
   const [heardFrom, setHeardFrom] = useState(() => localStorage.getItem('user_heard_from') || '');
+  const [userToken, setUserToken] = useState(() => localStorage.getItem('ap_vidyuth_token') || null);
+  const [resetPasswordState, setResetPasswordState] = useState(null);
 
   // Profile modal trigger
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -257,53 +259,7 @@ function AppContent() {
     }
   };
 
-  const handleProfileSave = async (name, email, source) => {
-    try {
-      const { saveProfile } = await import('../features/electricity/api/servicesApi.js');
-      const res = await saveProfile(name, email, source);
 
-      localStorage.setItem('user_name', name);
-      localStorage.setItem('user_email', email);
-      if (source) {
-        localStorage.setItem('user_heard_from', source);
-      }
-      localStorage.setItem('profile_prompt_shown', 'true');
-
-      setUserName(name);
-      setUserEmail(email);
-      setHeardFrom(source || '');
-      setProfileModalOpen(false);
-
-      if (res && res.user && res.user.role) {
-        const { db } = await import('../shared/db/storage.js');
-        const { isSecurePro } = await import('../features/electricity/utils/billing.js');
-        if (res.user.role === 'PRO') {
-          await db.setSetting('is_pro', isSecurePro('WHITELISTED'));
-          await db.setSetting('pro_source', res.user.pro_source || 'admin');
-        } else {
-          await db.setSetting('is_pro', null);
-          await db.setSetting('pro_source', null);
-        }
-        electricityContext.actions.reload();
-      }
-
-      toast.success('Profile created successfully!');
-    } catch (err) {
-      console.warn('[profile] Sync failed on launch, saving locally:', err.message);
-      localStorage.setItem('user_name', name);
-      localStorage.setItem('user_email', email);
-      if (source) {
-        localStorage.setItem('user_heard_from', source);
-      }
-      localStorage.setItem('profile_prompt_shown', 'true');
-
-      setUserName(name);
-      setUserEmail(email);
-      setHeardFrom(source || '');
-      setProfileModalOpen(false);
-      toast.success('Profile saved locally!');
-    }
-  };
 
   const handleWithdrawPro = () => {
     if (electricityContext.proSource === 'coupon') {
@@ -400,6 +356,70 @@ function AppContent() {
     const interval = setInterval(loadNotifications, 30000);
     return () => clearInterval(interval);
   }, [loadNotifications]);
+
+  // Handle forgot-password email redirect token detection
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const email = params.get('email');
+    if (token && email) {
+      setResetPasswordState({ token, email });
+      setActivePage('reset-password');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  // Background Postgres sync on mount if authenticated
+  useEffect(() => {
+    const initSync = async () => {
+      const token = localStorage.getItem('ap_vidyuth_token');
+      if (token) {
+        try {
+          const { db } = await import('../shared/db/storage.js');
+          await db.syncWithPostgres();
+          console.log('[sync] Background sync merge complete on startup');
+        } catch (err) {
+          console.warn('[sync] Startup sync merge failed:', err.message);
+        }
+      }
+    };
+    initSync();
+  }, []);
+
+  // Authentication success event listener
+  useEffect(() => {
+    const handleAuthSuccess = async (e) => {
+      const { token, user } = e.detail;
+      setUserToken(token);
+      setUserName(user.name);
+      setUserEmail(user.email);
+      setHeardFrom(user.heardFrom || '');
+      
+      const { db } = await import('../shared/db/storage.js');
+      const { isSecurePro } = await import('../features/electricity/utils/billing.js');
+      if (user.role === 'PRO') {
+        await db.setSetting('is_pro', isSecurePro('WHITELISTED'));
+        await db.setSetting('pro_source', 'admin');
+      } else {
+        await db.setSetting('is_pro', null);
+        await db.setSetting('pro_source', null);
+      }
+      
+      try {
+        toast.loading('Syncing your data...', { id: 'auth-sync' });
+        await db.syncWithPostgres();
+        toast.success('Services and readings synchronized!', { id: 'auth-sync' });
+      } catch (err) {
+        toast.error('Local merge complete. Sync pending: ' + err.message, { id: 'auth-sync' });
+      }
+      
+      electricityContext.actions.reload();
+    };
+    
+    window.addEventListener('auth-success', handleAuthSuccess);
+    return () => window.removeEventListener('auth-success', handleAuthSuccess);
+  }, [electricityContext]);
+
 
   useEffect(() => {
     const checkProfile = setTimeout(() => {
@@ -717,67 +737,197 @@ function AppContent() {
                       <button className="btn btn--icon" onClick={() => setActivePage('settings')} aria-label="Back">
                         <FiArrowLeft size={20} />
                       </button>
-                      <h2 className="page__title">User Profile</h2>
+                      <h2 className="page__title">Account & Security</h2>
                     </div>
                   </div>
-                  <div className="page__body">
-                    {(!userName || !userEmail || showUserInfo) ? (
-                      <div className="scard" style={{ padding: '24px' }}>
-                        <div className="field" style={{ marginBottom: '16px' }}>
-                          <label className="field__label">Full Name</label>
-                          <input className="field__input" placeholder="Enter your name" value={userName} onChange={e => setUserName(e.target.value)} />
-                        </div>
-                        <div className="field" style={{ marginBottom: '16px' }}>
-                          <label className="field__label">Email Address</label>
-                          <input className="field__input" type="email" placeholder="Enter your email" value={userEmail} onChange={e => setUserEmail(e.target.value)} />
-                        </div>
-                        <div className="field" style={{ marginBottom: '16px' }}>
-                          <label className="field__label">How did you hear about AP Vidyuth? (Optional)</label>
-                          <select
-                            className="field__input"
-                            value={heardFrom}
-                            onChange={e => setHeardFrom(e.target.value)}
-                            style={{ width: '100%', background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px' }}
-                          >
-                            <option value="">Select an option</option>
-                            <option value="WhatsApp Groups">WhatsApp Groups</option>
-                            <option value="Friends">Friends</option>
-                            <option value="APSPDCL Searches">APSPDCL Searches</option>
-                            <option value="Social Media">Social Media</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                          {userName && userEmail && (
-                            <button className="btn btn--ghost" style={{ flex: 1 }} onClick={() => setShowUserInfo(false)}>Cancel</button>
-                          )}
-                          <button className="btn btn--primary" style={{ flex: 1.5 }} onClick={saveUserInfo} disabled={!userName.trim() || !userEmail.trim()}>Save Details</button>
-                        </div>
-                        <p style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-3)', textAlign: 'center', lineHeight: '1.4' }}>
-                          We use these details only to process Pro requests and provide support. We never share your data.
+                  <div className="page__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '480px', margin: '0 auto', width: '100%' }}>
+                    {!userToken ? (
+                      <div className="scard" style={{ padding: '30px', textAlign: 'center' }}>
+                        <FiUser size={48} style={{ color: 'var(--primary)', marginBottom: '16px', opacity: 0.8 }} />
+                        <h3>Access Your Account</h3>
+                        <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginBottom: '24px' }}>
+                          Sign in or create a standard profile account to synchronize your tracked services, bills history, and meter reading logs across all your devices.
                         </p>
-                      </div>
-                    ) : (
-                      <div className="scard" style={{ padding: '24px' }}>
-                        <div style={{ marginBottom: '20px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase' }}>Saved Name</label>
-                          <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-1)', marginTop: '4px' }}>{userName}</p>
-                        </div>
-                        <div style={{ marginBottom: '20px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase' }}>Saved Email</label>
-                          <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-1)', marginTop: '4px' }}>{userEmail}</p>
-                        </div>
-                        {heardFrom && (
-                          <div style={{ marginBottom: '24px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase' }}>How you heard about us</label>
-                            <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-1)', marginTop: '4px' }}>{heardFrom}</p>
-                          </div>
-                        )}
-                        <button className="btn btn--outline" style={{ width: '100%', borderColor: 'var(--border)' }} onClick={() => setShowUserInfo(true)}>
-                          Edit Profile Details
+                        <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => setProfileModalOpen(true)}>
+                          Login / Register
                         </button>
                       </div>
+                    ) : (
+                      <>
+                        {/* Profile Info */}
+                        <div className="scard" style={{ padding: '24px' }}>
+                          <h3 style={{ margin: '0 0 16px', fontSize: '15px', color: 'var(--text-1)' }}>Profile Details</h3>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold' }}>Name</div>
+                              <div style={{ fontSize: '15px', color: 'var(--text-1)', fontWeight: '500' }}>{userName}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold' }}>Email Address</div>
+                              <div style={{ fontSize: '15px', color: 'var(--text-1)', fontWeight: '500' }}>{userEmail}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 'bold', marginBottom: '4px' }}>Subscription Status</div>
+                              <div style={{ fontSize: '12px', fontWeight: '700', color: electricityContext.isPro ? 'var(--primary)' : 'var(--text-2)', display: 'inline-block', padding: '2px 8px', borderRadius: '4px', background: electricityContext.isPro ? 'rgba(99,102,241,0.15)' : 'var(--surface-2)' }}>
+                                {electricityContext.isPro ? 'PRO SUBSCRIPTION' : 'STANDARD (FREE)'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Sync Status */}
+                        <div className="scard" style={{ padding: '24px' }}>
+                          <h3 style={{ margin: '0 0 8px', fontSize: '15px', color: 'var(--text-1)' }}>Data Synchronization</h3>
+                          <p style={{ color: 'var(--text-3)', fontSize: '12px', lineHeight: '1.4', margin: '0 0 16px' }}>
+                            Your electricity services and meter readings are automatically backed up to Postgres.
+                          </p>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'var(--surface-2)', borderRadius: '8px', marginBottom: '16px' }}>
+                            <span style={{ fontSize: '13px', color: 'var(--text-2)' }}>Cloud Status</span>
+                            <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }}></span> Connected
+                            </span>
+                          </div>
+                          <button
+                            className="btn btn--outline"
+                            style={{ width: '100%', borderColor: 'var(--border)' }}
+                            onClick={async () => {
+                              const syncToast = toast.loading('Syncing with PostgreSQL database...');
+                              try {
+                                const { db } = await import('../shared/db/storage.js');
+                                await db.syncWithPostgres();
+                                toast.success('Data merge and synchronization complete!', { id: syncToast });
+                              } catch (err) {
+                                toast.error('Cloud sync failed: ' + err.message, { id: syncToast });
+                              }
+                            }}
+                          >
+                            Sync with Database
+                          </button>
+                        </div>
+
+                        {/* Change Password */}
+                        <div className="scard" style={{ padding: '24px' }}>
+                          <h3 style={{ margin: '0 0 16px', fontSize: '15px', color: 'var(--text-1)' }}>Change Password</h3>
+                          <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            const cur = e.target.curPass.value;
+                            const next = e.target.newPass.value;
+                            const conf = e.target.confPass.value;
+                            if (!cur || !next || !conf) {
+                              toast.error('All fields are required.');
+                              return;
+                            }
+                            if (next !== conf) {
+                              toast.error('New passwords do not match.');
+                              return;
+                            }
+                            if (next.length < 6) {
+                              toast.error('New password must be at least 6 characters.');
+                              return;
+                            }
+                            const upToast = toast.loading('Updating security credentials...');
+                            try {
+                              const { changePassword } = await import('../features/electricity/api/servicesApi.js');
+                              await changePassword(cur, next);
+                              toast.success('Password changed successfully!', { id: upToast });
+                              e.target.reset();
+                            } catch (err) {
+                              toast.error(err.message || 'Failed to change password.', { id: upToast });
+                            }
+                          }}>
+                            <div className="field" style={{ marginBottom: '12px' }}>
+                              <label className="field__label" style={{ fontSize: '11px' }}>Current Password</label>
+                              <input className="field__input" type="password" name="curPass" placeholder="Enter current password" required />
+                            </div>
+                            <div className="field" style={{ marginBottom: '12px' }}>
+                              <label className="field__label" style={{ fontSize: '11px' }}>New Password</label>
+                              <input className="field__input" type="password" name="newPass" placeholder="Min. 6 characters" required />
+                            </div>
+                            <div className="field" style={{ marginBottom: '16px' }}>
+                              <label className="field__label" style={{ fontSize: '11px' }}>Confirm New Password</label>
+                              <input className="field__input" type="password" name="confPass" placeholder="Confirm new password" required />
+                            </div>
+                            <button type="submit" className="btn btn--primary" style={{ width: '100%' }}>Update Password</button>
+                          </form>
+                        </div>
+
+                        {/* Sign Out */}
+                        <button
+                          className="btn btn--outline"
+                          style={{ width: '100%', borderColor: 'var(--red)', color: 'var(--red)', background: 'transparent' }}
+                          onClick={async () => {
+                            localStorage.removeItem('ap_vidyuth_token');
+                            localStorage.removeItem('user_name');
+                            localStorage.removeItem('user_email');
+                            localStorage.removeItem('user_heard_from');
+                            setUserToken(null);
+                            setUserName('');
+                            setUserEmail('');
+                            setHeardFrom('');
+                            
+                            const { db } = await import('../shared/db/storage.js');
+                            await db.setSetting('is_pro', null);
+                            await db.setSetting('pro_source', null);
+                            electricityContext.actions.reload();
+                            
+                            toast.success('Signed out successfully');
+                            setActivePage('settings');
+                          }}
+                        >
+                          Log Out Account
+                        </button>
+                      </>
                     )}
+                  </div>
+                </div>
+              )}
+              {activePage === 'reset-password' && resetPasswordState && (
+                <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
+                  <div className="page__header page__header--sticky">
+                    <h2 className="page__title">Reset Account Password</h2>
+                  </div>
+                  <div className="page__body" style={{ display: 'flex', justifyContent: 'center', paddingTop: '40px' }}>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const newPass = e.target.newPass.value;
+                      const confirmPass = e.target.confirmPass.value;
+                      if (!newPass || !confirmPass) {
+                        toast.error('All fields are required.');
+                        return;
+                      }
+                      if (newPass !== confirmPass) {
+                        toast.error('Passwords do not match.');
+                        return;
+                      }
+                      if (newPass.length < 6) {
+                        toast.error('Password must be at least 6 characters.');
+                        return;
+                      }
+                      const resetToast = toast.loading('Resetting password...');
+                      try {
+                        const { resetPassword } = await import('../features/electricity/api/servicesApi.js');
+                        await resetPassword(resetPasswordState.email, resetPasswordState.token, newPass);
+                        toast.success('Password reset successfully! Please log in.', { id: resetToast });
+                        setResetPasswordState(null);
+                        setActivePage('settings');
+                        setProfileModalOpen(true);
+                      } catch (err) {
+                        toast.error(err.message || 'Failed to reset password.', { id: resetToast });
+                      }
+                    }} className="scard" style={{ padding: '24px', width: '400px', maxWidth: '90vw' }}>
+                      <p style={{ fontSize: '13px', color: 'var(--text-2)', marginBottom: '16px' }}>
+                        Set a new secure password for <strong>{resetPasswordState.email}</strong>.
+                      </p>
+                      <div className="field" style={{ marginBottom: '14px' }}>
+                        <label className="field__label">New Password</label>
+                        <input className="field__input" type="password" name="newPass" placeholder="Min. 6 characters" required />
+                      </div>
+                      <div className="field" style={{ marginBottom: '20px' }}>
+                        <label className="field__label">Confirm New Password</label>
+                        <input className="field__input" type="password" name="confirmPass" placeholder="Confirm password" required />
+                      </div>
+                      <button type="submit" className="btn btn--primary" style={{ width: '100%' }}>Update Password</button>
+                    </form>
                   </div>
                 </div>
               )}
@@ -1533,8 +1683,8 @@ function AppContent() {
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
                         <SettingsItem
                           icon={FiUser}
-                          label="User Profile"
-                          description={userName ? "View or edit your contact details" : "Set your name and email for Pro access"}
+                          label={userToken ? "Account & Security" : "User Profile"}
+                          description={userToken ? `Logged in as ${userEmail}` : (userName ? "View profile details" : "Register or Log in to sync details")}
                           onClick={() => setActivePage('user-profile')}
                           color="var(--blue)"
                         />
@@ -1654,7 +1804,6 @@ function AppContent() {
         <ProfileRegistrationModal
           open={profileModalOpen}
           onClose={() => setProfileModalOpen(false)}
-          onSave={handleProfileSave}
         />
         <NotificationsModal
           open={notificationsModalOpen}
@@ -1674,10 +1823,16 @@ function AppContent() {
   );
 }
 
-export function ProfileRegistrationModal({ open, onClose, onSave }) {
+export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login' }) {
+  const [tab, setTab] = useState(defaultTab); // 'login' | 'register' | 'forgot'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [heardFrom, setHeardFrom] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -1685,63 +1840,253 @@ export function ProfileRegistrationModal({ open, onClose, onSave }) {
     };
     if (open) {
       window.addEventListener('keydown', handleEsc);
+      setError('');
+      setForgotSuccess('');
     }
     return () => window.removeEventListener('keydown', handleEsc);
   }, [open, onClose]);
 
   if (!open) return null;
 
-  const handleSave = () => {
-    if (!name.trim() || !email.trim()) return;
-    onSave(name.trim(), email.trim(), heardFrom || null);
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      setError('Email and password are required.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const { loginUser } = await import('../features/electricity/api/servicesApi.js');
+      const res = await loginUser(email.trim(), password);
+      
+      localStorage.setItem('ap_vidyuth_token', res.token);
+      localStorage.setItem('user_name', res.user.name);
+      localStorage.setItem('user_email', res.user.email);
+      if (res.user.heardFrom) localStorage.setItem('user_heard_from', res.user.heardFrom);
+      localStorage.setItem('profile_prompt_shown', 'true');
+
+      // Dispatch event to notify parent state
+      window.dispatchEvent(new CustomEvent('auth-success', { detail: res }));
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Login failed. Please check credentials.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSkip = () => {
-    localStorage.setItem('profile_prompt_shown', 'true');
-    onClose();
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      setError('Name, email, and password are required.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const { registerUser } = await import('../features/electricity/api/servicesApi.js');
+      const res = await registerUser(name.trim(), email.trim(), password, heardFrom || null);
+
+      localStorage.setItem('ap_vidyuth_token', res.token);
+      localStorage.setItem('user_name', res.user.name);
+      localStorage.setItem('user_email', res.user.email);
+      if (res.user.heardFrom) localStorage.setItem('user_heard_from', res.user.heardFrom);
+      localStorage.setItem('profile_prompt_shown', 'true');
+
+      window.dispatchEvent(new CustomEvent('auth-success', { detail: res }));
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Registration failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      setError('Email address is required.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const { forgotPassword } = await import('../features/electricity/api/servicesApi.js');
+      const res = await forgotPassword(email.trim());
+      setForgotSuccess(res.message || 'If registered, we have sent a reset password link.');
+    } catch (err) {
+      setError(err.message || 'Request failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 11000 }}>
-      <div className="dialog" role="dialog" style={{ width: '420px', maxWidth: '90vw' }}>
-        <div className="dialog__header" style={{ padding: '24px 24px 16px' }}>
-          <h2 className="dialog__title">Complete Your Profile</h2>
-          <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginTop: '8px' }}>
-            Set up your profile to enable personalized updates, notification alerts, and seamless Pro access requests.
-          </p>
-        </div>
-        <div className="dialog__body" style={{ padding: '0 24px' }}>
-          <div className="field" style={{ marginBottom: '16px' }}>
-            <label className="field__label">Full Name *</label>
-            <input className="field__input" placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} />
-          </div>
-          <div className="field" style={{ marginBottom: '16px' }}>
-            <label className="field__label">Email Address *</label>
-            <input className="field__input" type="email" placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} />
-          </div>
-          <div className="field" style={{ marginBottom: '16px' }}>
-            <label className="field__label">How did you hear about AP Vidyuth? (Optional)</label>
-            <select
-              className="field__input"
-              value={heardFrom}
-              onChange={e => setHeardFrom(e.target.value)}
-              style={{ width: '100%', background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px' }}
+      <div className="dialog" role="dialog" style={{ width: '420px', maxWidth: '90vw', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}>
+        {/* Tabs Header */}
+        {tab !== 'forgot' && (
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '4px' }}>
+            <button
+              onClick={() => { setTab('login'); setError(''); }}
+              style={{
+                flex: 1, padding: '14px', background: 'none', border: 'none',
+                color: tab === 'login' ? 'var(--primary)' : 'var(--text-3)',
+                fontWeight: '600', fontSize: '14px', cursor: 'pointer',
+                borderBottom: tab === 'login' ? '2px solid var(--primary)' : 'none',
+                transition: 'all 0.2s'
+              }}
             >
-              <option value="">Select an option</option>
-              <option value="WhatsApp Groups">WhatsApp Groups</option>
-              <option value="Friends">Friends</option>
-              <option value="APSPDCL Searches">APSPDCL Searches</option>
-              <option value="Social Media">Social Media</option>
-              <option value="Other">Other</option>
-            </select>
+              Sign In
+            </button>
+            <button
+              onClick={() => { setTab('register'); setError(''); }}
+              style={{
+                flex: 1, padding: '14px', background: 'none', border: 'none',
+                color: tab === 'register' ? 'var(--primary)' : 'var(--text-3)',
+                fontWeight: '600', fontSize: '14px', cursor: 'pointer',
+                borderBottom: tab === 'register' ? '2px solid var(--primary)' : 'none',
+                transition: 'all 0.2s'
+              }}
+            >
+              Sign Up
+            </button>
           </div>
-          <p style={{ fontSize: '11px', color: 'var(--text-3)', lineHeight: '1.4', margin: '12px 0 0' }}>
-            Privacy Note: We only use your information for app synchronization and notification alerts. We never sell your data.
+        )}
+
+        <div className="dialog__header" style={{ padding: '24px 24px 12px' }}>
+          {tab === 'forgot' && (
+            <h2 className="dialog__title" style={{ fontSize: '18px', fontWeight: '700' }}>Reset Password</h2>
+          )}
+          <p style={{ color: 'var(--text-2)', fontSize: '12px', lineHeight: '1.5', margin: '4px 0 0' }}>
+            {tab === 'login' && 'Sign in to access your services and sync reading data across devices.'}
+            {tab === 'register' && 'Create an account to store and automatically backup your bills.'}
+            {tab === 'forgot' && 'Enter your email address to receive a secure password reset link.'}
           </p>
         </div>
-        <div className="dialog__footer" style={{ padding: '20px 24px 24px', display: 'flex', gap: '12px' }}>
-          <button className="btn btn--ghost" style={{ flex: 1 }} onClick={handleSkip}>Skip for Now</button>
-          <button className="btn btn--primary" style={{ flex: 1.5 }} onClick={handleSave} disabled={!name.trim() || !email.trim()}>Save details</button>
+
+        {error && (
+          <div style={{ margin: '0 24px 12px', padding: '10px 14px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', color: 'var(--red)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>{error}</span>
+          </div>
+        )}
+
+        {forgotSuccess && (
+          <div style={{ margin: '0 24px 12px', padding: '10px 14px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '8px', color: 'var(--green, #22c55e)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>{forgotSuccess}</span>
+          </div>
+        )}
+
+        <div className="dialog__body" style={{ padding: '0 24px' }}>
+          {tab === 'login' && (
+            <form onSubmit={handleLogin}>
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Email Address</label>
+                <div style={{ position: 'relative' }}>
+                  <FiMail style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
+                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} style={{ paddingLeft: '36px' }} />
+                </div>
+              </div>
+              <div className="field" style={{ marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)', margin: 0 }}>Password</label>
+                  <button type="button" onClick={() => { setTab('forgot'); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '11px', cursor: 'pointer', fontWeight: '500' }}>Forgot Password?</button>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <FiLock style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
+                  <input className="field__input" type={showPassword ? "text" : "password"} placeholder="••••••" value={password} onChange={e => setPassword(e.target.value)} style={{ paddingLeft: '36px', paddingRight: '36px' }} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '12px', background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}>
+                    {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px', marginBottom: '16px' }}>
+                <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={onClose}>Skip</button>
+                <button type="submit" className="btn btn--primary" style={{ flex: 1.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }} disabled={loading}>
+                  {loading ? 'Signing In...' : 'Sign In'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {tab === 'register' && (
+            <form onSubmit={handleRegister}>
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Full Name</label>
+                <div style={{ position: 'relative' }}>
+                  <FiUser style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
+                  <input className="field__input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} style={{ paddingLeft: '36px' }} />
+                </div>
+              </div>
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Email Address</label>
+                <div style={{ position: 'relative' }}>
+                  <FiMail style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
+                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} style={{ paddingLeft: '36px' }} />
+                </div>
+              </div>
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Password (Min. 6 chars)</label>
+                <div style={{ position: 'relative' }}>
+                  <FiLock style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
+                  <input className="field__input" type={showPassword ? "text" : "password"} placeholder="••••••" value={password} onChange={e => setPassword(e.target.value)} style={{ paddingLeft: '36px', paddingRight: '36px' }} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '12px', background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}>
+                    {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>How did you hear about us? (Optional)</label>
+                <select
+                  className="field__input"
+                  value={heardFrom}
+                  onChange={e => setHeardFrom(e.target.value)}
+                  style={{ width: '100%', background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px' }}
+                >
+                  <option value="">Select an option</option>
+                  <option value="WhatsApp Groups">WhatsApp Groups</option>
+                  <option value="Friends">Friends</option>
+                  <option value="APSPDCL Searches">APSPDCL Searches</option>
+                  <option value="Social Media">Social Media</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px', marginBottom: '16px' }}>
+                <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={onClose}>Skip</button>
+                <button type="submit" className="btn btn--primary" style={{ flex: 1.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }} disabled={loading}>
+                  {loading ? 'Creating...' : 'Register'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {tab === 'forgot' && (
+            <form onSubmit={handleForgot}>
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Email Address</label>
+                <div style={{ position: 'relative' }}>
+                  <FiMail style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
+                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} style={{ paddingLeft: '36px' }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', marginBottom: '16px', gap: '12px' }}>
+                <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={() => { setTab('login'); setError(''); setForgotSuccess(''); }}>Back to Sign In</button>
+                <button type="submit" className="btn btn--primary" style={{ flex: 1.5 }} disabled={loading}>
+                  {loading ? 'Sending...' : 'Send Reset Link'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+        <div style={{ padding: '0 24px 20px', borderTop: '1px solid var(--border)', marginTop: '8px', paddingTop: '12px' }}>
+          <p style={{ fontSize: '10px', color: 'var(--text-3)', lineHeight: '1.4', margin: 0, textAlign: 'center' }}>
+            Privacy Guarantee: We secure your data and credentials with top-tier hashing. We never sell or share profile details.
+          </p>
         </div>
       </div>
     </div>,
