@@ -158,6 +158,12 @@ function AppContent() {
   // Profile modal trigger
   const [profileModalOpen, setProfileModalOpen] = useState(false);
 
+  useEffect(() => {
+    const handleOpen = () => setProfileModalOpen(true);
+    window.addEventListener('open-profile-modal', handleOpen);
+    return () => window.removeEventListener('open-profile-modal', handleOpen);
+  }, []);
+
   // User notifications
   const [notifications, setNotifications] = useState([]);
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
@@ -1945,6 +1951,37 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    const handleOpen = (e) => {
+      if (e.detail && e.detail.tab) {
+        setTab(e.detail.tab);
+      }
+    };
+    window.addEventListener('open-profile-modal', handleOpen);
+    return () => window.removeEventListener('open-profile-modal', handleOpen);
+  }, []);
+
+  useEffect(() => {
+    setError('');
+    setFieldErrors({});
+    setForgotSuccess('');
+  }, [tab]);
+
+  useEffect(() => {
+    if (!open) {
+      setName('');
+      setEmail('');
+      setPassword('');
+      setHeardFrom('');
+      setError('');
+      setFieldErrors({});
+      setForgotSuccess('');
+    } else {
+      setTab(defaultTab);
+    }
+  }, [open, defaultTab]);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -1962,12 +1999,23 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setError('Email and password are required.');
+    const errors = {};
+    if (!email.trim()) {
+      errors.email = 'Email address is required.';
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      errors.email = 'Please enter a valid email address.';
+    }
+    if (!password.trim()) {
+      errors.password = 'Password is required.';
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
+
     setLoading(true);
     setError('');
+    setFieldErrors({});
     try {
       const { loginUser } = await import('../features/electricity/api/servicesApi.js');
       const res = await loginUser(email.trim(), password);
@@ -1990,16 +2038,28 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      setError('Name, email, and password are required.');
+    const errors = {};
+    if (!name.trim()) {
+      errors.name = 'Full name is required.';
+    }
+    if (!email.trim()) {
+      errors.email = 'Email address is required.';
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      errors.email = 'Please enter a valid email address.';
+    }
+    if (!password.trim()) {
+      errors.password = 'Password is required.';
+    } else if (password.length < 6) {
+      errors.password = 'Password must be at least 6 characters.';
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
+
     setLoading(true);
     setError('');
+    setFieldErrors({});
     try {
       const { registerUser } = await import('../features/electricity/api/servicesApi.js');
       const res = await registerUser(name.trim(), email.trim(), password, heardFrom || null);
@@ -2021,12 +2081,20 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
 
   const handleForgot = async (e) => {
     e.preventDefault();
+    const errors = {};
     if (!email.trim()) {
-      setError('Email address is required.');
+      errors.email = 'Email address is required.';
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      errors.email = 'Please enter a valid email address.';
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
+
     setLoading(true);
     setError('');
+    setFieldErrors({});
     try {
       const { forgotPassword } = await import('../features/electricity/api/servicesApi.js');
       const res = await forgotPassword(email.trim());
@@ -2077,16 +2145,10 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
           )}
           <p style={{ color: 'var(--text-2)', fontSize: '12px', lineHeight: '1.5', margin: '4px 0 0' }}>
             {tab === 'login' && 'Sign in to access your services and sync reading data across devices.'}
-            {tab === 'register' && 'Create an account to store and automatically backup your bills.'}
+            {tab === 'register' && 'Create a profile to unlock automated cloud sync, secure data backup, and the ability to request extended service caps (more than 4 services). Profile registration is mandatory to request upgrades.'}
             {tab === 'forgot' && 'Enter your email address to receive a secure password reset link.'}
           </p>
         </div>
-
-        {error && (
-          <div style={{ margin: '0 24px 12px', padding: '10px 14px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', color: 'var(--red)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>{error}</span>
-          </div>
-        )}
 
         {forgotSuccess && (
           <div style={{ margin: '0 24px 12px', padding: '10px 14px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '8px', color: 'var(--green, #22c55e)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2101,8 +2163,11 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
                 <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Email Address</label>
                 <div style={{ position: 'relative' }}>
                   <FiMail style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
-                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} style={{ paddingLeft: '36px' }} />
+                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => { setEmail(e.target.value); setFieldErrors(p => ({ ...p, email: '' })); }} style={{ paddingLeft: '36px', borderColor: fieldErrors.email ? 'var(--red)' : 'var(--border)' }} />
                 </div>
+                {fieldErrors.email && (
+                  <span style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', display: 'block' }}>{fieldErrors.email}</span>
+                )}
               </div>
               <div className="field" style={{ marginBottom: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -2111,12 +2176,20 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
                 </div>
                 <div style={{ position: 'relative' }}>
                   <FiLock style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
-                  <input className="field__input" type={showPassword ? "text" : "password"} placeholder="••••••" value={password} onChange={e => setPassword(e.target.value)} style={{ paddingLeft: '36px', paddingRight: '36px' }} />
+                  <input className="field__input" type={showPassword ? "text" : "password"} placeholder="••••••" value={password} onChange={e => { setPassword(e.target.value); setFieldErrors(p => ({ ...p, password: '' })); }} style={{ paddingLeft: '36px', paddingRight: '36px', borderColor: fieldErrors.password ? 'var(--red)' : 'var(--border)' }} />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '12px', background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}>
                     {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <span style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', display: 'block' }}>{fieldErrors.password}</span>
+                )}
               </div>
+              {error && (
+                <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', color: 'var(--red)', fontSize: '12px', marginBottom: '12px' }}>
+                  {error}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px', marginBottom: '16px' }}>
                 <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={onSkip || (() => { localStorage.setItem('profile_prompt_shown', 'true'); onClose(); })}>Skip</button>
                 <button type="submit" className="btn btn--primary" style={{ flex: 1.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }} disabled={loading}>
@@ -2132,25 +2205,34 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
                 <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Full Name</label>
                 <div style={{ position: 'relative' }}>
                   <FiUser style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
-                  <input className="field__input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} style={{ paddingLeft: '36px' }} />
+                  <input className="field__input" placeholder="John Doe" value={name} onChange={e => { setName(e.target.value); setFieldErrors(p => ({ ...p, name: '' })); }} style={{ paddingLeft: '36px', borderColor: fieldErrors.name ? 'var(--red)' : 'var(--border)' }} />
                 </div>
+                {fieldErrors.name && (
+                  <span style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', display: 'block' }}>{fieldErrors.name}</span>
+                )}
               </div>
               <div className="field" style={{ marginBottom: '14px' }}>
                 <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Email Address</label>
                 <div style={{ position: 'relative' }}>
                   <FiMail style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
-                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} style={{ paddingLeft: '36px' }} />
+                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => { setEmail(e.target.value); setFieldErrors(p => ({ ...p, email: '' })); }} style={{ paddingLeft: '36px', borderColor: fieldErrors.email ? 'var(--red)' : 'var(--border)' }} />
                 </div>
+                {fieldErrors.email && (
+                  <span style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', display: 'block' }}>{fieldErrors.email}</span>
+                )}
               </div>
               <div className="field" style={{ marginBottom: '14px' }}>
                 <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Password (Min. 6 chars)</label>
                 <div style={{ position: 'relative' }}>
                   <FiLock style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
-                  <input className="field__input" type={showPassword ? "text" : "password"} placeholder="••••••" value={password} onChange={e => setPassword(e.target.value)} style={{ paddingLeft: '36px', paddingRight: '36px' }} />
+                  <input className="field__input" type={showPassword ? "text" : "password"} placeholder="••••••" value={password} onChange={e => { setPassword(e.target.value); setFieldErrors(p => ({ ...p, password: '' })); }} style={{ paddingLeft: '36px', paddingRight: '36px', borderColor: fieldErrors.password ? 'var(--red)' : 'var(--border)' }} />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '12px', background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}>
                     {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <span style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', display: 'block' }}>{fieldErrors.password}</span>
+                )}
               </div>
               <div className="field" style={{ marginBottom: '14px' }}>
                 <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>How did you hear about us? (Optional)</label>
@@ -2168,6 +2250,11 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
                   <option value="Other">Other</option>
                 </select>
               </div>
+              {error && (
+                <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', color: 'var(--red)', fontSize: '12px', marginBottom: '12px' }}>
+                  {error}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px', marginBottom: '16px' }}>
                 <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={onSkip || (() => { localStorage.setItem('profile_prompt_shown', 'true'); onClose(); })}>Skip</button>
                 <button type="submit" className="btn btn--primary" style={{ flex: 1.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }} disabled={loading}>
@@ -2183,9 +2270,17 @@ export function ProfileRegistrationModal({ open, onClose, defaultTab = 'login', 
                 <label className="field__label" style={{ fontSize: '11px', color: 'var(--text-3)' }}>Email Address</label>
                 <div style={{ position: 'relative' }}>
                   <FiMail style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-3)' }} size={16} />
-                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} style={{ paddingLeft: '36px' }} />
+                  <input className="field__input" type="email" placeholder="email@example.com" value={email} onChange={e => { setEmail(e.target.value); setFieldErrors(p => ({ ...p, email: '' })); }} style={{ paddingLeft: '36px', borderColor: fieldErrors.email ? 'var(--red)' : 'var(--border)' }} />
                 </div>
+                {fieldErrors.email && (
+                  <span style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', display: 'block' }}>{fieldErrors.email}</span>
+                )}
               </div>
+              {error && (
+                <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', color: 'var(--red)', fontSize: '12px', marginBottom: '12px' }}>
+                  {error}
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', marginBottom: '16px', gap: '12px' }}>
                 <button type="button" className="btn btn--ghost" style={{ flex: 1 }} onClick={() => { setTab('login'); setError(''); setForgotSuccess(''); }}>Back to Sign In</button>
                 <button type="submit" className="btn btn--primary" style={{ flex: 1.5 }} disabled={loading}>

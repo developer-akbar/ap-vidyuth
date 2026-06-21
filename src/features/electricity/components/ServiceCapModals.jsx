@@ -53,37 +53,35 @@ export function RequestSuccessModal({ open, type, email, onClose }) {
 
 export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess }) {
   const { t } = useTranslation();
-  const [name, setName] = useState(() => localStorage.getItem('user_name') || '');
-  const [email, setEmail] = useState(() => localStorage.getItem('user_email') || '');
+  const [name] = useState(() => localStorage.getItem('user_name') || '');
+  const [email] = useState(() => localStorage.getItem('user_email') || '');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestedPlan, setRequestedPlan] = useState('BRONZE');
+  const [error, setError] = useState('');
 
   const handleSubmit = useCallback(async (forcedName, forcedEmail) => {
     const finalName = forcedName || name.trim();
     const finalEmail = forcedEmail || email.trim();
 
     if (!finalName || !finalEmail) {
-      toast.error('Name and Email are required.');
+      setError('You must be registered to make an access request.');
       return;
     }
     
     setIsSubmitting(true);
+    setError('');
     try {
       const { requestProAccess } = await import('../api/servicesApi.js');
       const defaultMessage = type === 'WITHDRAW' ? 'User requested Pro subscription withdrawal.' : 'User requested extended access for tracking services.';
       const res = await requestProAccess(type, message || defaultMessage, finalName, finalEmail, requestedPlan);
       if (res.ok) {
-        // Save to localStorage if not already present or if changed
-        localStorage.setItem('user_name', finalName);
-        localStorage.setItem('user_email', finalEmail);
-        
         onSuccess && onSuccess(type, finalEmail);
       } else {
-        toast.error(res.error || 'Failed to send request.');
+        setError(res.error || 'Failed to send request.');
       }
     } catch (e) {
-      toast.error(e.message || 'Failed to send request. Please try again later.');
+      setError(e.message || 'Failed to send request. Please try again later.');
     } finally {
       setIsSubmitting(false);
     }
@@ -170,13 +168,10 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
               </ul>
             </div>
           )}
-          <div className="field" style={{ marginBottom: '16px' }}>
-            <label className="field__label">Name *</label>
-            <input className="field__input" placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} disabled={isSubmitting} />
-          </div>
-          <div className="field" style={{ marginBottom: '16px' }}>
-            <label className="field__label">Email *</label>
-            <input className="field__input" type="email" placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} disabled={isSubmitting} />
+          <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px' }}>
+            <div style={{ color: 'var(--text-3)', fontSize: '11px', marginBottom: '4px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Profile Details</div>
+            <div style={{ fontWeight: '600', color: 'var(--text-1)' }}>{name || 'No Name'}</div>
+            <div style={{ color: 'var(--text-2)', fontSize: '12px', marginTop: '2px' }}>{email || 'No Email'}</div>
           </div>
           {type !== 'WITHDRAW' && (
             <div className="field" style={{ marginBottom: '16px' }}>
@@ -204,9 +199,14 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
             Note: Your contact details are only used to serve you better and provide access if needed. We never share your data.
           </p>
         </div>
-        <div className="dialog__footer" style={{ padding: '20px 24px 24px', display: 'flex', gap: '12px' }}>
+        {error && (
+          <div style={{ margin: '0 24px 12px', padding: '10px 14px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', color: 'var(--red)', fontSize: '12px' }}>
+            {error}
+          </div>
+        )}
+        <div className="dialog__footer" style={{ padding: '0 24px 24px', display: 'flex', gap: '12px' }}>
           <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={isSubmitting}>Cancel</button>
-          <button className="btn btn--primary" onClick={() => handleSubmit()} style={{ flex: 1.5 }} disabled={isSubmitting || !name.trim() || !email.trim()}>
+          <button className="btn btn--primary" onClick={() => handleSubmit()} style={{ flex: 1.5 }} disabled={isSubmitting || !name || !email}>
             {isSubmitting ? 'Sending...' : 'Send Request'}
           </button>
         </div>
@@ -223,6 +223,19 @@ export function ServiceCapModal({ open, serviceCount = 0, limit = 4, onClose }) 
   const [isSuccess, setIsSuccess] = useState(false);
   const [requestFormOpen, setRequestFormOpen] = useState(false);
   const [successState, setSuccessState] = useState({ open: false, type: '', email: '' });
+  const [couponError, setCouponError] = useState('');
+
+  useEffect(() => {
+    const handleAuthSuccess = () => {
+      if (open) {
+        setRequestFormOpen(true);
+      }
+    };
+    window.addEventListener('auth-success', handleAuthSuccess);
+    return () => {
+      window.removeEventListener('auth-success', handleAuthSuccess);
+    };
+  }, [open]);
 
   useEffect(() => {
     const handleBack = (e) => {
@@ -250,6 +263,7 @@ export function ServiceCapModal({ open, serviceCount = 0, limit = 4, onClose }) 
   const handleApplyCoupon = async () => {
     if (!coupon.trim()) return;
     setValidating(true);
+    setCouponError('');
     try {
       const normalizedCoupon = String(coupon).trim().toUpperCase();
       const { validateCoupon } = await import('../api/servicesApi.js');
@@ -263,17 +277,22 @@ export function ServiceCapModal({ open, serviceCount = 0, limit = 4, onClose }) 
         setIsSuccess(true);
         toast.success('Pro Access Granted!');
       } else {
-        toast.error(res.error || t('invalid_coupon', 'Invalid Coupon Code'));
+        setCouponError('Invalid Coupon');
       }
     } catch (e) {
-      toast.error('Validation failed');
+      setCouponError('Validation failed');
     } finally {
       setValidating(false);
     }
   };
 
   const handleRequestAccessClick = () => {
-    setRequestFormOpen(true);
+    const isLoggedIn = !!localStorage.getItem('ap_vidyuth_token');
+    if (!isLoggedIn) {
+      window.dispatchEvent(new CustomEvent('open-profile-modal', { detail: { tab: 'register' } }));
+    } else {
+      setRequestFormOpen(true);
+    }
   };
 
   const handleRequestSuccess = (type, email) => {
@@ -339,13 +358,18 @@ export function ServiceCapModal({ open, serviceCount = 0, limit = 4, onClose }) 
               placeholder={t('enter_coupon_code', 'Enter Coupon Code')} 
               style={{ textAlign: 'center', textTransform: 'uppercase' }} 
               value={coupon}
-              onChange={e => setCoupon(e.target.value)}
+              onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
               disabled={validating}
             />
           </div>
         </div>
-        <div className="dialog__footer" style={{ flexDirection: 'column', gap: '8px' }}>
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating}>
+        <div className="dialog__footer" style={{ flexDirection: 'column', gap: '8px', paddingTop: 0 }}>
+          {couponError && (
+            <div style={{ color: 'var(--red)', fontSize: '12px', marginBottom: '8px', textAlign: 'center', fontWeight: '500' }}>
+              {couponError}
+            </div>
+          )}
+          <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
             {validating ? 'Validating...' : t('apply_coupon', 'Apply Coupon')}
           </button>
           
@@ -377,6 +401,18 @@ export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
   const [isSuccess, setIsSuccess] = useState(false);
   const [requestFormOpen, setRequestFormOpen] = useState(false);
   const [successState, setSuccessState] = useState({ open: false, type: '', email: '' });
+  const [couponError, setCouponError] = useState('');
+
+  useEffect(() => {
+    const handleAuthSuccess = () => {
+      // In this modal, if auth completes successfully, show Request Form
+      setRequestFormOpen(true);
+    };
+    window.addEventListener('auth-success', handleAuthSuccess);
+    return () => {
+      window.removeEventListener('auth-success', handleAuthSuccess);
+    };
+  }, []);
 
   useEffect(() => {
     setSelectedIds(new Set(services.slice(0, limit).map(s => s.id)));
@@ -414,6 +450,7 @@ export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
   const handleApplyCoupon = async () => {
     if (!coupon.trim()) return;
     setValidating(true);
+    setCouponError('');
     try {
       const normalizedCoupon = String(coupon).trim().toUpperCase();
       const { validateCoupon } = await import('../api/servicesApi.js');
@@ -427,17 +464,22 @@ export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
         setIsSuccess(true);
         toast.success('Pro Access Activated!');
       } else {
-        toast.error(res.error || t('invalid_coupon', 'Invalid Coupon Code'));
+        setCouponError('Invalid Coupon');
       }
     } catch (e) {
-      toast.error('Validation failed');
+      setCouponError('Validation failed');
     } finally {
       setValidating(false);
     }
   };
 
   const handleRequestAccessClick = () => {
-    setRequestFormOpen(true);
+    const isLoggedIn = !!localStorage.getItem('ap_vidyuth_token');
+    if (!isLoggedIn) {
+      window.dispatchEvent(new CustomEvent('open-profile-modal', { detail: { tab: 'register' } }));
+    } else {
+      setRequestFormOpen(true);
+    }
   };
 
   const handleRequestSuccess = (type, email) => {
@@ -536,13 +578,18 @@ export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
                   placeholder={t('enter_coupon_code', 'Enter Coupon Code')} 
                   style={{ textTransform: 'uppercase', flex: 1 }} 
                   value={coupon}
-                  onChange={e => setCoupon(e.target.value)}
+                  onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                   disabled={validating}
                 />
                 <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
                   {validating ? '...' : 'Apply'}
                 </button>
              </div>
+             {couponError && (
+               <div style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', fontWeight: '500' }}>
+                 {couponError}
+               </div>
+             )}
           </div>
 
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -576,6 +623,18 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
   const [isSuccess, setIsSuccess] = useState(false);
   const [requestFormOpen, setRequestFormOpen] = useState(false);
   const [successState, setSuccessState] = useState({ open: false, type: '', email: '' });
+  const [couponError, setCouponError] = useState('');
+
+  useEffect(() => {
+    const handleAuthSuccess = () => {
+      // In this modal, if auth completes successfully, show Request Form
+      setRequestFormOpen(true);
+    };
+    window.addEventListener('auth-success', handleAuthSuccess);
+    return () => {
+      window.removeEventListener('auth-success', handleAuthSuccess);
+    };
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -608,6 +667,7 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
   const handleApplyCoupon = async () => {
     if (!coupon.trim()) return;
     setValidating(true);
+    setCouponError('');
     try {
       const normalizedCoupon = String(coupon).trim().toUpperCase();
       const { validateCoupon } = await import('../api/servicesApi.js');
@@ -621,17 +681,22 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
         setIsSuccess(true);
         toast.success('Pro Access Activated!');
       } else {
-        toast.error(res.error || t('invalid_coupon', 'Invalid Coupon Code'));
+        setCouponError('Invalid Coupon');
       }
     } catch (e) {
-      toast.error('Validation failed');
+      setCouponError('Validation failed');
     } finally {
       setValidating(false);
     }
   };
 
   const handleRequestAccessClick = () => {
-    setRequestFormOpen(true);
+    const isLoggedIn = !!localStorage.getItem('ap_vidyuth_token');
+    if (!isLoggedIn) {
+      window.dispatchEvent(new CustomEvent('open-profile-modal', { detail: { tab: 'register' } }));
+    } else {
+      setRequestFormOpen(true);
+    }
   };
 
   const handleRequestSuccess = (type, email) => {
@@ -755,13 +820,18 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
                   placeholder={t('enter_coupon_code', 'Enter Coupon Code')} 
                   style={{ textTransform: 'uppercase', flex: 1 }} 
                   value={coupon}
-                  onChange={e => setCoupon(e.target.value)}
+                  onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                   disabled={validating}
                 />
                 <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
                   {validating ? '...' : 'Apply'}
                 </button>
              </div>
+             {couponError && (
+               <div style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', fontWeight: '500' }}>
+                 {couponError}
+               </div>
+             )}
           </div>
 
           <div style={{ display: 'flex', gap: '12px' }}>
