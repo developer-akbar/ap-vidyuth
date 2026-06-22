@@ -1202,6 +1202,8 @@ app.post('/api/services/:serviceNumber/refresh', async (req, res) => {
   }
 });
 
+// TODO: Convert this into an SSE or NDJSON-streaming endpoint to flush each result
+// to the client as soon as it's ready, rather than buffering the whole batch.
 app.post('/api/services/refresh-all', async (req, res) => {
   const { services: inputServices, serviceNumbers, billdeskSession } = req.body || {};
 
