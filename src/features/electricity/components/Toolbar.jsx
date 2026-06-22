@@ -1,4 +1,3 @@
-import { FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiChevronDown, FiGlobe, FiZap, FiCopy, FiLayout, FiEye, FiArrowUp, FiArrowDown, FiWifiOff } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import { Loader } from '../../../shared/components/Loader.jsx';
 import { SessionIndicator } from './SessionIndicator.jsx';
@@ -28,95 +27,105 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
     i18n.changeLanguage(isTelugu ? 'en' : 'te');
   };
 
-  const copyAllNumbers = async () => {
-    if (!services || services.length === 0) return;
-    const numbers = services.map(s => s.serviceNumber).join(', ');
-    try {
-      await navigator.clipboard.writeText(numbers);
-      toast.success(t('copied_all', 'All service numbers copied'));
-    } catch (e) {
-      toast.error('Failed to copy');
-    }
-  };
-
   const toggleSortOrder = () => {
     const nextOrder = filters.sortOrder === 'asc' ? 'desc' : 'asc';
     onFiltersChange({ ...filters, sortOrder: nextOrder });
   };
 
   return (
-    <div className="toolbar">
+    <div className="flex flex-col gap-3 mb-4">
       {/* ── Top Row: Search, Language, Add ── */}
-      <div className="toolbar__row toolbar__row--top">
-        <div className="search-box">
-          <FiSearch size={14} />
+      <div className="flex justify-between items-center gap-3 w-full">
+        {/* Search */}
+        <div className="flex-1 flex items-center bg-surface-container-low px-3 py-1.5 rounded-xl border border-border-subtle group">
+          <span className="material-symbols-outlined text-text-muted text-[20px] mr-2">search</span>
           <input
             value={localQuery}
             onChange={e => setLocalQuery(e.target.value)}
             placeholder={t('search_services')}
+            className="bg-transparent border-none focus:ring-0 text-body-base placeholder:text-text-muted w-full outline-none text-[13px] p-0"
           />
         </div>
         
-        <div className="toolbar__group">
+        <div className="flex items-center gap-2">
+          {/* Language Toggle */}
           <button 
-            className="btn btn--ghost btn--sm" 
+            className="flex items-center gap-1.5 px-3 py-2 bg-surface-card border border-border-medium rounded-xl text-xs font-body-bold hover:bg-surface-container-low transition-all cursor-pointer text-text-secondary disabled:opacity-50"
             onClick={toggleLanguage} 
             title={t('language')} 
             aria-label={t('language')}
             disabled={refreshingAll}
-            style={{ padding: '0 8px', opacity: refreshingAll ? 0.6 : 1 }}
           >
-            <FiGlobe size={15} />
-            <span className="hide-mobile-sm" style={{ marginLeft: '4px' }}>{isTelugu ? 'English' : 'తెలుగు'}</span>
-            <span className="show-mobile-sm" style={{ marginLeft: '4px', fontSize: '11px', fontWeight: '800' }}>{isTelugu ? 'En' : 'తె'}</span>
+            <span className="material-symbols-outlined text-[18px]">language</span>
+            <span>{isTelugu ? 'English' : 'తెలుగు'}</span>
           </button>
 
-          <button className="btn btn--primary btn--sm" onClick={onAdd} disabled={refreshingAll} aria-label={t('add_service')} style={{ opacity: refreshingAll ? 0.6 : 1 }}>
-            <FiPlus size={15} />
-            <span style={{ marginLeft: '4px' }}>{t('add')}</span>
+          {/* Add Service */}
+          <button 
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-xs shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50"
+            onClick={onAdd} 
+            disabled={refreshingAll} 
+            aria-label={t('add_service')}
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            <span>{t('add')}</span>
           </button>
         </div>
       </div>
 
-      <div className="toolbar__row toolbar__row--bottom" style={{ flexWrap: 'wrap', gap: '8px', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="toolbar__group" style={{ flex: '1 1 auto', justifyContent: 'flex-start', gap: '6px', flexWrap: 'wrap' }}>
-          <div className="seg">
+      {/* ── Bottom Row: Segment controls, sort/filter, refresh ── */}
+      <div className="flex flex-wrap gap-2.5 justify-between items-center w-full">
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Active / Trash Toggle */}
+          <div className="flex bg-surface-container rounded-full p-0.5 border border-border-medium">
             <button 
-              className={`seg__btn ${activeView === 'active' ? 'seg__btn--active' : ''}`} 
+              className={`px-3 py-1 text-[11px] font-label-caps rounded-full transition-all duration-150 cursor-pointer ${
+                activeView === 'active' 
+                  ? 'bg-white shadow-sm text-primary font-bold' 
+                  : 'text-text-muted hover:text-on-surface'
+              }`}
               onClick={() => onViewChange('active')}
               aria-label={t('view_active_services', 'View active services')}
             >
-               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                 <FiZap size={14} className="show-mobile-sm" />
-                 {t('active')}
-               </span>
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">bolt</span>
+                {t('active')}
+              </span>
             </button>
             <button 
-              className={`seg__btn ${activeView === 'trash' ? 'seg__btn--active' : ''}`} 
+              className={`px-3 py-1 text-[11px] font-label-caps rounded-full transition-all duration-150 cursor-pointer ${
+                activeView === 'trash' 
+                  ? 'bg-white shadow-sm text-primary font-bold' 
+                  : 'text-text-muted hover:text-on-surface'
+              }`}
               onClick={() => onViewChange('trash')}
               aria-label={t('view_trash', 'View trash')}
             >
-              <FiTrash2 size={13} />
-              {trashCount > 0 && <span className="badge">{trashCount}</span>}
+              <span className="flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[14px]">delete</span>
+                {trashCount > 0 && <span className="px-1.5 py-0.2 bg-red-dim text-red text-[9px] font-black rounded-full">{trashCount}</span>}
+              </span>
             </button>
           </div>
 
+          {/* View Style Switcher */}
           <button 
-            className="btn btn--ghost btn--sm" 
+            className="flex items-center gap-1 px-3 py-1.5 bg-surface-card border border-border-medium rounded-xl text-xs font-body-bold hover:bg-surface-container-low transition-all cursor-pointer text-text-secondary"
             onClick={onToggleCardStyle} 
             title={cardStyle === 'classic' ? 'Switch to Quick Glance' : 'Switch to Classic'}
             aria-label={cardStyle === 'classic' ? 'Switch to Quick Glance' : 'Switch to Classic'}
-            style={{ padding: '0 6px', height: '32px', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', gap: '4px' }}
           >
-            <span style={{ fontSize: '11px', fontWeight: '700' }} className="hide-xs">View Style</span>
-            <span style={{ fontSize: '11px', fontWeight: '700' }} className="show-xs hide-xxs">Style</span>
-            {cardStyle === 'classic' ? <FiLayout size={17} style={{ color: 'var(--text-3)' }} /> : <FiEye size={17} style={{ color: 'var(--primary)' }} />}
+            <span className="text-[11px]">View Style</span>
+            <span className="material-symbols-outlined text-[18px] text-text-muted ml-0.5">
+              {cardStyle === 'classic' ? 'grid_view' : 'table_rows'}
+            </span>
           </button>
 
-          <div className="toolbar__filters" style={{ display: 'flex', gap: '4px' }}>
-            <div className="select-wrap">
+          {/* Filters Selects */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex items-center bg-surface-card border border-border-medium rounded-xl px-2.5 py-1">
               <select 
-                className="select" 
+                className="bg-transparent border-none outline-none text-xs font-body-bold text-text-secondary pr-4 cursor-pointer focus:ring-0 focus:border-none appearance-none" 
                 value={filters.status} 
                 onChange={e => onFiltersChange({ ...filters, status: e.target.value })}
                 aria-label={t('filter_by_status', 'Filter by status')}
@@ -127,54 +136,61 @@ export function Toolbar({ filters, onFiltersChange, onAdd, onRefreshAll, refresh
                 <option value="NO_DUES">{t('filter_no_dues')}</option>
                 <option value="UNKNOWN">{t('filter_unknown')}</option>
               </select>
-              <FiChevronDown size={12} className="select-icon" />
+              <span className="material-symbols-outlined text-[16px] text-text-muted absolute right-1 pointer-events-none">expand_more</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', paddingRight: '2px' }}>
-              <div className="select-wrap" style={{ border: 'none' }}>
+            <div className="flex items-center bg-surface-card border border-border-medium rounded-xl">
+              <div className="relative flex items-center px-2.5 py-1">
                 <select 
-                  className="select" 
+                  className="bg-transparent border-none outline-none text-xs font-body-bold text-text-secondary pr-4 cursor-pointer focus:ring-0 focus:border-none appearance-none" 
                   value={filters.sort} 
                   onChange={e => onFiltersChange({ ...filters, sort: e.target.value })}
                   aria-label={t('sort_by', 'Sort by')}
-                  style={{ border: 'none', background: 'transparent' }}
                 >
                   <option value="amount">{t('sort_amount')}</option>
                   <option value="dueDate">{t('sort_due_date')}</option>
                   <option value="name">{t('sort_name')}</option>
                 </select>
-                <FiChevronDown size={12} className="select-icon" />
+                <span className="material-symbols-outlined text-[16px] text-text-muted absolute right-1 pointer-events-none">expand_more</span>
               </div>
+              <div className="w-[1px] h-4 bg-border-medium" />
               <button 
-                className="icon-btn-micro" 
+                className="p-1 hover:bg-surface-container-low rounded-r-xl transition-all cursor-pointer text-text-secondary" 
                 onClick={toggleSortOrder}
                 title={filters.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
                 aria-label={filters.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-                style={{ height: '24px', width: '24px', color: 'var(--text-2)' }}
               >
-                {filters.sortOrder === 'asc' ? <FiArrowUp size={14} /> : <FiArrowDown size={14} />}
+                <span className="material-symbols-outlined text-[16px]">
+                  {filters.sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                </span>
               </button>
             </div>
           </div>
         </div>
 
-        <div className="toolbar__group toolbar__group--refresh" style={{ background: 'var(--surface-2)', padding: '2px 4px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+        {/* Refresh All */}
+        <div className="flex items-center gap-1.5 bg-surface-container-low px-2 py-1 rounded-xl border border-border-subtle ml-auto">
           <button 
-            className="btn btn--ghost btn--sm" 
+            className="flex items-center gap-1 px-2.5 py-1 bg-surface-card hover:bg-surface-container-low transition-colors border border-border-medium rounded-lg text-xs font-body-bold text-text-secondary cursor-pointer disabled:opacity-50"
             onClick={(e) => {
               if (isOffline) {
-                toast('You are offline. Reconnect to refresh.', { icon: <FiWifiOff color="var(--amber)" /> });
+                toast('You are offline. Reconnect to refresh.', { icon: <span className="material-symbols-outlined text-amber text-[16px]">wifi_off</span> });
                 return;
               }
               onRefreshAll(e);
             }} 
             disabled={refreshingAll || !hasServices || isOffline} 
             aria-label={t('refresh_all', 'Refresh all services')}
-            style={{ border: 'none', background: 'transparent', padding: '0 6px', opacity: isOffline ? 0.5 : 1, cursor: isOffline ? 'not-allowed' : 'pointer' }}
             title={isOffline ? 'Offline' : ''}
           >
-            {refreshingAll ? <Loader size={13} /> : (isOffline ? <FiWifiOff size={13} /> : <FiRefreshCw size={13} />)}
-            <span className="hide-xs" style={{ marginLeft: '4px' }}>{t('refresh')}</span>
+            {refreshingAll ? (
+              <Loader size={12} />
+            ) : (
+              <span className="material-symbols-outlined text-[16px]">
+                {isOffline ? 'wifi_off' : 'sync'}
+              </span>
+            )}
+            <span>{t('refresh')}</span>
           </button>
           <SessionIndicator />
         </div>

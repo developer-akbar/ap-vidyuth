@@ -30,8 +30,14 @@ function TrendBadge({ value, unit = '', percent }) {
   const label = zero ? 'Same'
     : `${up ? '+' : ''}${unit === '₹' ? formatInr(Math.abs(value)) : `${Math.abs(value).toLocaleString('en-IN')} ${unit}`}`;    
   return (
-    <span className={`tbadge tbadge--${zero ? 'flat' : up ? 'up' : 'dn'}`}>
-      {!zero && (up ? <FiTrendingUp size={10} /> : <FiTrendingDown size={10} />)}
+    <span className={`inline-flex items-center gap-1 text-[11px] font-mono-data px-1.5 py-0.5 rounded-full ${
+      zero ? 'bg-surface-container text-text-muted' : up ? 'bg-red-dim text-red' : 'bg-green-dim text-green'
+    }`}>
+      {!zero && (
+        <span className="material-symbols-outlined text-[12px]">
+          {up ? 'trending_up' : 'trending_down'}
+        </span>
+      )}
       {label}{percent != null ? ` (${percent > 0 ? '+' : ''}${Number(percent).toFixed(0)}%)` : ''}
     </span>
   );
@@ -53,15 +59,22 @@ function Section({ title, badge, defaultOpen = false, children, isExpanded }) {
   }, [isExpanded]);
 
   return (
-    <div className={`acc ${open ? 'acc--open' : ''}`}>
-      <button className="acc__head" onClick={() => setOpen(v => !v)}>
-        <span className="acc__title">{title}</span>
-        <div className="acc__right">
-          {(typeof badge === 'string' || typeof badge === 'number') ? <span className="acc__badge">{badge}</span> : badge}
-          <FiChevronDown size={14} className="acc__chevron" />
+    <div className={`border-b border-border-subtle last:border-none transition-all duration-200 ${open ? 'bg-surface-container-low/10' : ''}`}>
+      <button 
+        className="w-full flex items-center justify-between py-2.5 px-3 hover:bg-surface-container-low transition-colors duration-150 text-left cursor-pointer" 
+        onClick={() => setOpen(v => !v)}
+      >
+        <span className="font-body-bold text-[13px] text-on-surface">{title}</span>
+        <div className="flex items-center gap-2">
+          {(typeof badge === 'string' || typeof badge === 'number') ? (
+            <span className="font-mono-data text-xs px-2 py-0.5 bg-surface-container-high text-text-secondary rounded">{badge}</span>
+          ) : badge}
+          <span className={`material-symbols-outlined text-[16px] text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+            expand_more
+          </span>
         </div>
       </button>
-      {open && <div className="acc__body">{children}</div>}
+      {open && <div className="p-3 bg-surface-container-low/30 border-t border-border-subtle">{children}</div>}
     </div>
   );
 }
@@ -147,7 +160,6 @@ export function ServiceCard({
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
 
-    // Only consider bills from the current year up to the current month
     const paymentsThisYear = service.billHistory.filter(ph => {
       const d = new Date(ph.billDate);
       return d.getFullYear() === currentYear && d.getMonth() <= currentMonth;
@@ -157,8 +169,6 @@ export function ServiceCard({
 
     const total = paymentsThisYear.reduce((sum, ph) => sum + Number(ph.billAmount || 0), 0);
     
-    // Determine the end month for the label
-    // Use the latest bill month from history for this year.
     let endMonthName = '—';
     if (paymentsThisYear.length > 0) {
       const sorted = [...paymentsThisYear].sort((a, b) => new Date(b.billDate) - new Date(a.billDate));
@@ -255,20 +265,20 @@ export function ServiceCard({
   return (
     <article
       id={id}
-      className={`scard scard--${status.toLowerCase()} ${menuOpen ? 'scard--menu-open' : ''} ${selected ? 'scard--selected' : ''} ${isFlashing ? 'flash' : ''} ${isExpanded ? 'scard--expanded' : ''}`}
+      className={`scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-3 shadow-sm transition-all duration-200 hover:translate-y-[-1px] relative overflow-visible ${
+        selected ? 'border-primary bg-primary-dim/5 ring-1 ring-primary' : ''
+      } ${isFlashing ? 'animate-pulse border-amber shadow-[0_0_12px_var(--amber)]' : ''}`}
       onContextMenu={e => { if (longPressTimer.current || selecting) e.preventDefault(); }}
-      style={{ overflow: 'visible' }}
     >
       {selecting && (
         <div
-          className="scard__select-overlay"
+          className="absolute inset-0 z-5 cursor-pointer rounded-xl"
           onClick={e => { e.stopPropagation(); onToggleSelect(service.id); }}
-          style={{ position: 'absolute', inset: 0, zIndex: 5, cursor: 'pointer' }}
         />
       )}
 
       {/* ── Header ────────────────────────────────────────────────────────────────── */}
-      <header className="scard__header"
+      <header className="flex justify-between items-center w-full relative z-10"
         onMouseDown={handlePressStart}
         onMouseUp={handlePressEnd}
         onMouseLeave={handlePressEnd}
@@ -277,93 +287,134 @@ export function ServiceCard({
         onTouchEnd={handlePressEnd}
         onTouchMove={handlePressMove}
       >
-        <div className="scard__identity">
+        <div className="flex items-center gap-3">
           {selecting && (
-            <div style={{ position: 'relative', zIndex: 10, display: 'flex', alignItems: 'center', marginRight: '8px' }}>
+            <div className="relative z-10 flex items-center mr-1">
               <input
                 type="checkbox"
                 checked={!!selected}
                 onChange={() => onToggleSelect(service.id)}
                 onClick={e => e.stopPropagation()}
-                style={{ width: '18px', height: '18px', margin: 0, padding: 0 }}
+                className="w-[18px] h-[18px] cursor-pointer rounded border-border-medium text-primary focus:ring-primary"
               />
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-            <div className={`scard__status-dot scard__status-dot--${status.toLowerCase()}`} />
-            {service.pinned && <BsPinFill size={12} style={{ color: 'var(--primary-hi)', transform: 'rotate(45deg)' }} />}        
+          <div className="flex flex-col items-center gap-1.5">
+            {/* Glowing neon status dot */}
+            <div className={`relative flex items-center justify-center w-3 h-3 rounded-full ${
+              status === 'DUE' ? 'bg-red shadow-[0_0_8px_#e11d48]' : 
+              status === 'PAID' ? 'bg-green shadow-[0_0_8px_#059669]' : 
+              'bg-text-muted shadow-[0_0_8px_#64748b]'
+            }`} />
+            {service.pinned && (
+              <span className="material-symbols-outlined text-[14px] text-primary rotate-45">pin</span>
+            )}        
           </div>
-          <div className="scard__identity-text">
-            <h2 className="scard__name" title={service.customerName}>{service.label || service.customerName || t('untitled')}</h2>
-            <div className="scard__num-row">
-              <span className="scard__num">{service.serviceNumber}</span>
+          <div className="flex flex-col">
+            <h2 className="font-body-bold text-[14px] text-on-surface truncate max-w-[160px]" title={service.customerName}>
+              {service.label || service.customerName || t('untitled')}
+            </h2>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="font-mono-data text-[11px] text-text-secondary">{service.serviceNumber}</span>
               <button
-                className="icon-btn-micro"
+                className="w-5 h-5 flex items-center justify-center rounded hover:bg-surface-container-low text-text-secondary relative z-10 cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); copyNum(); }}
                 title={t('copy')}
                 aria-label={t('copy')}
-                style={{ position: 'relative', zIndex: 10 }}
               >
-                <FiCopy size={12} />
+                <span className="material-symbols-outlined text-[14px]">content_copy</span>
               </button>
               <button
-                className="icon-btn-micro"
+                className="w-5 h-5 flex items-center justify-center rounded hover:bg-surface-container-low text-text-secondary relative z-10 cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); onShare?.(); }}
                 title="Share Status"
                 aria-label="Share Status"
-                style={{ position: 'relative', zIndex: 10, marginLeft: '4px' }}
               >
-                <FiShare2 size={12} />
+                <span className="material-symbols-outlined text-[14px]">share</span>
               </button>
             </div>
           </div>
         </div>
 
-        <div className="scard__header-right" style={{ position: 'relative', zIndex: 30 }}>
+        <div className="flex items-center gap-2 relative z-30">
           {cardStyle === 'classic' && (
             <div
               ref={headUpdateRef}
-              className="scard__updated-at"
+              className="flex items-center gap-1 text-[10px] text-text-muted cursor-pointer hover:text-on-surface transition-colors"
               title={formatDateTime(service.lastFetchedAt)}
               onClick={(e) => { e.stopPropagation(); setShowUpdateInfoHead(!showUpdateInfoHead); }}
-              style={{ fontSize: '10px', color: 'var(--text-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
             >
-              <FiClock size={11} /> {fromNow(service.lastFetchedAt)}
+              <span className="material-symbols-outlined text-[12px]">schedule</span>
+              <span>{fromNow(service.lastFetchedAt)}</span>
             </div>
           )}
           {showUpdateInfoHead && cardStyle === 'classic' && (
-            <div className="popover" style={{ position: 'absolute', top: '30px', right: '40px', width: 'max-content', zIndex: 110, padding: '8px 12px', fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+            <div className="absolute top-7 right-10 bg-inverse-surface text-inverse-on-surface p-2 rounded-lg shadow-lg border border-border-medium z-50 text-[10px] font-mono-data whitespace-nowrap">
                Updated: {formatDateTime(service.lastFetchedAt)}
             </div>
           )}
 
-          <span className={`soft-badge soft-badge--${status.toLowerCase()}`}>{t(`filter_${status.toLowerCase()}`, status.replace('_', ' '))}</span>
-          <div className="scard__menu-wrap">
+          <span className={`text-[11px] font-label-caps px-2 py-0.5 rounded-full ${
+            status === 'DUE' ? 'bg-badge-due-bg text-badge-due-fg' : 
+            status === 'PAID' ? 'bg-badge-paid-bg text-badge-paid-fg' : 
+            'bg-surface-container-high text-text-secondary'
+          }`}>{t(`filter_${status.toLowerCase()}`, status.replace('_', ' '))}</span>
+          
+          <div className="relative">
             <button 
-              className="icon-btn-ghost" 
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-low transition-colors text-text-secondary cursor-pointer" 
               onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }} 
               onBlur={() => setTimeout(() => setMenuOpen(false), 200)}
               aria-label={t('more_options', 'More options')}
             >
-              <FiMoreVertical size={16} />
+              <span className="material-symbols-outlined">more_vert</span>
             </button>
             {menuOpen && (
-              <div className="popover" onMouseDown={e => e.stopPropagation()} style={{ zIndex: 100 }}>
-                <button onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onTogglePin(); }}>
-                  {service.pinned ? <BsPinFill size={13} /> : <BsPin size={13} />} {service.pinned ? 'Unpin' : 'Pin'}
+              <div className="absolute right-0 top-9 bg-surface-card border border-border-medium rounded-xl shadow-lg p-1.5 w-48 z-50 flex flex-col gap-0.5" onMouseDown={e => e.stopPropagation()}>
+                <button 
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-body-bold text-text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg text-left cursor-pointer"
+                  onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onTogglePin(); }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">{service.pinned ? 'keep_off' : 'keep'}</span>
+                  {service.pinned ? 'Unpin' : 'Pin'}
                 </button>
-                <button onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onEdit(); }}><FiEdit2 size={13} /> Edit</button>
-                <button onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onShowQR?.(service); }}>
-                  <BsQrCode size={13} /> Show QR Code
+                <button 
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-body-bold text-text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg text-left cursor-pointer"
+                  onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onEdit(); }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">edit</span> Edit Details
                 </button>
-                <button onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onCalculateBill?.(service); }}>
-                  <LuCalculator size={13} /> {t('calculate_next_bill')}
+                <button 
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-body-bold text-text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg text-left cursor-pointer"
+                  onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onShowQR?.(service); }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">qr_code</span> Show QR Code
                 </button>
-                <button onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onShareReport?.(); }}>
-                  <FiFileText size={13} /> Share Report
+                <button 
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-body-bold text-text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg text-left cursor-pointer"
+                  onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onCalculateBill?.(service); }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">calculate</span> {t('calculate_next_bill')}
                 </button>
-                <button onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onAbout(); }}><FiInfo size={13} /> {t('about_service')}</button>
-                <button className="danger" onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(); }}><FiTrash2 size={13} /> Trash</button>
+                <button 
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-body-bold text-text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg text-left cursor-pointer"
+                  onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onShareReport?.(); }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">description</span> Share Report
+                </button>
+                <button 
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-body-bold text-text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg text-left cursor-pointer"
+                  onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onAbout(); }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">info</span> {t('about_service')}
+                </button>
+                <div className="h-[1px] bg-border-subtle my-1" />
+                <button 
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-body-bold text-red hover:bg-red-dim/10 rounded-lg text-left cursor-pointer"
+                  onMouseDown={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(); }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span> Move to Trash
+                </button>
               </div>
             )}
           </div>
@@ -371,85 +422,97 @@ export function ServiceCard({
       </header>
 
       {/* ── Hero / Amount ────────────────────────────────────────────────────────────────── */}
-      <div className="scard__hero-main" onClick={() => setIsExpanded(!isExpanded)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div className="scard__hero-content" style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div 
+        className="flex items-center justify-between w-full relative z-10 cursor-pointer py-1"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex-1">
+          <div className="flex items-center gap-4">
             <div>
-              <p className="scard__hero-label">{t('amount_due')}</p>
-              <div className="scard__hero-val">
-                <h2 className="scard__hero-amount">
-                  {status === 'DUE' ? formatInr(service.lastAmountDue) : '₹0'}
-                </h2>
-              </div>
+              <p className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider mb-0.5">{t('amount_due')}</p>
+              <h2 className="font-amount-hero text-amount-hero text-on-surface tracking-tight font-black leading-none">
+                {status === 'DUE' ? formatInr(service.lastAmountDue) : '₹0'}
+              </h2>
             </div>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: '20px', height: '20px', borderRadius: '50%',
-              background: 'var(--surface-3)', border: '1px solid var(--border)',
-              color: 'var(--text-1)', flexShrink: 0
-            }}>
-              <FiChevronDown size={22} style={{ transition: 'transform 0.3s ease', transform: isExpanded ? 'rotate(180deg)' : 'none' }} />
+            <div className="w-6 h-6 rounded-full bg-surface-container border border-border-subtle flex items-center justify-center text-text-secondary transition-all">
+              <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                expand_more
+              </span>
             </div>
           </div>
-          <div className="scard__hero-meta" style={{ marginTop: '8px' }}>
+          <div className="flex flex-col gap-1 mt-2">
             {insights?.vsLastMonth && (
-              <div style={{marginBottom: '4px'}}>
+              <div>
                  <TrendBadge value={insights?.vsLastMonth.amount} unit="₹" percent={insights?.vsLastMonth.amountPct} />
               </div>
             )}
-            {dueCopy && !service.isPaid && <span className={`text-${dueTone}`}>{dueCopy} ({formatDate(service.lastDueDate)})</span>}
+            {dueCopy && !service.isPaid && (
+              <span className={`text-[11px] font-body-bold text-${dueTone}`}>
+                {dueCopy} ({formatDate(service.lastDueDate)})
+              </span>
+            )}
             {service.isPaid && (
-              <span className="text-green" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <FiCheckCircle size={12} /> {t('paid')} <b>{formatInr(service.paidAmount)}</b> on {formatDate(service.paidDate)}  
+              <span className="text-green text-[11px] font-body-bold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">check_circle</span> 
+                {t('paid')} <b>{formatInr(service.paidAmount)}</b> on {formatDate(service.paidDate)}  
               </span>
             )}
           </div>
         </div>
-        {service.isPaid && (
-          <button 
-            className="btn-pay-more" 
-            onClick={(e) => { e.stopPropagation(); handlePayClick(e); }}
-            style={{
-              fontSize: '11px', fontWeight: '700', color: 'var(--primary)',
-              background: 'var(--primary-dim)', border: '1px solid var(--primary-glow)',
-              padding: '6px 10px', borderRadius: '14px', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '4px'
-            }}
-          >
-            Pay more
-          </button>
-        )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="flex items-center gap-3">
+          {service.isPaid && (
+            <button 
+              className="px-3 py-1.5 bg-primary-dim/15 hover:bg-primary-dim/30 border border-primary-glow text-primary font-body-bold text-[11px] rounded-full transition-all cursor-pointer" 
+              onClick={(e) => { e.stopPropagation(); handlePayClick(e); }}
+            >
+              Pay more
+            </button>
+          )}
+
           {status === 'DUE' && Number(service.lastAmountDue || 0) > 0 && (
-            <div className="scard__hero-qr" onClick={(e) => { e.stopPropagation(); onShowQR?.(service); }} title={t('show_qr')} style={{ position: 'relative', zIndex: 10 }}>
-              <QRCodeSVG value={generateAPSPDCLUpiString(service) || ''} size={44} level="L" includeMargin={false} />
+            <div 
+              className="bg-white border border-border-medium rounded-lg p-1 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer relative z-10 shadow-sm"
+              onClick={(e) => { e.stopPropagation(); onShowQR?.(service); }} 
+              title={t('show_qr')}
+            >
+              <QRCodeSVG value={generateAPSPDCLUpiString(service) || ''} size={42} level="L" includeMargin={false} />
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Quick Metrics (Visible when collapsed in rich mode, or always when expanded) ── */}
+      {/* ── Quick Metrics ── */}
       {(cardStyle === 'rich' || isExpanded) && (
-        <div className="scard__quick-metrics" onClick={useAccordion ? () => setIsExpanded(!isExpanded) : undefined} style={{ cursor: useAccordion ? 'pointer' : 'default', paddingBottom: (service.lastThreeAmounts?.length > 0) ? '8px' : '14px' }}>
-          <div className="qm-item">
-            <span className="qm-label">{t('units')}</span>
-            <span className="qm-val">
+        <div 
+          className={`grid grid-cols-3 gap-2 py-2 border-t border-border-subtle relative z-10 ${
+            useAccordion ? 'cursor-pointer' : ''
+          }`}
+          onClick={useAccordion ? () => setIsExpanded(!isExpanded) : undefined}
+        >
+          <div className="flex flex-col">
+            <span className="font-label-caps text-[9px] text-text-muted uppercase tracking-wider mb-0.5">{t('units')}</span>
+            <span className="font-mono-data text-xs text-on-surface font-semibold">
               {service.lastBilledUnits == null ? '—' : Number(service.lastBilledUnits).toLocaleString('en-IN')}
-              <span style={{fontSize: '9px', fontWeight: '500', marginLeft:'2px', color: 'var(--text-3)'}}>u</span>
+              <span className="text-[10px] text-text-muted ml-0.5">u</span>
             </span>
           </div>
-          <div className="qm-item">
-            <span className="qm-label">{t('bill_date')}</span>
-            <span className="qm-val">{formatDate(service.lastBillDate)}</span>
+          <div className="flex flex-col">
+            <span className="font-label-caps text-[9px] text-text-muted uppercase tracking-wider mb-0.5">{t('bill_date')}</span>
+            <span className="font-body-bold text-xs text-on-surface truncate">{formatDate(service.lastBillDate)}</span>
           </div>
-          <div ref={metricsUpdateRef} className="qm-item" onClick={(e) => { e.stopPropagation(); setShowUpdateInfoMetrics(!showUpdateInfoMetrics); }} style={{ cursor: 'pointer', position: 'relative' }}>
-            <span className="qm-label">{t('last_updated')}</span>
-            <span className="qm-val" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <FiClock size={11} /> {fromNow(service.lastFetchedAt)}
+          <div 
+            ref={metricsUpdateRef} 
+            className="flex flex-col cursor-pointer relative"
+            onClick={(e) => { e.stopPropagation(); setShowUpdateInfoMetrics(!showUpdateInfoMetrics); }}
+          >
+            <span className="font-label-caps text-[9px] text-text-muted uppercase tracking-wider mb-0.5">{t('last_updated')}</span>
+            <span className="font-body-bold text-xs text-on-surface flex items-center gap-0.5">
+              <span className="material-symbols-outlined text-[12px] text-text-muted">schedule</span>
+              {fromNow(service.lastFetchedAt)}
             </span>
             {showUpdateInfoMetrics && (
-              <div className="popover" style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: '8px', width: 'max-content', zIndex: 110, padding: '8px 12px', fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-inverse-surface text-inverse-on-surface p-2 rounded-lg shadow-lg border border-border-medium z-50 text-[10px] font-mono-data whitespace-nowrap">
                  Updated: {formatDateTime(service.lastFetchedAt)}
               </div>
             )}
@@ -459,14 +522,14 @@ export function ServiceCard({
 
       {/* ── Quick History Chips ── */}
       {(cardStyle === 'rich' || isExpanded) && Array.isArray(service.lastThreeAmounts) && service.lastThreeAmounts.length > 0 && (
-        <div className="scard__chips" style={{ borderTop: 'none' }}>
+        <div className="flex gap-2 relative z-10 pt-1">
           {service.lastThreeAmounts.map((b, i) => {
             const date = new Date(b.paidDate || b.billDate);
             const label = `${MO[date.getUTCMonth()]} ${String(date.getUTCFullYear()).slice(2)}`;
             return (
-              <div key={i} className="chip" style={{ minWidth: 'auto', flex: '1', padding: '4px 8px' }}>
-                <span style={{ fontSize: '9px' }}>{label}</span>
-                <b style={{ fontSize: '11px' }}>{formatInr(b.billAmount)}</b>
+              <div key={i} className="flex-1 p-2 bg-surface-container-low border border-border-subtle rounded-xl flex flex-col text-center shadow-xs">
+                <span className="font-label-caps text-[9px] text-text-muted tracking-wider">{label}</span>
+                <b className="font-mono-data text-xs text-on-surface mt-0.5">{formatInr(b.billAmount)}</b>
               </div>
             );
           })}
@@ -474,38 +537,41 @@ export function ServiceCard({
       )}
 
       {/* ── Action Bar ── */}
-      <div className="scard__action-bar" onClick={e => e.stopPropagation()} style={{ position: 'relative', zIndex: 20 }}>
-        <div className="scard__action-left">
+      <div className="flex justify-between items-center w-full pt-2 border-t border-border-subtle relative z-20" onClick={e => e.stopPropagation()}>
+        <div>
           <button 
-            className="btn-ghost-sm" 
+            className="flex items-center gap-1 px-3 py-1.5 bg-surface-card hover:bg-surface-container-low transition-colors border border-border-medium rounded-lg text-xs font-body-bold text-text-secondary cursor-pointer disabled:opacity-50"
             onClick={handleRefreshClick} 
             disabled={refreshing || isOffline}
-            aria-label={t('refresh')}
-            style={isOffline ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
             title={isOffline ? 'Offline' : ''}
           >
-            {refreshing ? <Loader size={14} /> : (isOffline ? <FiWifiOff size={14} /> : <FiClock size={14} />)} {t('refresh')}
+            {refreshing ? (
+              <Loader size={12} />
+            ) : (
+              <span className="material-symbols-outlined text-[16px]">
+                {isOffline ? 'wifi_off' : 'sync'}
+              </span>
+            )}
+            <span>{t('refresh')}</span>
           </button>
         </div>
-        <div className="scard__action-right">
+        <div className="flex items-center gap-1.5">
           {status === 'DUE' && Number(service.lastAmountDue || 0) > 0 ? (
             <>
               <button
-                className="btn btn--secondary btn--sm"
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-border-medium hover:bg-surface-container-low text-text-secondary cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); onCalculateBill?.(service); }}
                 title="Calculator"
                 aria-label="Calculator"
                 disabled={refreshing}
-                style={refreshing ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
-                <LuCalculator size={14} />
+                <span className="material-symbols-outlined text-[18px]">calculate</span>
               </button>
               <button 
-                className="btn btn--pay btn--sm" 
+                className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-lg font-body-bold text-xs shadow-sm shadow-primary/10 cursor-pointer disabled:opacity-50"
                 onClick={handlePayClick} 
                 aria-label={t('pay_now')}
                 disabled={isOffline || refreshing}
-                style={(isOffline || refreshing) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
                 {t('pay_now')}
               </button>
@@ -513,22 +579,22 @@ export function ServiceCard({
           ) : (
             <>
               <button 
-                className="btn btn--secondary btn--sm" 
+                className="flex items-center gap-1 px-3 py-1.5 bg-surface-card hover:bg-surface-container-low transition-colors border border-border-medium rounded-lg text-xs font-body-bold text-text-secondary cursor-pointer disabled:opacity-50"
                 onClick={(e) => { e.stopPropagation(); onShowQR?.(service); }}
                 aria-label={t('show_qr')}
                 disabled={refreshing}
-                style={refreshing ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >      
-                <BsQrCode size={14} /> <span className="hide-mobile-sm" style={{marginLeft:'4px'}}>QR</span>
+                <span className="material-symbols-outlined text-[16px]">qr_code</span>
+                <span>QR</span>
               </button>
               <button 
-                className="btn btn--secondary btn--sm" 
+                className="flex items-center gap-1 px-3 py-1.5 bg-surface-card hover:bg-surface-container-low transition-colors border border-border-medium rounded-lg text-xs font-body-bold text-text-secondary cursor-pointer disabled:opacity-50"
                 onClick={(e) => { e.stopPropagation(); onCalculateBill?.(service); }}
                 aria-label={t('calculate_next_bill')}
                 disabled={refreshing}
-                style={refreshing ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
-                <LuCalculator size={14} /> <span className="hide-mobile-sm" style={{marginLeft:'4px'}}>{t('calculate_next_bill')}</span>
+                <span className="material-symbols-outlined text-[16px]">calculate</span>
+                <span>{t('calculate_next_bill')}</span>
               </button>
             </>
           )}
@@ -536,70 +602,69 @@ export function ServiceCard({
       </div>
 
       {/* ── Expanded Body ── */}
-      <div className={`scard__body ${isExpanded ? 'scard__body--expanded' : ''}`}>
-        <div className="scard__body-inner" key={isExpanded ? 'exp' : 'col'}>
+      <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[3000px] opacity-100 mt-2' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+        <div className="flex flex-col gap-0 border border-border-subtle rounded-xl overflow-hidden bg-surface shadow-inner">
           {insights && (
             <Section title="Consumption Insights" defaultOpen={false} isExpanded={isExpanded}>
-              <div style={{ padding: '0 10px' }}>
+              <div className="flex flex-col gap-2">
                  {insights.vsLastMonth?.amountPct > 5 && (
-                   <div style={{ margin: '0 0 12px', background: 'var(--amber-dim)', color: 'var(--amber)', border: '1px solid var(--amber)', padding: '8px', borderRadius: 'var(--radius-sm)', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                     <FiZap size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
-                     <span style={{ fontSize: '11px', lineHeight: 1.4 }}><b>High bill detected (+{insights.vsLastMonth.amountPct}%).</b> Setting your AC to 24°C instead of 18°C can save up to 24% on cooling costs.</span>
+                   <div className="p-3 bg-amber-dim/10 border border-amber/20 rounded-xl flex items-start gap-2 text-amber text-xs leading-normal">
+                     <span className="material-symbols-outlined text-[16px] mt-0.5 flex-shrink-0">lightbulb</span>
+                     <span><b>High bill detected (+{insights.vsLastMonth.amountPct}%).</b> Setting your AC to 24°C instead of 18°C can save up to 24% on cooling costs.</span>
                    </div>
                  )}
-                 <div className="receipt-row">
-                    <span className="receipt-row__label">Units Vs Last Month</span>
+                 <div className="flex justify-between items-center text-xs">
+                    <span className="text-text-secondary">Units Vs Last Month</span>
                     <TrendBadge value={insights.vsLastMonth?.units} unit="u" percent={insights.vsLastMonth?.unitsPct} />        
                  </div>
                  {insights.vsLastMonth?.amount != null && (
-                   <div className="receipt-row">
-                      <span className="receipt-row__label">Amount Vs Last Month</span>
+                   <div className="flex justify-between items-center text-xs">
+                      <span className="text-text-secondary">Amount Vs Last Month</span>
                       <TrendBadge value={insights.vsLastMonth.amount} unit="₹" percent={insights.vsLastMonth.amountPct} />    
                    </div>
                  )}
                  {insights.vsSameMonthLastYear && (
                    <>
-                     <div className="receipt-row">
-                        <span className="receipt-row__label">Units Vs Last Year</span>
+                     <div className="flex justify-between items-center text-xs">
+                        <span className="text-text-secondary">Units Vs Last Year</span>
                         <TrendBadge value={insights.vsSameMonthLastYear.units} unit="u" percent={insights.vsSameMonthLastYear.unitsPct} />
                      </div>
-                     <div className="receipt-row">
-                        <span className="receipt-row__label">Amount Vs Last Year</span>
+                     <div className="flex justify-between items-center text-xs">
+                        <span className="text-text-secondary">Amount Vs Last Year</span>
                         <TrendBadge value={insights.vsSameMonthLastYear.amount} unit="₹" percent={insights.vsSameMonthLastYear.amountPct} />
                      </div>
                    </>
                  )}
-                 <div className="receipt-row">
-                    <span className="receipt-row__label">{t('avg_mo')}</span>
-                    <b className="receipt-row__val">{formatInr(insights.avgAmount)}</b>
+                 <div className="flex justify-between items-center text-xs">
+                    <span className="text-text-secondary">{t('avg_mo')}</span>
+                    <b className="font-mono-data text-on-surface">{formatInr(insights.avgAmount)}</b>
                  </div>
                  {currentYearTotalPaid && (
-                   <div className="receipt-row">
-                      <span className="receipt-row__label">Total Paid ({currentYearTotalPaid.label})</span>
-                      <b className="receipt-row__val">{formatInr(currentYearTotalPaid.total)}</b>
+                   <div className="flex justify-between items-center text-xs">
+                      <span className="text-text-secondary">Total Paid ({currentYearTotalPaid.label})</span>
+                      <b className="font-mono-data text-on-surface">{formatInr(currentYearTotalPaid.total)}</b>
                    </div>
                  )}
-                 <div className="receipt-row">
-                    <span className="receipt-row__label">Avg Units (Last 6m)</span>
-                    <b className="receipt-row__val">{insights.avgUnits6m?.toLocaleString('en-IN') || '—'} u</b>
+                 <div className="flex justify-between items-center text-xs">
+                    <span className="text-text-secondary">Avg Units (Last 6m)</span>
+                    <b className="font-mono-data text-on-surface">{insights.avgUnits6m?.toLocaleString('en-IN') || '—'} u</b>
                  </div>
-                 <div className="receipt-row">
-                    <span className="receipt-row__label">Avg Units (Last 12m)</span>
-                    <b className="receipt-row__val">{insights.avgUnits12m?.toLocaleString('en-IN') || '—'} u</b>
+                 <div className="flex justify-between items-center text-xs">
+                    <span className="text-text-secondary">Avg Units (Last 12m)</span>
+                    <b className="font-mono-data text-on-surface">{insights.avgUnits12m?.toLocaleString('en-IN') || '—'} u</b>
                  </div>
                  {service.lastBilledUnits > 0 && (
-                   <div className="receipt-row" style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed var(--border-md)' }}>
-                      <span className="receipt-row__label">Effective Rate (This Month)</span>
-                      <b className="receipt-row__val">₹{((service.lastAmountDue || service.paidAmount || 0) / service.lastBilledUnits).toFixed(2)}/u</b>
-                 </div>
+                   <div className="flex justify-between items-center text-xs pt-2 border-t border-dashed border-border-medium mt-1">
+                      <span className="font-body-bold text-text-secondary">Effective Rate (This Month)</span>
+                      <b className="font-mono-data text-on-surface">₹{((service.lastAmountDue || service.paidAmount || 0) / service.lastBilledUnits).toFixed(2)}/u</b>
+                  </div>
                  )}
 
                  <button 
-                   className="btn btn--ghost btn--sm" 
-                   style={{ width: '100%', marginTop: '16px', justifyContent: 'center', border: '1px dashed var(--primary-glow)', color: 'var(--primary-hi)' }}
+                   className="flex items-center justify-center gap-1.5 w-full mt-3 py-2 border border-dashed border-primary/40 hover:bg-primary-dim/10 rounded-xl text-xs font-body-bold text-primary transition-all cursor-pointer"
                    onClick={(e) => { e.stopPropagation(); onShareReport?.(); }}
                  >
-                   <FiFileText size={14} style={{ marginRight: '6px' }} />
+                   <span className="material-symbols-outlined text-[16px]">description</span>
                    Share Monthly Usage Report
                  </button>
               </div>
@@ -619,20 +684,20 @@ export function ServiceCard({
           )}
 
           <Section
-            title={<span style={{ display: 'flex', alignItems: 'center' }}>{streakEmoji}{t('payment_history')}</span>}
-            badge={isHistoryError ? <span style={{display:'flex', alignItems:'center', gap: '4px'}}><FiAlertTriangle size={12}/> Sync Error</span> : `${(service.paymentHistory?.length > 0 ? service.paymentHistory.length : (service.billHistory?.filter(b => b.isPaid).length || 0))}`}
+            title={<span className="flex items-center">{streakEmoji}{t('payment_history')}</span>}
+            badge={isHistoryError ? <span className="flex items-center gap-1 text-red text-xs"><span className="material-symbols-outlined text-[14px]">warning</span> Sync Error</span> : `${(service.paymentHistory?.length > 0 ? service.paymentHistory.length : (service.billHistory?.filter(b => b.isPaid).length || 0))}`}
             isExpanded={isExpanded}
           >
             {isHistoryError ? (
-              <div className="scard__error" style={{ margin: '8px 10px' }}>
-                <FiAlertTriangle size={12} />
+              <div className="p-3 bg-red-dim/10 border border-red/20 rounded-xl flex items-center gap-2 text-xs text-red">
+                <span className="material-symbols-outlined text-[16px]">warning</span>
                 {t('history_unavailable')}
               </div>
             ) : (service.paymentHistory?.length > 0 || service.billHistory?.some(b => b.isPaid)) ? (
-              <PaymentsPanel service={service} t={t} />
+               <PaymentsPanel service={service} t={t} />
             ) : (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '13px' }}>
-                <FiInfo size={14} style={{ marginBottom: '4px', display: 'block', margin: '0 auto 4px' }} />
+              <div className="p-5 text-center text-text-muted text-xs">
+                <span className="material-symbols-outlined text-[18px] text-text-muted mb-1 block mx-auto">info</span>
                 {t('no_records_found')}
               </div>
             )}
@@ -644,21 +709,21 @@ export function ServiceCard({
             isExpanded={isExpanded}
             badge={meterLogCount > 0 ? meterLogCount : null}
           >
-            <div style={{ padding: '0 10px 10px' }}>
+            <div className="flex flex-col gap-2">
               <MeterReadingLog service={service} />
             </div>
           </Section>
 
           {/* ── Budget Goal (Feature 3) ── */}
           <Section title="Budget Goal" isExpanded={isExpanded}>
-            <div style={{ padding: '0 10px 10px' }}>
+            <div className="flex flex-col gap-2">
               <BudgetGoal service={service} />
             </div>
           </Section>
 
           {/* ── Cost Split Tracker (Feature 8) ── */}
           <Section title="Split Bill" isExpanded={isExpanded}>
-            <div style={{ padding: '0 10px 10px' }}>
+            <div className="flex flex-col gap-2">
               <CostSplitTracker service={service} />
             </div>
           </Section>
@@ -678,68 +743,81 @@ function BreakupPanel({ breakup, isPaid, paidAmount, t }) {
   ];
   const total = breakup.grossTotal || 1;
   return (
-    <div className="bp">
-      <div className="bp__bar">
+    <div className="flex flex-col gap-2">
+      {/* Visual Weight Bar */}
+      <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden flex">
+        {rows.map(r => {
+          const val = breakup[r.key] || 0;
+          if (val <= 0) return null;
+          return (
+            <div 
+              key={r.key} 
+              className="h-full first:rounded-l-full last:rounded-r-full" 
+              style={{ width: `${(val / total) * 100}%`, backgroundColor: r.color }} 
+              title={`${r.label}: ${formatInr(val)}`} 
+            />
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-1.5 mt-2">
         {rows.map(r => (
-          <div key={r.key} className="bp__seg" style={{ flex: breakup[r.key] / total, background: r.color }} title={r.label} />   
+          <div key={r.key} className="flex justify-between items-center text-xs">
+            <span className="flex items-center gap-1.5 text-text-secondary">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color }} />
+              {r.label}
+            </span>
+            <b className="font-mono-data text-on-surface">{formatInr(breakup[r.key] || 0)}</b>
+          </div>
         ))}
       </div>
 
-      {rows.map(r => (
-        <div key={r.key} className="receipt-row">
-          <span className="receipt-row__label">
-            <span className="bp__dot" style={{ background: r.color }} />
-            {r.label}
-          </span>
-          <b className="receipt-row__val">{formatInr(breakup[r.key] || 0)}</b>
-        </div>
-      ))}
-
-      <div style={{ borderTop: '1px dashed var(--border-md)', margin: '8px 0' }} />
-      <div className="receipt-row">
-        <span className="receipt-row__label">{t('gross_total')}</span>
-        <b className="receipt-row__val">{formatInr(breakup.grossTotal || 0)}</b>
+      <div className="border-t border-dashed border-border-medium my-2" />
+      
+      <div className="flex justify-between items-center text-xs">
+        <span className="text-text-secondary">{t('gross_total')}</span>
+        <b className="font-mono-data text-on-surface">{formatInr(breakup.grossTotal || 0)}</b>
       </div>
 
       {breakup.isd !== 0 && breakup.isd != null && (
-        <div className="receipt-row">
-          <span className="receipt-row__label">{t('isd')}</span>
-          <b className="receipt-row__val" style={{ color: breakup.isd < 0 ? 'var(--green)' : 'inherit' }}>{formatInr(breakup.isd)}</b>
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-text-secondary">{t('isd')}</span>
+          <b className="font-mono-data" style={{ color: breakup.isd < 0 ? 'var(--green)' : 'inherit' }}>{formatInr(breakup.isd)}</b>
         </div>
       )}
 
       {breakup.arrearsTotal > 0 && (
         <>
-          <div style={{ borderTop: '1px dashed var(--border-md)', margin: '8px 0' }} />
+          <div className="border-t border-dashed border-border-medium my-1.5" />
           {Array.isArray(breakup.arrears) && breakup.arrears.map((a, i) => (
-            <div key={i} className="receipt-row">
-              <span className="receipt-row__label">
-                <FiCheckCircle size={12} color="var(--green)" />
+            <div key={i} className="flex justify-between items-center text-xs">
+              <span className="flex items-center gap-1 text-green">
+                <span className="material-symbols-outlined text-[14px]">check_circle</span>
                 {a.receiptNo || `Payment ${i + 1}`}
-                <small style={{fontWeight:'normal', marginLeft: '4px'}}>({formatDate(a.date)})</small>
+                <small className="text-text-muted ml-1">({formatDate(a.date)})</small>
               </span>
-              <b className="receipt-row__val credit">−{formatInr(a.amount)}</b>
+              <b className="font-mono-data text-green">−{formatInr(a.amount)}</b>
             </div>
           ))}
-          <div className="receipt-row">
-            <span className="receipt-row__label">{t('total_arrears')}</span>
-            <b className="receipt-row__val credit">−{formatInr(breakup.arrearsTotal)}</b>
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-text-secondary">{t('total_arrears')}</span>
+            <b className="font-mono-data text-green">−{formatInr(breakup.arrearsTotal)}</b>
           </div>
         </>
       )}
 
       {isPaid && paidAmount != null && (
-        <div className="receipt-row">
-          <span className="receipt-row__label">
-            <FiCheckCircle size={12} color="var(--green)" /> {t('paid_amount')}
+        <div className="flex justify-between items-center text-xs">
+          <span className="flex items-center gap-1 text-green">
+            <span className="material-symbols-outlined text-[14px]">check_circle</span> {t('paid_amount')}
           </span>
-          <b className="receipt-row__val credit">−{formatInr(paidAmount)}</b>
+          <b className="font-mono-data text-green">−{formatInr(paidAmount)}</b>
         </div>
       )}
 
-      <div className="receipt-row receipt-row--net">
-        <span className="receipt-row__label">{t('net_due')}</span>
-        <b className="receipt-row__val">{formatInr(isPaid ? 0 : (breakup.netDue ?? breakup.grossTotal ?? 0))}</b>
+      <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-surface-container-low mt-2 border border-border-subtle">
+        <span className="font-body-bold text-on-surface">{t('net_due')}</span>
+        <b className="font-mono-data text-primary text-[14px]">{formatInr(isPaid ? 0 : (breakup.netDue ?? breakup.grossTotal ?? 0))}</b>
       </div>
     </div>
   );
@@ -776,51 +854,59 @@ function TrendPanel({ data, insights, t }) {
   }, [data]);
 
   return (
-    <div className="trend">
-      <div className="trend__head">
-        <span className="trend__title">{t('18_month_trend')}</span>
-        <div className="seg seg--xs">
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-between items-center">
+        <span className="text-xs font-body-bold text-text-muted">{t('18_month_trend')}</span>
+        <div className="flex bg-surface-container rounded-full p-0.5 border border-border-medium">
           {['amount', 'units', 'combo'].map(v => (
-            <button key={v} className={`seg__btn ${view === v ? 'seg__btn--active' : ''}`} onClick={() => setView(v)}>
+            <button 
+              key={v} 
+              className={`px-2.5 py-0.5 text-[10px] font-label-caps rounded-full transition-all duration-150 cursor-pointer ${
+                view === v 
+                  ? 'bg-white shadow-sm text-primary font-bold' 
+                  : 'text-text-muted hover:text-on-surface'
+              }`}
+              onClick={() => setView(v)}
+            >
               {v === 'amount' ? '₹' : v === 'units' ? 'U' : t('both')}
             </button>
           ))}
         </div>
       </div>
 
-      <Suspense fallback={<div className="state-box" style={{ height: '150px' }}><Loader size={16} /></div>}>
+      <Suspense fallback={<div className="flex items-center justify-center h-[150px]"><Loader size={16} /></div>}>
         <TrendChart chartData={chartData} view={view} insights={insights} />
       </Suspense>
 
       {insights && (
-        <div className="trend__stats">
-          <div className="tstat tstat--red">
-            <span>{t('highest')}</span>
-            <b>{formatInr(insights.maxAmount)}</b>
-            <small>{fmtMonth(insights.maxAmountMonth)}</small>
+        <div className="grid grid-cols-3 gap-2 mt-2">
+          <div className="p-2 bg-red-dim/10 border border-red/20 rounded-xl flex flex-col text-center">
+            <span className="text-[10px] uppercase font-label-caps text-text-muted mb-0.5">{t('highest')}</span>
+            <b className="font-mono-data text-red text-xs">{formatInr(insights.maxAmount)}</b>
+            <small className="text-[10px] text-text-muted mt-0.5">{fmtMonth(insights.maxAmountMonth)}</small>
           </div>
-          <div className="tstat tstat--green">
-            <span>{t('lowest')}</span>
-            <b>{formatInr(insights.minAmount)}</b>
-            <small>{fmtMonth(insights.minAmountMonth)}</small>
+          <div className="p-2 bg-green-dim/10 border border-green/20 rounded-xl flex flex-col text-center">
+            <span className="text-[10px] uppercase font-label-caps text-text-muted mb-0.5">{t('lowest')}</span>
+            <b className="font-mono-data text-green text-xs">{formatInr(insights.minAmount)}</b>
+            <small className="text-[10px] text-text-muted mt-0.5">{fmtMonth(insights.minAmountMonth)}</small>
           </div>
           {insights.predictedNextBill && (
-            <div className="tstat tstat--blue">
-              <span>{t('next_est')}</span>
-              <b>~{formatInr(insights.predictedNextBill)}</b>
-              <small>{insights.predictedBasis || 'Seasonal'}</small>
+            <div className="p-2 bg-primary-dim/10 border border-primary/20 rounded-xl flex flex-col text-center">
+              <span className="text-[10px] uppercase font-label-caps text-text-muted mb-0.5">{t('next_est')}</span>
+              <b className="font-mono-data text-primary text-xs">~{formatInr(insights.predictedNextBill)}</b>
+              <small className="text-[10px] text-text-muted mt-0.5">{insights.predictedBasis || 'Seasonal'}</small>
             </div>
           )}
         </div>
       )}
 
       {seasonalInsight && (
-        <div style={{ margin: '16px 10px 0', background: 'var(--amber-dim)', border: '1px solid var(--amber)', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '16px' }}>☀️</span>
+        <div className="p-3 bg-amber-dim/10 border border-amber/20 rounded-xl flex items-start gap-2.5 mt-2">
+          <span className="material-symbols-outlined text-amber text-[20px] mt-0.5 flex-shrink-0">light_mode</span>
           <div>
-            <h4 style={{ margin: '0 0 4px', fontSize: '12px', color: 'var(--amber)' }}>Summer Pattern Detected</h4>
-            <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-1)', lineHeight: 1.4 }}>
-              Your Apr–Jun bills average <b>{formatInr(seasonalInsight.avg)}</b> — which is <b>{seasonalInsight.pct}% higher</b> than the rest of the year.
+            <h4 className="font-body-bold text-[12px] text-amber">Summer Pattern Detected</h4>
+            <p className="text-xs text-on-surface leading-normal mt-0.5">
+              Your Apr–Jun bills average <b className="font-mono-data">{formatInr(seasonalInsight.avg)}</b> — which is <b className="text-amber">{seasonalInsight.pct}% higher</b> than the rest of the year.
             </p>
           </div>
         </div>
@@ -831,7 +917,6 @@ function TrendPanel({ data, insights, t }) {
 
 function PaymentsPanel({ service, t }) {
   const history = useMemo(() => {
-    // Priority 1: Explicit payment history from APSPDCL (contains receipt numbers, etc.)
     if (service.paymentHistory && service.paymentHistory.length > 0) {
       return service.paymentHistory.map(p => ({
         date: p.date,
@@ -843,7 +928,6 @@ function PaymentsPanel({ service, t }) {
       })).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 12);
     }
     
-    // Priority 2: Successful items from bill history
     const bh = (service.billHistory || []).filter(b => b.isPaid);
     if (bh.length > 0) {
       return bh.map(b => ({
@@ -862,18 +946,20 @@ function PaymentsPanel({ service, t }) {
   if (history.length === 0) return null;
 
   return (
-    <div className="pymt">
+    <div className="flex flex-col gap-2">
       {history.map((p, i) => (
-        <div key={i} className="pymt__row">
-          <div className="pymt__left">
-            <FiCheckCircle size={11} style={{ color: 'var(--green)' }} />
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '11px' }}>{formatDate(p.date)}</span>
-            </div>
+        <div key={i} className="flex justify-between items-center gap-3 text-xs p-2 hover:bg-surface-container rounded-lg border border-border-subtle">
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-green text-[18px]">check_circle</span>
+            <span className="text-[11px] text-text-secondary">{formatDate(p.date)}</span>
           </div>
-          <span className="mono-sm pymt__ref" title={p.receiptNo || '—'}>{p.receiptNo || '—'}</span>
-          <span className="mono-sm pymt__counter">{p.counter || '—'}</span>
-          <b>{formatInr(p.amount)}</b>
+          <span className="font-mono-data text-[11px] text-text-muted truncate max-w-[100px]" title={p.receiptNo || '—'}>
+            {p.receiptNo || '—'}
+          </span>
+          <span className="font-body-base text-[11px] text-text-muted max-w-[100px] truncate">
+            {p.counter || '—'}
+          </span>
+          <b className="font-mono-data text-on-surface">{formatInr(p.amount)}</b>
         </div>
       ))}
     </div>

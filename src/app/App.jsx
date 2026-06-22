@@ -75,10 +75,10 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_POSTHOG_KEY) {
 }
 
 const NAV = [
-  { id: 'electricity', icon: FiZap },
-  { id: 'home', icon: FiGrid },
-  { id: 'appliances', icon: FiMonitor },
-  { id: 'settings', icon: FiSettings },
+  { id: 'electricity', icon: 'receipt_long' },
+  { id: 'home', icon: 'dashboard' },
+  { id: 'appliances', icon: 'insights' },
+  { id: 'settings', icon: 'settings' },
 ];
 
 function AppContent() {
@@ -689,16 +689,61 @@ function AppContent() {
   }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
       {isOffline && (
-        <div style={{ flexShrink: 0, width: '100%', background: 'var(--amber)', color: '#000', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-          <FiWifiOff size={16} />
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 'auto',
+          maxWidth: '90%',
+          background: 'var(--amber)',
+          color: '#000',
+          padding: '6px 16px',
+          textAlign: 'center',
+          fontSize: '12px',
+          fontWeight: '700',
+          zIndex: 100000,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '8px',
+          borderRadius: '0 0 8px 8px',
+          boxShadow: 'var(--shadow-lg)',
+          border: '1px solid rgba(0,0,0,0.15)',
+          borderTop: 'none',
+        }}>
+          <FiWifiOff size={14} />
           You're offline — showing cached data
         </div>
       )}
       {globalProgress && (
-        <div style={{ flexShrink: 0, width: '100%', background: 'var(--blue-dim)', borderBottom: '1px solid var(--blue)', color: 'var(--blue)', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', zIndex: 10000, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-          <Loader size={16} />
+        <div style={{
+          position: 'absolute',
+          top: isOffline ? '32px' : '0',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 'auto',
+          maxWidth: '90%',
+          background: 'var(--blue)',
+          color: '#fff',
+          padding: '6px 16px',
+          textAlign: 'center',
+          fontSize: '12px',
+          fontWeight: '700',
+          zIndex: 100000,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '8px',
+          borderRadius: isOffline ? '8px' : '0 0 8px 8px',
+          boxShadow: 'var(--shadow-lg)',
+          border: '1px solid var(--primary-hi)',
+          borderTop: isOffline ? '1px solid var(--primary-hi)' : 'none',
+          transition: 'top 0.3s ease',
+        }}>
+          <Loader size={14} color="#fff" />
           {globalProgress}
         </div>
       )}
@@ -714,18 +759,18 @@ function AppContent() {
         )}
         <aside className="sidebar">
           <div className="sidebar__brand">
-            <div className="sidebar__logo"><FiGrid size={16} /></div>
+            <div className="sidebar__logo"><span className="material-symbols-outlined text-[18px]">bolt</span></div>
             <span>AP Vidyuth</span>
           </div>
           <nav className="sidebar__nav">
-            {NAV.map(({ id, icon: Icon }) => (
+            {NAV.map(({ id, icon }) => (
               <button
                 key={id}
                 className={`sidebar__item ${activePage === id ? 'sidebar__item--active' : ''}`}
                 onClick={() => handleNavClick(id)}
                 aria-label={t(id)}
               >
-                <Icon size={17} />
+                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: activePage === id ? "'FILL' 1" : "'FILL' 0" }}>{icon}</span>
                 {t(id)}
               </button>
             ))}
@@ -736,28 +781,28 @@ function AppContent() {
         <ErrorBoundary>
           <main className="main">
             <Suspense fallback={<PageLoader />}>
-              {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} electricityContext={electricityContext} profileModalOpen={profileModalOpen} />}
+              {activePage === 'electricity' && <ElectricityDashboard onOpenCalcSettings={() => handleNavClick('calculation-settings')} electricityContext={electricityContext} profileModalOpen={profileModalOpen} onOpenProfile={() => setActivePage('user-profile')} />}
               {activePage === 'calculation-settings' && <CalculationSettings onBack={() => setActivePage('settings')} />}
               {activePage === 'prefix-migration' && <PrefixMigration onBack={() => setActivePage('settings')} />}
-              {activePage === 'appliances' && <ApplianceCalculator onBack={() => setActivePage('electricity')} />}
-              {activePage === 'home' && <OverviewTab electricityContext={electricityContext} />}
+              {activePage === 'appliances' && <ApplianceCalculator onBack={() => setActivePage('electricity')} onOpenProfile={() => setActivePage('user-profile')} />}
+              {activePage === 'home' && <OverviewTab electricityContext={electricityContext} onOpenProfile={() => setActivePage('user-profile')} />}
               {activePage === 'privacy' && <PrivacyPolicy onBack={() => setActivePage('settings')} />}
               {activePage === 'user-profile' && (
                 <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
                   <div className="page__header page__header--sticky">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <button className="btn btn--icon" onClick={() => setActivePage('settings')} aria-label="Back">
-                        <FiArrowLeft size={20} />
+                      <button className="icon-btn" onClick={() => setActivePage('settings')} aria-label="Back">
+                        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
                       </button>
                       <h2 className="page__title">Account & Security</h2>
                     </div>
                   </div>
                   <div className="page__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '480px', margin: '0 auto', width: '100%' }}>
                     {!userToken ? (
-                      <div className="scard" style={{ padding: '30px', textAlign: 'center', alignItems: 'center' }}>
-                        <FiUser size={48} style={{ color: 'var(--primary)', marginBottom: '16px', opacity: 0.8 }} />
+                      <div className="scard" style={{ padding: '30px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                        <span className="material-symbols-outlined text-[48px] text-primary" style={{ opacity: 0.8 }}>account_circle</span>
                         <h3>Access Your Account</h3>
-                        <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginBottom: '24px' }}>
+                        <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginBottom: '12px' }}>
                           Sign in or create a standard profile account to synchronize your tracked services, bills history, and meter reading logs across all your devices.
                         </p>
                         <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => setProfileModalOpen(true)}>
@@ -874,8 +919,8 @@ function AppContent() {
 
                         {/* Sign Out */}
                         <button
-                          className="btn btn--outline"
-                          style={{ width: '100%', borderColor: 'var(--red)', color: 'var(--red)', background: 'transparent' }}
+                          className="btn btn--danger"
+                          style={{ width: '100%', border: '1px solid var(--red)' }}
                           onClick={async () => {
                             localStorage.removeItem('ap_vidyuth_token');
                             localStorage.removeItem('user_name');
@@ -905,7 +950,12 @@ function AppContent() {
               {activePage === 'reset-password' && resetPasswordState && (
                 <div className="page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--bg)' }}>
                   <div className="page__header page__header--sticky">
-                    <h2 className="page__title">Reset Account Password</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <button className="icon-btn" onClick={() => setActivePage('settings')} aria-label="Back">
+                        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+                      </button>
+                      <h2 className="page__title">Reset Account Password</h2>
+                    </div>
                   </div>
                   <div className="page__body" style={{ display: 'flex', justifyContent: 'center', paddingTop: '40px' }}>
                     <form onSubmit={async (e) => {
@@ -957,15 +1007,14 @@ function AppContent() {
                   <div className="page__header page__header--sticky">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <button className="btn btn--icon" onClick={() => setActivePage('settings')} aria-label="Back">
-                          <FiArrowLeft size={20} />
+                        <button className="icon-btn" onClick={() => setActivePage('settings')} aria-label="Back">
+                          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
                         </button>
                         <h2 className="page__title">Admin Portal</h2>
                       </div>
                       {adminToken && (
                         <button
-                          className="btn btn--outline"
-                          style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+                          className="btn btn--danger btn--sm"
                           onClick={() => {
                             localStorage.removeItem('admin_token');
                             setAdminToken(null);
@@ -981,9 +1030,9 @@ function AppContent() {
                   </div>
                   <div className="page__body">
                     {!adminToken ? (
-                      <div className="scard" style={{ maxWidth: '400px', margin: '40px auto 0', padding: '20px' }}>
-                        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                          <FiShield size={40} color="var(--red)" style={{ marginBottom: '12px' }} />
+                      <div className="scard" style={{ maxWidth: '400px', margin: '40px auto 0', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ textAlign: 'center', marginBottom: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                          <span className="material-symbols-outlined text-[40px] text-red" style={{ color: 'var(--red)' }}>shield_person</span>
                           <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>Admin Authentication</h3>
                           <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-3)' }}>Enter credentials to access dashboard</p>
                         </div>
@@ -1350,7 +1399,7 @@ function AppContent() {
                                           title="Copy Device ID"
                                           aria-label="Copy Device ID"
                                         >
-                                          <FiCopy size={13} />
+                                          <span className="material-symbols-outlined text-[14px]">content_copy</span>
                                         </button>
                                       )}
                                     </div>
@@ -1716,7 +1765,7 @@ function AppContent() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         {/* Notification Bell */}
                         <button
-                          className="btn btn--icon"
+                          className="icon-btn"
                           onClick={async () => {
                             setNotificationsModalOpen(true);
                             const email = localStorage.getItem('user_email');
@@ -1724,8 +1773,8 @@ function AppContent() {
                             if (unreadCount > 0) {
                               try {
                                 const { markNotificationsAsRead } = await import('../features/electricity/api/servicesApi.js');
-                                await markNotificationsAsRead(email);
                                 setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                                await markNotificationsAsRead(email);
                               } catch (err) {
                                 console.error('[notifications] Mark read failed:', err.message);
                               }
@@ -1733,31 +1782,15 @@ function AppContent() {
                           }}
                           style={{
                             position: 'relative',
-                            background: 'transparent',
-                            border: 'none',
-                            color: notifications.some(n => !n.is_read) ? 'var(--primary)' : 'var(--text-2)',
-                            padding: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
+                            width: '40px',
+                            height: '40px',
+                            color: notifications.some(n => !n.is_read) ? 'var(--primary)' : 'var(--text-2)'
                           }}
                           aria-label="Notifications"
                         >
-                          <FiBell size={20} />
+                          <span className="material-symbols-outlined text-[20px]">notifications</span>
                           {notifications.some(n => !n.is_read) && (
-                            <span style={{
-                              position: 'absolute',
-                              top: '2px',
-                              right: '2px',
-                              background: 'var(--red)',
-                              color: 'white',
-                              borderRadius: '50%',
-                              fontSize: '9px',
-                              fontWeight: 'bold',
-                              padding: '1px 5px',
-                              lineHeight: 1
-                            }}>
+                            <span className="header-badge">
                               {notifications.filter(n => !n.is_read).length}
                             </span>
                           )}
@@ -1765,8 +1798,8 @@ function AppContent() {
 
                         {electricityContext.isPro && (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                            <div style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--primary)' }}>
-                              <FiZap size={14} fill="currentColor" /> PRO
+                            <div style={{ background: 'var(--primary-dim)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--primary)' }}>
+                              <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span> PRO
                             </div>
                             {electricityContext.proSource && (
                               <span style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: 'bold', textTransform: 'uppercase', marginRight: '4px' }}>
@@ -1775,6 +1808,16 @@ function AppContent() {
                             )}
                           </div>
                         )}
+
+                        {/* Account Profile Avatar */}
+                        <button
+                          className="icon-btn"
+                          onClick={() => setActivePage('user-profile')}
+                          title="User Profile"
+                          style={{ width: '40px', height: '40px', borderRadius: '50%' }}
+                        >
+                          <span className="material-symbols-outlined text-[24px]">account_circle</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1783,7 +1826,7 @@ function AppContent() {
                       <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account & Subscription</h3>
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
                         <SettingsItem
-                          icon={FiUser}
+                          materialIcon="person"
                           label={userToken ? "Account & Security" : "User Profile"}
                           description={userToken ? `Logged in as ${userEmail}` : (userName ? "View profile details" : "Register or Log in to sync details")}
                           onClick={() => setActivePage('user-profile')}
@@ -1792,7 +1835,7 @@ function AppContent() {
                         <div style={{ height: '1px', background: 'var(--border)', margin: '0 16px' }} />
                         {!electricityContext.isPro ? (
                           <SettingsItem
-                            icon={FiZap}
+                            materialIcon="bolt"
                             label="Request Access"
                             description="Unlock unlimited services & premium features"
                             onClick={() => setCapModalOpen(true)}
@@ -1800,7 +1843,7 @@ function AppContent() {
                           />
                         ) : (
                           <SettingsItem
-                            icon={FiZap}
+                            materialIcon="bolt"
                             label="Request Withdrawal"
                             description="Cancel your Pro access and return to standard"
                             onClick={handleWithdrawPro}
@@ -1811,7 +1854,7 @@ function AppContent() {
                           <>
                             <div style={{ height: '1px', background: 'var(--border)', margin: '0 16px' }} />
                             <SettingsItem
-                              icon={FiShield}
+                              materialIcon="shield"
                               label="Administration"
                               description="Manage users and track dashboard stats"
                               onClick={() => setActivePage('admin')}
@@ -1822,33 +1865,48 @@ function AppContent() {
                       </div>
                     </div>
 
-                    <div style={{ marginBottom: '24px' }}>
-                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tools & Utilities</h3>
+                    <div className="settings-section" style={{ marginBottom: '24px' }}>
+                      <h3 className="settings-section__title" style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tools & Utilities</h3>
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                        <SettingsItem icon={FiShuffle} label={t('prefix_migration')} description="Batch update service prefixes" onClick={() => setActivePage('prefix-migration')} color="var(--blue)" />
-                        <SettingsItem icon={FiActivity} label="Slab Configuration" description="Configure billing rates & slabs" onClick={() => setActivePage('calculation-settings')} color="var(--orange)" />
+                        <SettingsItem materialIcon="compare_arrows" label={t('prefix_migration')} description="Batch update service prefixes" onClick={() => setActivePage('prefix-migration')} color="var(--blue)" />
+                        <SettingsItem materialIcon="monitoring" label="Slab Configuration" description="Configure billing rates & slabs" onClick={() => setActivePage('calculation-settings')} color="var(--orange)" />
                       </div>
                     </div>
-                    <div style={{ marginBottom: '24px' }}>
-                      <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Preferences</h3>
+                    <div className="settings-section" style={{ marginBottom: '24px' }}>
+                      <h3 className="settings-section__title" style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Preferences</h3>
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div className="settings-item__icon" style={{ color: 'var(--primary)' }}><FiLayout size={18} /></div><span style={{ fontSize: '15px', fontWeight: '600' }}>{t('theme')}</span></div>
+                        <div className="settings-pref-row" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div className="settings-item__icon" style={{ color: 'var(--primary)', backgroundColor: 'var(--primary-dim)' }}>
+                              <span className="material-symbols-outlined text-[20px]">palette</span>
+                            </div>
+                            <span className="settings-pref-row__label" style={{ fontSize: '15px', fontWeight: '600' }}>{t('theme')}</span>
+                          </div>
                           <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
                             <button className={`seg__btn ${theme === 'system' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('system')}>Auto</button>
                             <button className={`seg__btn ${theme === 'dark' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('dark')}>{t('dark')}</button>
                             <button className={`seg__btn ${theme === 'light' ? 'seg__btn--active' : ''}`} onClick={() => handleThemeChange('light')}>{t('light')}</button>
                           </div>
                         </div>
-                        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div className="settings-item__icon" style={{ color: 'var(--violet)' }}><FiLayers size={18} /></div><span style={{ fontSize: '15px', fontWeight: '600' }}>Display Density</span></div>
+                        <div className="settings-pref-row" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div className="settings-item__icon" style={{ color: 'var(--violet)', backgroundColor: 'var(--violet-dim)' }}>
+                              <span className="material-symbols-outlined text-[20px]">layers</span>
+                            </div>
+                            <span className="settings-pref-row__label" style={{ fontSize: '15px', fontWeight: '600' }}>Display Density</span>
+                          </div>
                           <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
                             <button className={`seg__btn ${density === 'comfortable' ? 'seg__btn--active' : ''}`} onClick={() => handleDensityChange('comfortable')}>Default</button>
                             <button className={`seg__btn ${density === 'compact' ? 'seg__btn--active' : ''}`} onClick={() => handleDensityChange('compact')}>Compact</button>
                           </div>
                         </div>
-                        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div className="settings-item__icon" style={{ color: 'var(--green)' }}><FiGlobe size={18} /></div><span style={{ fontSize: '15px', fontWeight: '600' }}>{t('language')}</span></div>
+                        <div className="settings-pref-row" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div className="settings-item__icon" style={{ color: 'var(--green)', backgroundColor: 'var(--green-dim)' }}>
+                              <span className="material-symbols-outlined text-[20px]">language</span>
+                            </div>
+                            <span className="settings-pref-row__label" style={{ fontSize: '15px', fontWeight: '600' }}>{t('language')}</span>
+                          </div>
                           <div className="seg" style={{ display: 'inline-flex', width: 'fit-content' }}>
                             <button className={`seg__btn ${i18n.language === 'en' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('en')}>EN</button>
                             <button className={`seg__btn ${i18n.language === 'te' ? 'seg__btn--active' : ''}`} onClick={() => changeLanguage('te')}>తెలుగు</button>
@@ -1864,15 +1922,15 @@ function AppContent() {
                       <div style={{ marginBottom: '24px' }}>
                         <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>System</h3>
                         <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                          <SettingsItem icon={FiBell} label="Notifications" description="Sync push notification token" onClick={async () => { const success = await syncPushTokenWithServer(null, true); if (success) toast.success('Notifications synced!'); }} color="var(--purple)" />
+                          <SettingsItem materialIcon="notifications" label="Notifications" description="Sync push notification token" onClick={async () => { const success = await syncPushTokenWithServer(null, true); if (success) toast.success('Notifications synced!'); }} color="var(--purple)" />
                         </div>
                       </div>
                     )}
                     <div>
                       <h3 style={{ marginLeft: '4px', marginBottom: '12px', fontSize: '13px', fontWeight: '800', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Support & Legal</h3>
                       <div className="scard" style={{ padding: '0', overflow: 'hidden' }}>
-                        <SettingsItem icon={FiMail} label={t('contact_developer')} description="Report bugs or suggest features" onClick={() => window.location.href = "mailto:mail.developer.akbar@gmail.com?subject=AP Vidyuth App Feedback"} color="var(--primary)" />
-                        <SettingsItem icon={FiShield} label="Privacy Policy" description="How we handle your data" onClick={() => setActivePage('privacy')} color="var(--text-2)" />
+                        <SettingsItem materialIcon="mail" label={t('contact_developer')} description="Report bugs or suggest features" onClick={() => window.location.href = "mailto:mail.developer.akbar@gmail.com?subject=AP Vidyuth App Feedback"} color="var(--primary)" />
+                        <SettingsItem materialIcon="policy" label="Privacy Policy" description="How we handle your data" onClick={() => setActivePage('privacy')} color="var(--text-2)" />
                       </div>
                     </div>
                   </div>
@@ -1899,9 +1957,10 @@ function AppContent() {
           </main>
         </ErrorBoundary>
         <nav className="bottom-nav">
-          {NAV.map(({ id, icon: Icon }) => (
+          {NAV.map(({ id, icon }) => (
             <button key={id} className={`bottom-nav__item ${activePage === id || (id === 'settings' && ['prefix-migration', 'calculation-settings', 'privacy', 'user-profile'].includes(activePage)) ? 'bottom-nav__item--active' : ''}`} onClick={() => handleNavClick(id)} aria-label={t(id)}>
-              <Icon size={20} /><span>{t(id)}</span>
+              <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: (activePage === id || (id === 'settings' && ['prefix-migration', 'calculation-settings', 'privacy', 'user-profile'].includes(activePage))) ? "'FILL' 1" : "'FILL' 0" }}>{icon}</span>
+              <span>{t(id)}</span>
             </button>
           ))}
         </nav>

@@ -40,7 +40,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { useNetwork } from '../../shared/hooks/useNetwork.js';
 import { Virtuoso } from 'react-virtuoso';
 
-export function ElectricityDashboard({ onOpenCalcSettings, electricityContext, profileModalOpen }) {
+export function ElectricityDashboard({ onOpenCalcSettings, electricityContext, profileModalOpen, onOpenProfile }) {
   const isWeb = Capacitor.getPlatform() === 'web';
   const { t } = useTranslation();
   const { isOffline } = useNetwork({
@@ -588,12 +588,30 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext, p
             </div>
           </div>
           <div className="selection-bar__actions">
-            <button className="btn btn--ghost btn--sm" onClick={handleShareSelected} title="Share Selected"><FiShare2 size={16} />{!isMobile && <span style={{ marginLeft: '4px' }}>Share</span>}</button>
-            <button className="btn btn--ghost btn--sm" onClick={handleCopySelected} title="Copy Selected"><FiCopy size={16} />{!isMobile && <span style={{ marginLeft: '4px' }}>Copy</span>}</button>
+            <button className="btn btn--ghost btn--sm" onClick={handleShareSelected} title="Share Selected">
+              <span className="material-symbols-outlined text-[16px]">share</span>
+              {!isMobile && <span style={{ marginLeft: '4px' }}>Share</span>}
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={handleCopySelected} title="Copy Selected">
+              <span className="material-symbols-outlined text-[16px]">content_copy</span>
+              {!isMobile && <span style={{ marginLeft: '4px' }}>Copy</span>}
+            </button>
             {activeView === 'active' ? (
-              <button className="btn btn--danger btn--sm" onClick={() => handleBulkAction('trash')}><FiTrash2 size={16} />{!isMobile && <span style={{ marginLeft: '4px' }}>Trash</span>}</button>
+              <button className="btn btn--danger btn--sm" onClick={() => handleBulkAction('trash')}>
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                {!isMobile && <span style={{ marginLeft: '4px' }}>Trash</span>}
+              </button>
             ) : (
-              <><button className="btn btn--ghost btn--sm" onClick={() => handleBulkAction('restore')}><FiRefreshCw size={16} />{!isMobile && <span style={{ marginLeft: '4px' }}>Restore</span>}</button><button className="btn btn--danger btn--sm" onClick={() => handleBulkAction('purge')}><FiTrash2 size={13} />{!isMobile && <span style={{ marginLeft: '4px' }}>Purge</span>}</button></>
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={() => handleBulkAction('restore')}>
+                  <span className="material-symbols-outlined text-[16px]">restore</span>
+                  {!isMobile && <span style={{ marginLeft: '4px' }}>Restore</span>}
+                </button>
+                <button className="btn btn--danger btn--sm" onClick={() => handleBulkAction('purge')}>
+                  <span className="material-symbols-outlined text-[14px]">delete_forever</span>
+                  {!isMobile && <span style={{ marginLeft: '4px' }}>Purge</span>}
+                </button>
+              </>
             )}
             <button className="btn btn--ghost btn--sm" onClick={clearSelection} style={{ marginLeft: '4px' }}>Cancel</button>
           </div>
@@ -603,7 +621,9 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext, p
       <header className="page__header page__header--sticky">
         <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <p className="page__eyebrow"><FiZap size={12} /> APSPDCL</p>
+            <p className="page__eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span className="material-symbols-outlined text-[14px]">bolt</span> APSPDCL
+            </p>
             <div className="page__title-wrap" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h1 className="page__title" style={{ margin: 0 }}>AP Vidyuth</h1>
               {isPro && (
@@ -612,15 +632,24 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext, p
             </div>
           </div>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-            {!isWeb && (
-              <div className="header-alert-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                <button className="icon-btn" onClick={() => setInboxOpen(true)} title="Notifications" style={{ width: '40px', height: '40px', position: 'relative' }}>
-                  <FiBell size={20} style={{ color: unreadCount > 0 ? 'var(--primary)' : 'var(--text-3)' }} />
-                  {unreadCount > 0 && <span className="header-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
-                </button>
-                <span className="header-alert-label" style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: '600', textTransform: 'uppercase' }}>Alerts</span>
-              </div>
-            )}
+            <div className="header-alert-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+              <button className="icon-btn" onClick={() => setInboxOpen(true)} title="Notifications" style={{ width: '40px', height: '40px', position: 'relative' }}>
+                <span className="material-symbols-outlined text-[20px]" style={{ color: unreadCount > 0 ? 'var(--primary)' : 'var(--text-3)' }}>notifications</span>
+                {unreadCount > 0 && <span className="header-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+              </button>
+              <span className="header-alert-label" style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: '600', textTransform: 'uppercase' }}>Alerts</span>
+            </div>
+            <div className="header-profile-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+              <button
+                className="icon-btn"
+                onClick={onOpenProfile}
+                title="User Profile"
+                style={{ width: '40px', height: '40px', borderRadius: '50%' }}
+              >
+                <span className="material-symbols-outlined text-[24px]">account_circle</span>
+              </button>
+              <span className="header-profile-label" style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: '600', textTransform: 'uppercase' }}>Profile</span>
+            </div>
           </div>
         </div>
       </header>
@@ -638,7 +667,35 @@ export function ElectricityDashboard({ onOpenCalcSettings, electricityContext, p
       <ConfirmDialog open={confirmState.open} title={confirmState.title} description={confirmState.description} isDanger={confirmState.isDanger} onClose={() => setConfirmState(prev => ({ ...prev, open: false }))} onConfirm={confirmState.onConfirm} />
 
       {activeView === 'active' && (
-        <>{loading ? <div className="state-box"><Loader size={22} /><p>{t('loading_services')}</p></div> : visible.length === 0 ? <div className="state-box"><FiZap size={28} /><h3>{t('no_services_found')}</h3><p>{services.length === 0 ? t('add_first_service') : t('no_results_filter')}</p>{services.length === 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}><button className="btn btn--primary" onClick={() => setDialog({ open: true, service: null })}>{t('add_service')}</button><div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}><span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Have a backup file?</span><input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".json" onChange={handleImportFromEmptyState} /><button className="btn btn--ghost btn--sm" onClick={() => fileInputRef.current?.click()}><FiUpload size={14} /> Restore Data</button></div></div>}</div> : 
+        <>{loading ? (
+          <div className="state-box">
+            <Loader size={22} />
+            <p>{t('loading_services')}</p>
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="state-box" style={{ padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+            <span className="material-symbols-outlined text-[40px] text-primary" style={{ color: 'var(--primary)', opacity: 0.8 }}>bolt</span>
+            <h3>{t('no_services_found')}</h3>
+            <p style={{ maxWidth: '320px', textAlign: 'center', fontSize: '13px', color: 'var(--text-3)' }}>
+              {services.length === 0 ? t('add_first_service') : t('no_results_filter')}
+            </p>
+            {services.length === 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', marginTop: '8px' }}>
+                <button className="btn btn--primary" onClick={() => setDialog({ open: true, service: null })} style={{ gap: '6px' }}>
+                  <span className="material-symbols-outlined text-[18px]">add</span>
+                  {t('add_service')}
+                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Have a backup file?</span>
+                  <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".json" onChange={handleImportFromEmptyState} />
+                  <button className="btn btn--ghost btn--sm" onClick={() => fileInputRef.current?.click()} style={{ gap: '6px' }}>
+                    <span className="material-symbols-outlined text-[16px]">upload</span> Restore Data
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : 
         visible.length > 50 ? (
           <Virtuoso useWindowScroll data={visible} itemContent={(index, s) => (
               <div style={{ paddingBottom: '16px' }}>

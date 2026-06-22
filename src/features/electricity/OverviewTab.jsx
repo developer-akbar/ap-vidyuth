@@ -1,11 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import {
-  FiGrid, FiZap, FiShare2, FiAlertCircle, FiClock,
-  FiTrendingUp, FiTrendingDown, FiMinus, FiCalendar,
-  FiCheckCircle, FiAlertTriangle, FiTarget, FiBarChart2,
-  FiChevronDown,
-} from 'react-icons/fi';
-import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
 } from 'recharts';
@@ -56,16 +50,14 @@ function Delta({ current, previous, unit = '' }) {
   if (!previous || previous === 0) return null;
   const diff = current - previous;
   const pct  = Math.round(Math.abs(diff / previous) * 100);
-  if (pct === 0) return <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>Same as last month</span>;
+  if (pct === 0) return <span className="font-label-caps text-label-caps text-text-muted">Same as last month</span>;
   const up = diff > 0;
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3,
-      fontSize: '0.6875rem', fontWeight: 700,
-      color: up ? 'var(--red)' : 'var(--green)',
-    }}>
-      {up ? <FiTrendingUp size={11} /> : <FiTrendingDown size={11} />}
-      {up ? '+' : '−'}{pct}% vs last month
+    <span className={`inline-flex items-center gap-1 font-mono-data text-[11px] whitespace-nowrap ${up ? 'text-red' : 'text-green'}`}>
+      <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 0" }}>
+        {up ? 'trending_up' : 'trending_down'}
+      </span>
+      {up ? '+' : '−'}{pct}% MoM
       {unit ? ` (${unit})` : ''}
     </span>
   );
@@ -75,10 +67,10 @@ function Delta({ current, previous, unit = '' }) {
 function ChartTip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="ctip">
-      <p className="ctip__label">{label}</p>
+    <div className="ctip bg-inverse-surface text-inverse-on-surface p-2 rounded-lg shadow-lg border border-border-medium">
+      <p className="ctip__label text-xs font-body-bold mb-1">{label}</p>
       {payload.map(p => (
-        <p key={p.name} style={{ color: p.color, margin: 0, fontSize: '0.75rem' }}>
+        <p key={p.name} className="text-[11px] font-mono-data" style={{ color: p.color, margin: 0 }}>
           {p.name === 'amount' ? formatInr(p.value) : `${p.value} u`}
         </p>
       ))}
@@ -91,7 +83,6 @@ function AggregateTrendChart({ activeServices }) {
   const [view, setView] = useState('amount');
 
   const { chartData, avg12, avg6 } = useMemo(() => {
-    // Build a map of month → { amount, units }
     const map = {};
     activeServices.forEach(s => {
       (s.trendData || []).forEach(td => {
@@ -102,7 +93,7 @@ function AggregateTrendChart({ activeServices }) {
     });
     const entries = Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12); // last 12 months
+      .slice(-12);
 
     if (entries.length === 0) return { chartData: [], avg12: { amount: 0, units: 0 }, avg6: { amount: 0, units: 0 } };
 
@@ -127,20 +118,22 @@ function AggregateTrendChart({ activeServices }) {
   const currentAvg = view === 'amount' ? avg12.amount : avg12.units;
 
   return (
-    <div className="scard" style={{ padding: '16px', marginBottom: 16 }}>
-      {/* Header + toggle */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>
+    <div className="scard bg-surface-card border border-border-medium rounded-xl p-4 mb-4 shadow-sm">
+      <div className="flex justify-between items-center mb-4">
+        <p className="font-headline-md text-[16px] text-on-surface">
           Household Trend (12 Months)
         </p>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div className="flex bg-surface-container rounded-full p-0.5 border border-border-medium">
           {['amount', 'units'].map(v => (
-            <button key={v} onClick={() => setView(v)} style={{
-              padding: '3px 10px', borderRadius: 20, fontSize: '0.6875rem', fontWeight: 600, cursor: 'pointer',
-              border: `1px solid ${view === v ? 'var(--primary)' : 'var(--border-md)'}`,
-              background: view === v ? 'var(--primary-dim)' : 'transparent',
-              color: view === v ? 'var(--primary)' : 'var(--text-3)',
-            }}>
+            <button 
+              key={v} 
+              onClick={() => setView(v)} 
+              className={`px-3 py-1 text-[11px] font-label-caps rounded-full transition-all duration-150 cursor-pointer ${
+                view === v 
+                  ? 'bg-white shadow-sm text-primary font-bold' 
+                  : 'text-text-muted hover:text-on-surface'
+              }`}
+            >
               {v === 'amount' ? '₹ Bill' : '⚡ Units'}
             </button>
           ))}
@@ -172,16 +165,15 @@ function AggregateTrendChart({ activeServices }) {
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Average annotation */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 6 }}>
-        <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: 0 }}>
-          12m Avg: <b>{view === 'amount' ? formatInr(avg12.amount) : `${avg12.units} u`}</b>
+      <div className="flex justify-end gap-3 mt-2">
+        <p className="text-xs text-text-muted">
+          12m Avg: <b className="font-mono-data text-on-surface">{view === 'amount' ? formatInr(avg12.amount) : `${avg12.units} u`}</b>
         </p>
-        <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: 0 }}>
-          6m Avg: <b>{view === 'amount' ? formatInr(avg6.amount) : `${avg6.units} u`}</b>
+        <p className="text-xs text-text-muted">
+          6m Avg: <b className="font-mono-data text-on-surface">{view === 'amount' ? formatInr(avg6.amount) : `${avg6.units} u`}</b>
         </p>
-        <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', margin: 0 }}>
-          <span style={{ color: 'var(--amber)', fontWeight: 600 }}>■</span> current
+        <p className="text-xs text-text-muted">
+          <span className="text-amber font-bold">■</span> current
         </p>
       </div>
     </div>
@@ -203,8 +195,7 @@ function AttentionSection({ activeServices }) {
         const daysOverdue = Math.floor((now - due) / 86400000);
         if (daysOverdue > 0) {
           results.push({
-            id: s.id, priority: 1, icon: <FiAlertCircle size={15} />, color: 'var(--red)',
-            bg: 'var(--red-dim)',
+            id: s.id, priority: 1, icon: 'error', colorClass: 'text-red border-red/20 bg-red-dim/10',
             text: `${name} — overdue by ${daysOverdue}d`,
             sub: `${formatInr(s.lastAmountDue)} due since ${due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
           });
@@ -214,8 +205,7 @@ function AttentionSection({ activeServices }) {
         const daysTil = Math.ceil((due - now) / 86400000);
         if (daysTil <= 3) {
           results.push({
-            id: s.id, priority: 2, icon: <FiClock size={15} />, color: 'var(--amber)',
-            bg: 'var(--amber-dim)',
+            id: s.id, priority: 2, icon: 'schedule', colorClass: 'text-amber border-amber/20 bg-amber-dim/10',
             text: `${name} — due ${daysTil === 0 ? 'today' : daysTil === 1 ? 'tomorrow' : `in ${daysTil}d`}`,
             sub: formatInr(s.lastAmountDue),
           });
@@ -232,8 +222,7 @@ function AttentionSection({ activeServices }) {
           const rise = ((curr - prev) / prev) * 100;
           if (rise >= 25) {
             results.push({
-              id: `${s.id}_spike`, priority: 3, icon: <FiTrendingUp size={15} />, color: 'var(--violet)',
-              bg: 'var(--violet-dim)',
+              id: `${s.id}_spike`, priority: 3, icon: 'trending_up', colorClass: 'text-violet border-violet/20 bg-violet-dim/10',
               text: `${name} — usage spike +${Math.round(rise)}%`,
               sub: `${prev} → ${curr} units vs last month`,
             });
@@ -246,8 +235,7 @@ function AttentionSection({ activeServices }) {
         const staleDays = Math.floor((now - new Date(s.lastFetchedAt)) / 86400000);
         if (staleDays >= 7) {
           results.push({
-            id: `${s.id}_stale`, priority: 4, icon: <FiAlertTriangle size={15} />, color: 'var(--text-3)',
-            bg: 'var(--surface-3)',
+            id: `${s.id}_stale`, priority: 4, icon: 'warning', colorClass: 'text-text-muted border-border-medium bg-surface-container-low',
             text: `${name} — data is ${staleDays}d old`,
             sub: 'Pull to refresh for latest bill',
           });
@@ -260,14 +248,9 @@ function AttentionSection({ activeServices }) {
 
   if (items.length === 0) {
     return (
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '12px 14px', borderRadius: 'var(--radius-sm)',
-        background: 'var(--green-dim)', border: '1px solid var(--green)',
-        marginBottom: 16,
-      }}>
-        <FiCheckCircle size={16} color="var(--green)" />
-        <span style={{ fontSize: '0.8125rem', color: 'var(--green)', fontWeight: 600 }}>
+      <div className="flex items-center gap-3 p-3 rounded-lg bg-green-dim/10 border border-green/20 mb-4">
+        <span className="material-symbols-outlined text-green text-[18px]">check_circle</span>
+        <span className="text-[13px] text-green font-body-bold">
           All services are up to date — nothing needs attention
         </span>
       </div>
@@ -275,17 +258,13 @@ function AttentionSection({ activeServices }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+    <div className="flex flex-col gap-2 mb-4">
       {items.map(item => (
-        <div key={item.id} style={{
-          display: 'flex', alignItems: 'flex-start', gap: 10,
-          padding: '10px 14px', borderRadius: 'var(--radius-sm)',
-          background: item.bg, border: `1px solid ${item.color}22`,
-        }}>
-          <span style={{ color: item.color, marginTop: 1, flexShrink: 0 }}>{item.icon}</span>
+        <div key={item.id} className={`flex items-start gap-3 p-3 rounded-lg border ${item.colorClass}`}>
+          <span className="material-symbols-outlined text-[18px] mt-0.5 flex-shrink-0">{item.icon}</span>
           <div>
-            <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{item.text}</p>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: '2px 0 0' }}>{item.sub}</p>
+            <p className="text-[13px] font-body-bold text-on-surface">{item.text}</p>
+            <p className="text-xs text-text-muted mt-0.5">{item.sub}</p>
           </div>
         </div>
       ))}
@@ -317,39 +296,37 @@ function BudgetRollup({ budgets, activeServices }) {
   const withinCount = items.filter(i => !i.over).length;
 
   return (
-    <div className="scard" style={{ padding: '14px 16px', marginBottom: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FiTarget size={14} color="var(--primary)" />
-          <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>Budget Goals</p>
+    <div className="scard bg-surface-card border border-border-medium rounded-xl p-4 mb-4 shadow-sm">
+      <div className="flex justify-between items-center mb-3">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary text-[20px]">track_changes</span>
+          <p className="font-headline-md text-headline-md text-on-surface">Budget Goals</p>
         </div>
-        <span style={{
-          fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-          background: withinCount === items.length ? 'var(--green-dim)' : 'var(--amber-dim)',
-          color: withinCount === items.length ? 'var(--green)' : 'var(--amber)',
-        }}>
+        <span className={`text-[11px] font-label-caps px-2.5 py-0.5 rounded-full ${
+          withinCount === items.length ? 'bg-badge-paid-bg text-badge-paid-fg' : 'bg-badge-due-bg text-badge-due-fg'
+        }`}>
           {withinCount}/{items.length} within budget
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="flex flex-col gap-3">
         {items.map(item => (
           <div key={item.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: '0.8125rem', color: 'var(--text-2)', fontWeight: 500 }}>{item.name}</span>
-              <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: item.over ? 'var(--red)' : 'var(--text-1)' }}>
+            <div className="flex justify-between mb-1">
+              <span className="text-xs font-body-bold text-text-secondary">{item.name}</span>
+              <span className={`font-mono-data text-xs ${item.over ? 'text-red font-bold' : 'text-on-surface'}`}>
                 {formatInr(item.current)} / {formatInr(item.budget)}
               </span>
             </div>
-            <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', borderRadius: 99,
-                width: `${item.pct}%`,
-                background: item.over ? 'var(--red)' : item.pct >= 80 ? 'var(--amber)' : 'var(--green)',
-                transition: 'width 0.4s',
-              }} />
+            <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-400 ${
+                  item.over ? 'bg-red' : item.pct >= 80 ? 'bg-amber' : 'bg-green'
+                }`}
+                style={{ width: `${item.pct}%` }}
+              />
             </div>
             {item.over && (
-              <p style={{ fontSize: '0.6875rem', color: 'var(--red)', marginTop: 3 }}>
+              <p className="text-[11px] text-red font-body-bold mt-1">
                 Over by {formatInr(item.current - item.budget)}
               </p>
             )}
@@ -367,21 +344,16 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
 
   useEffect(() => {
     if (expanded && rowRef.current) {
-      // Delay to allow the accordion to start expanding and layout to shift
       setTimeout(() => {
         const mainEl = document.querySelector('.main');
         const headerEl = document.querySelector('.page__header--sticky');
         
         if (mainEl && rowRef.current) {
           const headerHeight = headerEl ? headerEl.offsetHeight : 0;
-          const headerOffset = headerHeight + 8; // Height + small gap
-          
+          const headerOffset = headerHeight + 8;
           const rect = rowRef.current.getBoundingClientRect();
           const containerRect = mainEl.getBoundingClientRect();
-          
-          // Calculate the distance from the top of the scroll container
           const relativeTop = rect.top - containerRect.top;
-          
           mainEl.scrollBy({
             top: relativeTop - headerOffset,
             behavior: 'smooth'
@@ -390,115 +362,95 @@ function ComparisonRow({ r, service, currentYear, maxAmt, isLowest }) {
       }, 150);
     }
   }, [expanded]);
-  
 
   return (
-    <div ref={rowRef} style={{ 
-      scrollMarginTop: '72px', // Offset for sticky header
-      borderBottom: '1px solid var(--border-md)', 
-      paddingBottom: expanded ? 0 : 14,
-      marginBottom: expanded ? 14 : 0,
-      background: expanded ? 'var(--surface-2)' : 'transparent',
-      borderRadius: expanded ? 'var(--radius-sm)' : 0,
-      border: expanded ? '1px solid var(--primary-glow)' : 'none',
-      transition: 'background 0.2s',
-    }}>
+    <div ref={rowRef} className={`scroll-mt-18 border-b border-border-medium pb-3.5 mb-0 transition-colors rounded-xl duration-200 ${
+      expanded ? 'bg-surface-container-low border-primary/20 p-4 mb-4 shadow-sm' : 'bg-transparent'
+    }`}>
       <button 
         onClick={() => setExpanded(!expanded)}
-        style={{ 
-          width: '100%', border: 'none', 
-          background: expanded ? 'var(--primary-dim)' : 'transparent', 
-          padding: expanded ? '14px 16px 12px' : '0', textAlign: 'left', cursor: 'pointer' 
-        }}
+        className={`w-full text-left cursor-pointer flex flex-col gap-2 rounded-lg ${
+          expanded ? 'bg-primary-dim/5 p-2' : ''
+        }`}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>
+        <div className="flex justify-between items-start w-full">
+          <div className="flex-1">
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <p className="font-body-bold text-[14px] text-on-surface">
                   {r.name} {isLowest && <span title="Lowest bill this month">🏆</span>}
                 </p>
-                <FiChevronDown style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-3)', fontSize: '0.75rem' }} />
+                <span className={`material-symbols-outlined text-[18px] text-text-muted transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>expand_more</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>{r.serviceNumber}</span>
-                <span style={{ 
-                  fontSize: '0.6rem', fontWeight: 700, padding: '1px 5px', borderRadius: 4, 
-                  background: 'var(--surface-3)', color: 'var(--text-3)', letterSpacing: '0.02em' 
-                }}>{service.category}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono-data text-[11px] text-text-secondary">{r.serviceNumber}</span>
+                <span className="font-label-caps text-[10px] px-1.5 py-0.5 bg-surface-container-high text-text-muted rounded">{service.category}</span>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+            <div className="flex gap-2.5 mt-1.5 flex-wrap">
               {r.unitsDelta !== null ? (
-                <span style={{
-                  fontSize: '0.6875rem', fontWeight: 700,
-                  color: r.unitsDelta > 0 ? 'var(--red)' : r.unitsDelta < 0 ? 'var(--green)' : 'var(--text-3)',
-                  display: 'flex', alignItems: 'center', gap: 3,
-                }}>
-                  {r.unitsDelta > 0 ? <FiTrendingUp size={10} /> : r.unitsDelta < 0 ? <FiTrendingDown size={10} /> : <FiMinus size={10} />}
+                <span className={`text-xs font-body-bold flex items-center gap-1 ${
+                  r.unitsDelta > 0 ? 'text-red' : r.unitsDelta < 0 ? 'text-green' : 'text-text-muted'
+                }`}>
+                  <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 0" }}>
+                    {r.unitsDelta > 0 ? 'trending_up' : r.unitsDelta < 0 ? 'trending_down' : 'horizontal_rule'}
+                  </span>
                   {r.unitsDelta > 0 ? '+' : ''}{Math.round(r.unitsDelta)}% units
-                  <span style={{ fontWeight: 400, color: 'var(--text-3)' }}>
+                  <span className="font-body-base text-text-muted text-[11px]">
                     ({r.prevUnits}→{r.currUnits}u)
                   </span>
                 </span>
               ) : (
-                <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>{r.currUnits} units</span>
+                <span className="text-xs text-text-muted">{r.currUnits} units</span>
               )}
               {r.amtDelta !== null && (
-                <span style={{
-                  fontSize: '0.6875rem', fontWeight: 700,
-                  color: r.amtDelta > 0 ? 'var(--red)' : r.amtDelta < 0 ? 'var(--green)' : 'var(--text-3)',
-                }}>
+                <span className={`text-xs font-body-bold ${
+                  r.amtDelta > 0 ? 'text-red' : r.amtDelta < 0 ? 'text-green' : 'text-text-muted'
+                }`}>
                   {r.amtDelta > 0 ? '+' : ''}{Math.round(r.amtDelta)}% bill
                 </span>
               )}
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-1)' }}>{formatInr(r.currAmt)}</span>
-            <p style={{ 
-              fontSize: '0.6875rem', fontWeight: 700, margin: '2px 0 0',
-              color: r.status === 'PAID' ? 'var(--green)' : 'var(--red)' 
-            }}>
+          <div className="text-right">
+            <span className="font-amount-hero text-amount-hero-mobile text-on-surface">{formatInr(r.currAmt)}</span>
+            <p className={`text-[11px] font-body-bold mt-0.5 ${
+              r.status === 'PAID' ? 'text-green' : 'text-red'
+            }`}>
               {r.status === 'PAID' ? 'PAID' : 'DUE'}
             </p>
           </div>
         </div>
-        {/* Bar */}
-        <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
-          <div style={{
-            height: '100%', borderRadius: 99,
-            width: `${(r.currAmt / maxAmt) * 100}%`,
-            background: r.amtDelta > 25 ? 'var(--red)' : r.amtDelta < -10 ? 'var(--green)' : 'var(--primary)',
-            opacity: 0.8,
-            transition: 'width 0.4s',
-          }} />
+        <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+          <div 
+            className={`h-full rounded-full transition-all duration-500 ${
+              r.amtDelta > 25 ? 'bg-red' : r.amtDelta < -10 ? 'bg-green' : 'bg-primary'
+            }`}
+            style={{ width: `${(r.currAmt / maxAmt) * 100}%` }}
+          />
         </div>
       </button>
 
       {expanded && (
-        <div style={{ padding: '0 16px 16px', borderTop: 'none' }}>
-           {/* Summary Stats */}
-           <div style={{ marginTop: 12, marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center' }}>
+        <div className="mt-4 pt-3 border-t border-border-subtle">
+           <div className="flex gap-4 items-center mb-4">
              {service.lastDueDate && r.status !== 'PAID' && (
-               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-3)', padding: '4px 10px', borderRadius: 'var(--radius-sm)' }}>
-                 <FiCalendar size={13} color="var(--text-3)" />
-                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-2)' }}>
+               <div className="flex items-center gap-1.5 bg-surface-container px-2.5 py-1 rounded-lg">
+                 <span className="material-symbols-outlined text-[16px] text-text-muted">calendar_today</span>
+                 <span className="text-xs font-body-bold text-text-secondary">
                    Due: {new Date(service.lastDueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                  </span>
                </div>
              )}
            </div>
 
-           {/* Trend Chart */}
-           <div style={{ marginBottom: 20 }}>
-              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trend Analysis (12 Months)</p>
+           <div className="mb-5">
+              <p className="text-xs font-label-caps text-text-muted mb-3 uppercase tracking-wider">Trend Analysis (12 Months)</p>
               <ServiceTrendChart service={service} />
            </div>
 
-           {/* Year Review */}
-           <div style={{ borderTop: '1px dashed var(--border-md)', paddingTop: 16 }}>
-              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{currentYear} Service Review</p>
+           <div className="border-t border-dashed border-border-medium pt-4">
+              <p className="text-xs font-label-caps text-text-muted mb-3 uppercase tracking-wider">{currentYear} Service Review</p>
               <YearInReview activeServices={[service]} currentYear={currentYear} forceOpen={true} hideToggle={true} hideMonthlyChart={true} />
            </div>
         </div>
@@ -531,7 +483,7 @@ function MonthComparison({ activeServices, currentYear }) {
         amtDelta, unitsDelta,
         status: s.lastStatus,
         category: s.category,
-        service: s, // keep ref
+        service: s,
       };
     }).filter(r => r.currAmt > 0 || r.currUnits > 0);
   }, [activeServices]);
@@ -542,14 +494,14 @@ function MonthComparison({ activeServices, currentYear }) {
   const minAmt = Math.min(...rows.map(r => r.currAmt).filter(a => a > 0));
 
   return (
-    <div className="scard" style={{ padding: '14px 16px', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-        <FiBarChart2 size={14} color="var(--primary)" />
-        <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>
+    <div className="scard bg-surface-card border border-border-medium rounded-xl p-4 mb-4 shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="material-symbols-outlined text-primary text-[20px]">bar_chart</span>
+        <p className="font-headline-md text-headline-md text-on-surface">
           Performance & Detailed Breakdown
         </p>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="flex flex-col gap-4">
         {rows.map(r => (
           <ComparisonRow key={r.id} r={r} service={r.service} currentYear={currentYear} maxAmt={maxAmt} isLowest={r.currAmt === minAmt && r.currAmt > 0} />
         ))}
@@ -582,14 +534,12 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
         monthlyMap[td.month].amount += amt;
       });
 
-      // On-time streaks from billHistory
       (s.billHistory || []).forEach(b => {
         if (!b.billDate || parseInt(b.billDate.slice(0, 4), 10) !== currentYear) return;
         totalBills++;
         if (b.isPaid && b.paidDate && b.dueDate && new Date(b.paidDate) <= new Date(b.dueDate)) onTimePaid++;
       });
 
-      // Most efficient connection ranking:
       const isDomestic = s.category === 'LT1';
       if (isDomestic && svcUnits > 0) {
         const avgUnits = svcUnits / 12; 
@@ -620,9 +570,6 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
   const handleShare = async () => {
     const { totalSpent, totalUnits, maxMo, minMo, bestService, bestRate } = data;
     
-    // Find the cost-per-unit for the best service
-    // In our ranking, bestRate is currently avg units per month.
-    // The prompt asks for (₹X.XX/unit) in the share message.
     let bestServiceCostPerUnit = 0;
     const winner = activeServices.find(s => (s.label || s.customerName || s.serviceNumber) === bestService);
     if (winner) {
@@ -656,109 +603,83 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
   };
 
   return (
-    <div style={{ marginBottom: hideToggle ? 0 : 24 }}>
-      {/* Accordion toggle */}
+    <div className="mb-4">
       {!hideToggle && (
         <button
           onClick={() => setOpen(v => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            width: '100%', padding: '14px 16px',
-            background: isExpanded ? 'var(--primary-dim)' : 'var(--surface-2)',
-            border: `1px solid ${isExpanded ? 'var(--primary-glow)' : 'var(--border)'}`,
-            borderRadius: isExpanded ? 'var(--radius-sm) var(--radius-sm) 0 0' : 'var(--radius-sm)',
-            cursor: 'pointer',
-          }}
+          className={`flex items-center justify-between w-full p-4 transition-all duration-200 border border-border-medium cursor-pointer ${
+            isExpanded 
+              ? 'bg-primary-dim/10 border-primary/25 rounded-t-xl' 
+              : 'bg-surface-container-low rounded-xl shadow-sm'
+          }`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <FiCalendar size={15} style={{ color: 'var(--primary)' }} />
-            <div style={{ textAlign: 'left' }}>
-              <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{currentYear} Year in Review</p>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-primary text-[20px]">calendar_today</span>
+            <div className="text-left">
+              <p className="font-body-bold text-on-surface">{currentYear} Year in Review</p>
+              <p className="text-xs text-text-muted mt-0.5">
                 {hasData
                   ? `${formatInr(data.totalSpent)} · ${data.totalUnits.toLocaleString('en-IN')} units`
                   : 'No data yet for this year'}
               </p>
             </div>
           </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>{isExpanded ? '▲' : '▼'}</span>
+          <span className="material-symbols-outlined text-primary text-[18px]">
+            {isExpanded ? 'expand_less' : 'expand_more'}
+          </span>
         </button>
       )}
 
       {isExpanded && hasData && (
-        <div style={{
-          padding: hideToggle ? 0 : 16, 
-          background: hideToggle ? 'transparent' : 'var(--surface-2)',
-          border: hideToggle ? 'none' : '1px solid var(--primary-glow)', 
-          borderTop: 'none',
-          borderRadius: hideToggle ? 0 : '0 0 var(--radius-sm) var(--radius-sm)',
-        }}>
-          {/* Responsive stats flex container for perfect space-filling */}
-          <div style={{ 
-            display: 'flex', 
-            flexWrap: 'wrap', 
-            gap: 10, 
-            marginBottom: 14 
-          }}>
-            {/* Stat chips that fill row space */}
+        <div className={`p-4 bg-surface-container-low border-x border-b border-primary/20 ${
+          hideToggle ? 'border-none p-0 bg-transparent' : 'rounded-b-xl'
+        }`}>
+          <div className="flex flex-wrap gap-2.5 mb-3.5">
             {[
-              { label: 'Total Spent',    val: formatInr(data.totalSpent),                          color: 'var(--primary)' },
-              { label: 'Total Units',    val: `${data.totalUnits.toLocaleString('en-IN')} u`,       color: 'var(--text-1)' },
-              { label: 'Highest Month',  val: fmtMoKeyFull(data.maxMo?.[0]),                        sub: formatInr(data.maxMo?.[1]?.amount || 0), color: 'var(--red)' },
-              { label: 'Lowest Month',   val: fmtMoKeyFull(data.minMo?.[0]),                        sub: formatInr(data.minMo?.[1]?.amount || 0), color: 'var(--green)' },
-            ].map(({ label, val, sub, color }) => (
-              <div key={label} style={{ 
-                flex: '1 1 130px', // Small basis to fit exactly 2 columns on most phones
-                padding: '10px 12px', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' 
-              }}>
-                <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>{label}</p>
-                <p style={{ fontSize: '1rem', fontWeight: 700, color, margin: 0 }}>{val}</p>
-                {sub && <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', margin: '2px 0 0' }}>{sub}</p>}
+              { label: 'Total Spent',    val: formatInr(data.totalSpent),                          colorClass: 'text-primary' },
+              { label: 'Total Units',    val: `${data.totalUnits.toLocaleString('en-IN')} u`,       colorClass: 'text-on-surface' },
+              { label: 'Highest Month',  val: fmtMoKeyFull(data.maxMo?.[0]),                        sub: formatInr(data.maxMo?.[1]?.amount || 0), colorClass: 'text-red' },
+              { label: 'Lowest Month',   val: fmtMoKeyFull(data.minMo?.[0]),                        sub: formatInr(data.minMo?.[1]?.amount || 0), colorClass: 'text-green' },
+            ].map(({ label, val, sub, colorClass }) => (
+              <div key={label} className="flex-1 min-w-[130px] p-3 bg-surface-card border border-border-medium rounded-xl shadow-sm">
+                <p className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider mb-1">{label}</p>
+                <p className={`font-headline-md text-[16px] font-black ${colorClass}`}>{val}</p>
+                {sub && <p className="text-xs text-text-secondary mt-0.5">{sub}</p>}
               </div>
             ))}
 
-            {/* On-time payment rate - Fills remaining space in current row or full width if alone */}
             {data.totalBills > 0 && (
-              <div style={{
-                flex: '1 1 280px', // Wide basis forces wrap on mobile but shares row on desktop with 3+ columns
-                padding: '10px 12px',
-                background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 2px' }}>On-time Payment Rate</p>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-2)', margin: 0 }}>{data.onTimePaid} of {data.totalBills} bills paid before due date</p>
+              <div className="w-full p-3 bg-surface-card border border-border-medium rounded-xl shadow-sm flex justify-between items-center">
+                <div>
+                  <p className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider mb-1">On-time Payment Rate</p>
+                  <p className="text-xs text-text-secondary">{data.onTimePaid} of {data.totalBills} bills paid before due date</p>
                 </div>
-                <span style={{
-                  fontSize: '1.125rem', fontWeight: 800, marginLeft: 12,
-                  color: data.onTimePaid / data.totalBills >= 0.8 ? 'var(--green)' : 'var(--amber)',
-                }}>
+                <span className={`font-display-lg text-[22px] font-black ${
+                  data.onTimePaid / data.totalBills >= 0.8 ? 'text-green' : 'text-amber'
+                }`}>
                   {Math.round((data.onTimePaid / data.totalBills) * 100)}%
                 </span>
               </div>
             )}
           </div>
 
-          {/* Efficiency callout */}
           {data.bestService && activeServices.length > 1 && (
-            <div style={{
-              padding: '8px 12px', marginBottom: 12,
-              background: 'var(--green-dim)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--green)',
-              fontSize: '0.8125rem', color: 'var(--text-1)',
-            }}>
-              🏆 Most efficient connection: <b>{data.bestService}</b> · avg ₹{data.bestRate.toFixed(2)}/unit
-              {data.worstService && data.worstService !== data.bestService && (
-                <span style={{ color: 'var(--text-3)' }}>
-                  {' '}· Highest: <b>{data.worstService}</b> at ₹{data.worstRate.toFixed(2)}/unit
-                </span>
-              )}
+            <div className="p-3 bg-green-dim/10 border border-green/20 rounded-xl text-xs text-on-surface mb-3 flex items-center gap-2">
+              <span className="material-symbols-outlined text-green text-[18px]">workspace_premium</span>
+              <div>
+                🏆 Most efficient connection: <b>{data.bestService}</b> · avg <span className="font-mono-data">₹{data.bestRate.toFixed(2)}/unit</span>
+                {data.worstService && data.worstService !== data.bestService && (
+                  <span className="text-text-muted">
+                    {' '}· Highest: <b>{data.worstService}</b> at <span className="font-mono-data">₹{data.worstRate.toFixed(2)}/unit</span>
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Monthly breakdown mini-chart */}
           {chartData.length >= 2 && !hideMonthlyChart && (
-            <>
-              <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', marginBottom: 6 }}>Monthly Breakdown</p>
+            <div className="mt-4">
+              <p className="text-xs font-body-bold text-text-muted mb-2">Monthly Breakdown</p>
               <ResponsiveContainer width="100%" height={110}>
                 <BarChart data={chartData} margin={{ top: 2, right: 4, left: -22, bottom: 0 }} barSize={10}>
                   <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} />
@@ -767,21 +688,16 @@ function YearInReview({ activeServices, currentYear, forceOpen = false, hideTogg
                   <Bar dataKey="amount" name="amount" fill="var(--primary)" fillOpacity={0.7} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </>
+            </div>
           )}
 
           {!hideToggle && (
             <button
               onClick={handleShare}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                width: '100%', marginTop: 14, padding: '10px',
-                background: 'var(--primary)', color: '#fff',
-                border: 'none', borderRadius: 'var(--radius-sm)',
-                fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
-              }}
+              className="flex items-center justify-center gap-2 w-full mt-4 py-2.5 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-[13px] shadow-md shadow-primary/20 cursor-pointer"
             >
-              <FiShare2 size={14} /> Share {currentYear} Summary
+              <span className="material-symbols-outlined text-[16px]">share</span>
+              Share {currentYear} Summary
             </button>
           )}
         </div>
@@ -795,7 +711,6 @@ function ServiceTrendChart({ service }) {
   const [view, setView] = useState('amount');
 
   const { chartData, avg12, avg6 } = useMemo(() => {
-    // Mirror the backend index.js trendData logic for perfect sync
     const data = (service.trendData || [])
       .map(td => ({
         month: td.month,
@@ -806,7 +721,6 @@ function ServiceTrendChart({ service }) {
     
     const calculateAvg = (arr, key) => arr.length ? Math.round(arr.reduce((s, d) => s + d[key], 0) / arr.length) : 0;
 
-    // Use full trendData for 12m average (backend usually sends up to 18 months, we slice 12)
     const data12 = data.slice(-12);
     const avg12 = {
       amount: calculateAvg(data12, 'amount'),
@@ -822,24 +736,28 @@ function ServiceTrendChart({ service }) {
     return { chartData: data12, avg12, avg6 };
   }, [service.trendData]);
 
-  if (chartData.length < 2) return <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', textAlign: 'center', padding: '20px 0' }}>Not enough data for trend</p>;
+  if (chartData.length < 2) return <p className="text-xs text-text-muted text-center py-5">Not enough data for trend</p>;
 
   const currentAvg = view === 'amount' ? avg12.amount : avg12.units;
 
   return (
-    <div style={{ marginBottom: 12 }}>
-      {/* View Toggle */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginBottom: 8 }}>
-        {['amount', 'units'].map(v => (
-          <button key={v} onClick={() => setView(v)} style={{
-            padding: '2px 8px', borderRadius: 20, fontSize: '0.625rem', fontWeight: 600, cursor: 'pointer',
-            border: `1px solid ${view === v ? 'var(--primary)' : 'var(--border-md)'}`,
-            background: view === v ? 'var(--primary-dim)' : 'transparent',
-            color: view === v ? 'var(--primary)' : 'var(--text-3)',
-          }}>
-            {v === 'amount' ? '₹ Bill' : '⚡ Units'}
-          </button>
-        ))}
+    <div className="mb-3">
+      <div className="flex justify-end gap-1 mb-2">
+        <div className="flex bg-surface-container rounded-full p-0.5 border border-border-medium">
+          {['amount', 'units'].map(v => (
+            <button 
+              key={v} 
+              onClick={() => setView(v)} 
+              className={`px-2.5 py-0.5 text-[10px] font-label-caps rounded-full transition-all duration-150 cursor-pointer ${
+                view === v 
+                  ? 'bg-white shadow-sm text-primary font-bold' 
+                  : 'text-text-muted hover:text-on-surface'
+              }`}
+            >
+              {v === 'amount' ? '₹ Bill' : '⚡ Units'}
+            </button>
+          ))}
+        </div>
       </div>
 
       <ResponsiveContainer width="100%" height={150}>
@@ -856,12 +774,12 @@ function ServiceTrendChart({ service }) {
         </BarChart>
       </ResponsiveContainer>
       
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 4 }}>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>
-          12m Avg: <b>{view === 'amount' ? formatInr(avg12.amount) : `${avg12.units} u`}</b>
+      <div className="flex justify-end gap-3 mt-1.5">
+        <p className="text-xs text-text-muted font-body-base">
+          12m Avg: <b className="font-mono-data text-on-surface">{view === 'amount' ? formatInr(avg12.amount) : `${avg12.units} u`}</b>
         </p>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>
-          6m Avg: <b>{view === 'amount' ? formatInr(avg6.amount) : `${avg6.units} u`}</b>
+        <p className="text-xs text-text-muted font-body-base">
+          6m Avg: <b className="font-mono-data text-on-surface">{view === 'amount' ? formatInr(avg6.amount) : `${avg6.units} u`}</b>
         </p>
       </div>
     </div>
@@ -869,13 +787,13 @@ function ServiceTrendChart({ service }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export function OverviewTab({ electricityContext }) {
+export function OverviewTab({ electricityContext, onOpenProfile }) {
   const { t } = useTranslation();
   const { services, loading } = electricityContext;
 
   const activeServices = useMemo(() => services.filter(s => !s.isDeleted), [services]);
+  const currentYear = new Date().getFullYear();
 
-  // Load all budget goals keyed by serviceNumber from db.getSetting
   const [budgets, setBudgets] = useState({});
   useEffect(() => {
     if (activeServices.length === 0) return;
@@ -903,12 +821,10 @@ export function OverviewTab({ electricityContext }) {
         const due = s.lastDueDate ? new Date(s.lastDueDate) : null;
         if (due && due < new Date()) overdueCount++;
       }
-      // Use trendData current month first, fallback to lastBilledUnits
       const currTd = (s.trendData || []).find(td => td.month === currentMonth);
       totalUnitsThisMonth += Number(currTd?.billedUnits || s.lastBilledUnits || 0);
     });
 
-    // Month-over-month totals for the top delta
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
     const lastMonthKey = lastMonth.toISOString().slice(0, 7);
@@ -948,73 +864,114 @@ export function OverviewTab({ electricityContext }) {
     try { await navigator.clipboard.writeText(text); toast.success('Summary copied!'); } catch { toast.error('Copy failed'); }
   };
 
-  // ── Loading / empty ─────────────────────────────────────────────────────────
   if (loading) {
-    return <div className="page"><div className="state-box"><Loader size={22} /><p>Loading Overview…</p></div></div>;
-  }
-
-  if (activeServices.length === 0) {
     return (
-      <div className="page" style={{ padding: 24 }}>
-        <div className="state-box">
-          <FiGrid size={28} />
-          <h3>No services</h3>
-          <p>Add some electricity services to see your overview.</p>
+      <div className="page flex items-center justify-center min-h-[400px]">
+        <div className="state-box flex flex-col items-center gap-2">
+          <Loader size={22} />
+          <p className="text-text-secondary">Loading Overview…</p>
         </div>
       </div>
     );
   }
 
-  const currentYear = new Date().getFullYear();
-
-  return (
-    <div className="page">
-
-      {/* ── Sticky header ─────────────────────────────── */}
-      <header className="page__header page__header--sticky">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+  if (activeServices.length === 0) {
+    return (
+      <div className="page flex-1 p-margin-mobile md:p-margin-desktop max-w-7xl mx-auto w-full pb-20 md:pb-6">
+        <header className="page__header page__header--sticky">
           <div>
-            <h2 className="page__title">Overview</h2>
-            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-3)' }}>
-              {activeServices.length} service{activeServices.length !== 1 ? 's' : ''} · {currentYear}
+            <h2 className="font-headline-md text-headline-md text-on-background">Overview</h2>
+            <p className="text-[11px] text-text-muted">
+              0 services · {currentYear}
             </p>
           </div>
-          <button className="icon-btn-ghost" onClick={handleShareSummary} title="Share this month's summary" aria-label="Share summary">
-            <FiShare2 size={20} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              className="icon-btn"
+              onClick={onOpenProfile}
+              title="User Profile"
+              style={{ width: '40px', height: '40px', borderRadius: '50%' }}
+            >
+              <span className="material-symbols-outlined text-[24px]">account_circle</span>
+            </button>
+          </div>
+        </header>
+
+        <div className="state-box flex flex-col items-center justify-center p-8 border border-dashed border-border-medium rounded-xl text-center bg-surface-card" style={{ marginTop: '20px' }}>
+          <span className="material-symbols-outlined text-[36px] text-text-muted mb-3">grid_view</span>
+          <h3 className="font-headline-md text-headline-md text-on-surface">No services</h3>
+          <p className="text-xs text-text-muted mt-1">Add some electricity services to see your overview.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page flex-1 p-margin-mobile md:p-margin-desktop max-w-7xl mx-auto w-full pb-20 md:pb-6">
+      {/* ── Sticky header ─────────────────────────────── */}
+      <header className="page__header page__header--sticky">
+        <div>
+          <h2 className="font-headline-md text-headline-md text-on-background">Overview</h2>
+          <p className="text-[11px] text-text-muted">
+            {activeServices.length} service{activeServices.length !== 1 ? 's' : ''} · {currentYear}
+          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button 
+            className="icon-btn" 
+            onClick={handleShareSummary} 
+            title="Share this month's summary" 
+            aria-label="Share summary"
+            style={{ width: '40px', height: '40px' }}
+          >
+            <span className="material-symbols-outlined text-[20px]">share</span>
+          </button>
+          <button
+            className="icon-btn"
+            onClick={onOpenProfile}
+            title="User Profile"
+            style={{ width: '40px', height: '40px', borderRadius: '50%' }}
+          >
+            <span className="material-symbols-outlined text-[24px]">account_circle</span>
           </button>
         </div>
       </header>
 
       {/* ── Top stat cards ─────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+      <div className="grid grid-cols-2 gap-4 mb-4">
         {/* Amount due now */}
-        <div className="scard" style={{
-          padding: '14px 16px',
-          background: summary.totalDue > 0 ? 'var(--red-dim)' : 'var(--green-dim)',
-          border: `1px solid ${summary.totalDue > 0 ? 'var(--red)' : 'var(--green)'}22`,
-        }}>
-          <p style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px', color: summary.totalDue > 0 ? 'var(--red)' : 'var(--green)' }}>
-            {summary.totalDue > 0 ? `Due Now${summary.overdueCount > 0 ? ` · ${summary.overdueCount} overdue` : ''}` : 'All Paid'}
-          </p>
-          <h2 style={{ fontSize: '1.375rem', margin: 0, color: 'var(--text-1)', lineHeight: 1 }}>
-            {summary.totalDue > 0 ? formatInr(summary.totalDue) : '✓'}
-          </h2>
-          <div style={{ marginTop: 4 }}>
+        <div className={`scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-2 ${
+          summary.totalDue > 0 ? 'border-red/20 bg-red-dim/10' : 'border-green/20 bg-green-dim/10'
+        }`}>
+          <div className="flex justify-between items-start">
+            <span className={`font-label-caps text-label-caps uppercase ${summary.totalDue > 0 ? 'text-red' : 'text-green'}`}>
+              {summary.totalDue > 0 ? `Due Now${summary.overdueCount > 0 ? ` · ${summary.overdueCount} overdue` : ''}` : 'All Paid'}
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="font-amount-hero text-amount-hero-mobile md:text-amount-hero text-on-background font-black">
+              {summary.totalDue > 0 ? formatInr(summary.totalDue) : '✓'}
+            </span>
+          </div>
+          <div className="mt-1">
             <Delta current={summary.totalThisMonth} previous={summary.totalLastMonth} />
           </div>
         </div>
 
         {/* Units this month */}
-        <div className="scard" style={{ padding: '14px 16px', background: 'var(--surface-2)' }}>
-          <p style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px', color: 'var(--text-3)' }}>
-            Units This Month
-          </p>
-          <h2 style={{ fontSize: '1.375rem', margin: 0, color: 'var(--text-1)', lineHeight: 1 }}>
-            {summary.totalUnitsThisMonth.toLocaleString('en-IN')}
-            <span style={{ fontSize: '0.875rem', fontWeight: 400, marginLeft: 4, color: 'var(--text-3)' }}>u</span>
-          </h2>
-          <div style={{ marginTop: 4 }}>
-            {/* units delta across all services */}
+        <div className="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-2">
+          <div className="flex justify-between items-start">
+            <span className="font-label-caps text-label-caps text-text-muted uppercase">
+              Units This Month
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="font-amount-hero text-amount-hero-mobile md:text-amount-hero text-on-background font-black">
+              {summary.totalUnitsThisMonth.toLocaleString('en-IN')}
+            </span>
+            <span className="font-mono-data text-text-muted">u</span>
+          </div>
+          <div className="mt-1">
             {(() => {
               const currentMonth = new Date().toISOString().slice(0, 7);
               const lastMonth = new Date(); lastMonth.setMonth(lastMonth.getMonth() - 1);
@@ -1030,8 +987,8 @@ export function OverviewTab({ electricityContext }) {
       </div>
 
       {/* ── Attention section ──────────────────────────── */}
-      <div style={{ marginBottom: 4 }}>
-        <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+      <div className="mb-4">
+        <p className="font-label-caps text-label-caps text-text-muted uppercase tracking-wider mb-2">
           Attention
         </p>
         <AttentionSection activeServices={activeServices} />

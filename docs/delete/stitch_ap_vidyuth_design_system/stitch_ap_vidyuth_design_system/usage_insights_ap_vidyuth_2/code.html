@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AP Vidyuth | Usage Analytics</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary": "#ffffff",
+                    "text-secondary": "#475569",
+                    "surface-tint": "#4d44e3",
+                    "background": "#f7f9fb",
+                    "border-subtle": "rgba(15, 23, 42, 0.05)",
+                    "primary-container": "#4f46e5",
+                    "border-medium": "rgba(15, 23, 42, 0.10)",
+                    "surface-bright": "#f7f9fb",
+                    "tertiary": "#41485e",
+                    "on-secondary-fixed": "#07006c",
+                    "tertiary-container": "#586076",
+                    "on-error": "#ffffff",
+                    "badge-paid-bg": "#d1fae5",
+                    "surface-inner": "#f1f5f9",
+                    "on-primary-container": "#dad7ff",
+                    "secondary": "#4648d4",
+                    "on-secondary-fixed-variant": "#2f2ebe",
+                    "surface": "#f7f9fb",
+                    "badge-paid-fg": "#059669",
+                    "primary-fixed": "#e2dfff",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#c0c1ff",
+                    "outline-variant": "#c7c4d8",
+                    "on-primary": "#ffffff",
+                    "on-primary-fixed-variant": "#3323cc",
+                    "surface-variant": "#e0e3e5",
+                    "badge-due-fg": "#e11d48",
+                    "surface-container-low": "#f2f4f6",
+                    "on-background": "#191c1e",
+                    "secondary-container": "#6063ee",
+                    "chart-cyan": "#0891b2",
+                    "primary": "#3525cd",
+                    "surface-card": "#ffffff",
+                    "surface-container-highest": "#e0e3e5",
+                    "primary-fixed-dim": "#c3c0ff",
+                    "inverse-surface": "#2d3133",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-tertiary-fixed": "#131b2e",
+                    "text-muted": "#64748b",
+                    "outline": "#777587",
+                    "bg-sidebar": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-container": "#d4dbf5",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed": "#0f0069",
+                    "secondary-fixed": "#e1e0ff",
+                    "on-surface": "#191c1e",
+                    "on-error-container": "#93000a",
+                    "badge-due-bg": "#fee2e2",
+                    "chart-violet": "#7c3aed",
+                    "surface-container-high": "#e6e8ea",
+                    "tertiary-fixed": "#dae2fd",
+                    "surface-container": "#eceef0",
+                    "on-secondary": "#ffffff",
+                    "surface-dim": "#d8dadc",
+                    "on-secondary-container": "#fffbff",
+                    "on-surface-variant": "#464555",
+                    "on-tertiary-fixed-variant": "#3f465c",
+                    "inverse-primary": "#c3c0ff",
+                    "tertiary-fixed-dim": "#bec6e0"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "lg": "16px",
+                    "xl": "24px",
+                    "sm": "8px",
+                    "unit": "4px",
+                    "gutter": "14px",
+                    "margin-mobile": "12px",
+                    "md": "12px",
+                    "margin-desktop": "24px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "amount-hero": ["Plus Jakarta Sans"],
+                    "label-caps": ["Plus Jakarta Sans"],
+                    "mono-data": ["JetBrains Mono"],
+                    "body-base": ["Plus Jakarta Sans"],
+                    "amount-hero-mobile": ["Plus Jakarta Sans"],
+                    "display-lg": ["Plus Jakarta Sans"],
+                    "body-bold": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "headline-md": ["20px", {"lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "amount-hero": ["28px", {"lineHeight": "32px", "letterSpacing": "-0.03em", "fontWeight": "800"}],
+                    "label-caps": ["11px", {"lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "mono-data": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "body-base": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                    "amount-hero-mobile": ["22px", {"lineHeight": "28px", "letterSpacing": "-0.03em", "fontWeight": "800"}],
+                    "display-lg": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.03em", "fontWeight": "800"}],
+                    "body-bold": ["14px", {"lineHeight": "22px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .chart-container {
+            height: 240px;
+            position: relative;
+        }
+        .usage-bar {
+            transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .shell-compact .card-spacing { padding: 8px; }
+        .shell-normal .card-spacing { padding: 16px; }
+        
+        /* Backdrop Blur Header */
+        .glass-header {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        /* Hover Transitions */
+        .scard {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .scard:hover {
+            transform: translateY(-1px);
+        }
+
+        /* Technical Grid Lines */
+        .grid-line {
+            stroke: rgba(15, 23, 42, 0.05);
+            stroke-width: 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-base antialiased">
+<!-- Desktop SideNav -->
+<aside class="fixed left-0 top-0 h-screen w-56 bg-bg-sidebar border-r border-border-subtle z-50 hidden md:flex flex-col gap-2 p-4">
+<div class="mb-8 px-2">
+<h1 class="font-display-lg text-display-lg font-black text-primary tracking-tight">AP Vidyuth</h1>
+<p class="font-label-caps text-label-caps text-text-muted mt-1 uppercase">Utility Management</p>
+</div>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 p-3 text-text-secondary hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-base">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 p-3 text-text-secondary hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-body-base">Accounts</span>
+</a>
+<a class="flex items-center gap-3 p-3 text-text-secondary hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="font-body-base">Billing</span>
+</a>
+<a class="flex items-center gap-3 p-3 bg-primary-fixed text-on-primary-fixed-variant font-body-bold rounded-lg group active:scale-[0.98] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">leaderboard</span>
+<span class="font-body-base">Usage</span>
+</a>
+<a class="flex items-center gap-3 p-3 text-text-secondary hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined">contact_support</span>
+<span class="font-body-base">Support</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-border-subtle pt-4 flex flex-col gap-1">
+<button class="w-full bg-primary text-on-primary py-2.5 rounded-lg font-body-bold mb-4 active:scale-95 transition-transform">
+                Add New Service
+            </button>
+<a class="flex items-center gap-3 p-3 text-text-secondary hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-base">Settings</span>
+</a>
+<a class="flex items-center gap-3 p-3 text-text-secondary hover:bg-surface-container-low transition-colors duration-200 rounded-lg group text-error" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-base">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-56 min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 w-full glass-header bg-surface/80 border-b border-border-subtle flex justify-between items-center h-14 px-margin-mobile md:px-margin-desktop">
+<div class="flex items-center gap-4">
+<h2 class="font-headline-md text-headline-md text-on-background">Usage Analytics</h2>
+<div class="hidden lg:flex items-center bg-surface-container rounded-full p-1 ml-4 border border-border-medium">
+<button class="px-4 py-1 text-label-caps font-label-caps rounded-full bg-white shadow-sm text-primary">Weekly</button>
+<button class="px-4 py-1 text-label-caps font-label-caps rounded-full text-text-muted hover:text-on-surface transition-colors">Monthly</button>
+<button class="px-4 py-1 text-label-caps font-label-caps rounded-full text-text-muted hover:text-on-surface transition-colors">Yearly</button>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="hidden md:flex relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">search</span>
+<input class="h-9 w-48 lg:w-64 pl-10 pr-4 bg-surface-container-low border border-border-medium rounded-lg text-body-base focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="Search data..." type="text"/>
+</div>
+<button class="p-2 text-text-muted hover:bg-surface-container-highest/10 rounded-full">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-border-medium">
+<img class="h-full w-full object-cover" data-alt="A professional studio headshot of a utilities manager with a friendly expression. The background is a clean, corporate gray with subtle lighting, perfectly capturing the tech-driven reliability of the AP Vidyuth brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzmVPWNY2zan-hED4hM5fZujhZMfXSnErnjPV5zyhjEKcqrHzZwURaYp8MMpDvT8171-DIbigHL4q89TRaLwHAeRhRDQ6ZgOdYO3QiR-Bdaxt1Kcrb6jccwwKwdCBzmWvWFrTluzFpD9Bo28c6uXwtOaDd7-Ke4Na2U5PgExD99FEcs-LNDBwvTj4jW3hWiQMqCFQiYO0TXWIabDfVBc0UQTCutXde6piIeaYXMh-bJADyAq3UqqEkMfbhN2_L134Bco1W-2ZS6bU"/>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<div class="flex-1 p-margin-mobile md:p-margin-desktop max-w-7xl mx-auto w-full">
+<!-- Key Metric Overview -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+<!-- Unit Consumption -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<span class="font-label-caps text-label-caps text-text-muted uppercase">Unit Consumption</span>
+<span class="text-xs font-mono-data text-badge-paid-fg bg-badge-paid-bg px-2 py-0.5 rounded-full">-12.5%</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="font-amount-hero text-amount-hero text-on-background">412.8</span>
+<span class="font-mono-data text-text-muted">kWh</span>
+</div>
+<p class="text-xs text-text-muted">Since last billing cycle</p>
+</div>
+<!-- Peak Demand -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<span class="font-label-caps text-label-caps text-text-muted uppercase">Peak Demand</span>
+<span class="text-xs font-mono-data text-badge-due-fg bg-badge-due-bg px-2 py-0.5 rounded-full">+4.2%</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="font-amount-hero text-amount-hero text-on-background">8.2</span>
+<span class="font-mono-data text-text-muted">kW</span>
+</div>
+<p class="text-xs text-text-muted">Recorded on July 14, 18:45</p>
+</div>
+<!-- Avg Cost/Day -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<span class="font-label-caps text-label-caps text-text-muted uppercase">Est. Daily Cost</span>
+<span class="text-xs font-mono-data text-text-muted bg-surface-container px-2 py-0.5 rounded-full">Stable</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="font-amount-hero text-amount-hero text-on-background">₹82</span>
+<span class="font-mono-data text-text-muted">/Day</span>
+</div>
+<p class="text-xs text-text-muted">Projected monthly: ₹2,460</p>
+</div>
+<!-- Carbon Footprint -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<span class="font-label-caps text-label-caps text-text-muted uppercase">Grid Impact</span>
+<span class="material-symbols-outlined text-chart-cyan text-sm">eco</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="font-amount-hero text-amount-hero text-on-background">0.24</span>
+<span class="font-mono-data text-text-muted">MT CO2</span>
+</div>
+<p class="text-xs text-text-muted">Lower than 72% of neighbors</p>
+</div>
+</div>
+<!-- Main Interactive Analytics Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+<!-- Consumption Trends Card (Bigger) -->
+<div class="lg:col-span-2 scard bg-surface-card border border-border-medium rounded-xl overflow-hidden flex flex-col">
+<div class="p-4 border-b border-border-subtle flex justify-between items-center bg-surface-container-low">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-background">Consumption Trends</h3>
+<p class="text-xs text-text-muted">Weekly breakdown of energy flow</p>
+</div>
+<div class="flex gap-2">
+<button class="p-2 border border-border-medium rounded bg-white hover:bg-surface-container transition-colors" title="Download CSV">
+<span class="material-symbols-outlined text-sm">download</span>
+</button>
+<button class="p-2 border border-border-medium rounded bg-white hover:bg-surface-container transition-colors" title="Expand">
+<span class="material-symbols-outlined text-sm">fullscreen</span>
+</button>
+</div>
+</div>
+<div class="p-6 flex-1 flex flex-col">
+<!-- Pseudo-Chart Canvas -->
+<div class="chart-container flex items-end justify-between gap-2 md:gap-4 group">
+<!-- Y-Axis labels (Absolute positioned) -->
+<div class="absolute -left-2 h-full flex flex-col justify-between text-[10px] font-mono-data text-text-muted -translate-x-full pr-2">
+<span>600</span>
+<span>400</span>
+<span>200</span>
+<span>0</span>
+</div>
+<!-- Chart Grid Lines -->
+<div class="absolute inset-0 pointer-events-none flex flex-col justify-between py-1">
+<div class="border-t border-border-subtle w-full"></div>
+<div class="border-t border-border-subtle w-full"></div>
+<div class="border-t border-border-subtle w-full"></div>
+<div class="border-t border-border-medium w-full"></div>
+</div>
+<!-- Bars -->
+<div class="flex-1 flex items-end justify-around gap-2 z-10">
+<!-- Mon -->
+<div class="relative group/bar flex flex-col items-center flex-1">
+<div class="usage-bar w-full bg-primary-container/20 rounded-t-sm" style="height: 60%"></div>
+<div class="usage-bar w-full bg-primary rounded-t-sm -mt-24" style="height: 45%"></div>
+<span class="mt-4 font-label-caps text-label-caps text-text-muted">MON</span>
+<!-- Tooltip -->
+<div class="absolute -top-12 opacity-0 group-hover/bar:opacity-100 bg-inverse-surface text-inverse-on-surface text-[10px] px-2 py-1 rounded transition-opacity pointer-events-none">
+                                        42.5 kWh
+                                    </div>
+</div>
+<!-- Tue -->
+<div class="relative group/bar flex flex-col items-center flex-1">
+<div class="usage-bar w-full bg-primary-container/20 rounded-t-sm" style="height: 55%"></div>
+<div class="usage-bar w-full bg-primary rounded-t-sm" style="height: 72%"></div>
+<span class="mt-4 font-label-caps text-label-caps text-text-muted">TUE</span>
+</div>
+<!-- Wed -->
+<div class="relative group/bar flex flex-col items-center flex-1">
+<div class="usage-bar w-full bg-primary-container/20 rounded-t-sm" style="height: 40%"></div>
+<div class="usage-bar w-full bg-primary rounded-t-sm" style="height: 35%"></div>
+<span class="mt-4 font-label-caps text-label-caps text-text-muted">WED</span>
+</div>
+<!-- Thu -->
+<div class="relative group/bar flex flex-col items-center flex-1">
+<div class="usage-bar w-full bg-primary-container/20 rounded-t-sm" style="height: 80%"></div>
+<div class="usage-bar w-full bg-primary rounded-t-sm" style="height: 88%"></div>
+<span class="mt-4 font-label-caps text-label-caps text-text-muted">THU</span>
+</div>
+<!-- Fri -->
+<div class="relative group/bar flex flex-col items-center flex-1">
+<div class="usage-bar w-full bg-primary-container/20 rounded-t-sm" style="height: 70%"></div>
+<div class="usage-bar w-full bg-primary rounded-t-sm" style="height: 65%"></div>
+<span class="mt-4 font-label-caps text-label-caps text-text-muted">FRI</span>
+</div>
+<!-- Sat -->
+<div class="relative group/bar flex flex-col items-center flex-1">
+<div class="usage-bar w-full bg-primary-container/20 rounded-t-sm" style="height: 45%"></div>
+<div class="usage-bar w-full bg-primary rounded-t-sm" style="height: 20%"></div>
+<span class="mt-4 font-label-caps text-label-caps text-text-muted">SAT</span>
+</div>
+<!-- Sun -->
+<div class="relative group/bar flex flex-col items-center flex-1">
+<div class="usage-bar w-full bg-primary-container/20 rounded-t-sm" style="height: 35%"></div>
+<div class="usage-bar w-full bg-primary rounded-t-sm" style="height: 15%"></div>
+<span class="mt-4 font-label-caps text-label-caps text-text-muted">SUN</span>
+</div>
+</div>
+</div>
+<div class="mt-8 flex gap-6">
+<div class="flex items-center gap-2">
+<span class="h-3 w-3 rounded-full bg-primary"></span>
+<span class="text-xs font-body-base text-text-secondary">Current Period</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="h-3 w-3 rounded-full bg-primary-container/30"></span>
+<span class="text-xs font-body-base text-text-secondary">Previous Period</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Peak Hours Breakdown -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-4">
+<h3 class="font-headline-md text-headline-md text-on-background">Peak Usage Hours</h3>
+<div class="flex-1 flex flex-col justify-center gap-4">
+<div class="flex flex-col gap-1">
+<div class="flex justify-between text-xs font-mono-data mb-1">
+<span class="text-text-secondary">Evening Peak (18:00 - 22:00)</span>
+<span class="text-on-background font-bold">54%</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-chart-violet rounded-full" style="width: 54%"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between text-xs font-mono-data mb-1">
+<span class="text-text-secondary">Mid-day Load (11:00 - 15:00)</span>
+<span class="text-on-background font-bold">28%</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-chart-cyan rounded-full" style="width: 28%"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between text-xs font-mono-data mb-1">
+<span class="text-text-secondary">Off-peak (23:00 - 06:00)</span>
+<span class="text-on-background font-bold">18%</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-outline rounded-full" style="width: 18%"></div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low p-4 rounded-lg mt-auto">
+<div class="flex items-center gap-3 text-secondary">
+<span class="material-symbols-outlined">lightbulb</span>
+<span class="text-xs font-body-bold">Efficiency Tip</span>
+</div>
+<p class="text-[11px] mt-1 text-text-secondary leading-relaxed">
+                            Shifting laundry and high-energy tasks to off-peak hours (before 6 AM) could save you approx. <b>₹340/month</b>.
+                        </p>
+</div>
+</div>
+</div>
+<!-- Detailed Grid & Controls -->
+<div class="flex flex-col gap-6">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+<div class="flex items-center gap-4">
+<h4 class="font-headline-md text-headline-md text-on-background">Device-Level Analysis</h4>
+<div class="flex items-center bg-surface-container-high rounded-lg p-1 border border-border-subtle">
+<button class="p-1.5 rounded bg-surface-card shadow-sm transition-all" id="grid-density-toggle" onclick="toggleDensity('compact')">
+<span class="material-symbols-outlined text-sm">grid_view</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-card/50 transition-all" onclick="toggleDensity('normal')">
+<span class="material-symbols-outlined text-sm">view_agenda</span>
+</button>
+</div>
+</div>
+<div class="flex gap-2 w-full md:w-auto">
+<select class="flex-1 md:w-48 bg-surface-card border border-border-medium rounded-lg px-3 py-2 text-body-base outline-none focus:ring-1 focus:ring-primary">
+<option>All Devices</option>
+<option>Heavy Appliances</option>
+<option>Lighting &amp; Fans</option>
+</select>
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface border border-border-medium rounded-lg font-body-bold hover:bg-surface-container-highest/20 transition-all">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                            Filter
+                        </button>
+</div>
+</div>
+<!-- Analytics Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20 md:pb-8" id="device-grid">
+<!-- HVAC -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-3 group">
+<div class="flex justify-between">
+<div class="flex items-center gap-3">
+<div class="h-10 w-10 rounded-lg bg-error-container/20 flex items-center justify-center text-error">
+<span class="material-symbols-outlined">ac_unit</span>
+</div>
+<div>
+<p class="font-body-bold text-on-background">Air Conditioning</p>
+<p class="text-[10px] text-text-muted uppercase">High Load Device</p>
+</div>
+</div>
+<span class="font-mono-data text-on-background font-bold">184 kWh</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-error rounded-full" style="width: 45%"></div>
+</div>
+<div class="flex justify-between items-center text-[11px] text-text-muted">
+<span>45% of total bill</span>
+<span class="text-badge-due-fg font-bold">+14% vs Last Month</span>
+</div>
+</div>
+<!-- Kitchen -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-3">
+<div class="flex justify-between">
+<div class="flex items-center gap-3">
+<div class="h-10 w-10 rounded-lg bg-secondary-container/10 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">kitchen</span>
+</div>
+<div>
+<p class="font-body-bold text-on-background">Kitchen Appliances</p>
+<p class="text-[10px] text-text-muted uppercase">Essential Load</p>
+</div>
+</div>
+<span class="font-mono-data text-on-background font-bold">92 kWh</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 22%"></div>
+</div>
+<div class="flex justify-between items-center text-[11px] text-text-muted">
+<span>22% of total bill</span>
+<span class="text-badge-paid-fg font-bold">-2% vs Last Month</span>
+</div>
+</div>
+<!-- EV Charger -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-3">
+<div class="flex justify-between">
+<div class="flex items-center gap-3">
+<div class="h-10 w-10 rounded-lg bg-chart-cyan/10 flex items-center justify-center text-chart-cyan">
+<span class="material-symbols-outlined">ev_station</span>
+</div>
+<div>
+<p class="font-body-bold text-on-background">Electric Vehicle</p>
+<p class="text-[10px] text-text-muted uppercase">Off-Peak Charge</p>
+</div>
+</div>
+<span class="font-mono-data text-on-background font-bold">64 kWh</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-chart-cyan rounded-full" style="width: 15%"></div>
+</div>
+<div class="flex justify-between items-center text-[11px] text-text-muted">
+<span>15% of total bill</span>
+<span class="text-text-muted">Target Met</span>
+</div>
+</div>
+<!-- Home Office -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-3">
+<div class="flex justify-between">
+<div class="flex items-center gap-3">
+<div class="h-10 w-10 rounded-lg bg-chart-violet/10 flex items-center justify-center text-chart-violet">
+<span class="material-symbols-outlined">laptop_mac</span>
+</div>
+<div>
+<p class="font-body-bold text-on-background">Home Office</p>
+<p class="text-[10px] text-text-muted uppercase">Constant Load</p>
+</div>
+</div>
+<span class="font-mono-data text-on-background font-bold">41 kWh</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-chart-violet rounded-full" style="width: 10%"></div>
+</div>
+<div class="flex justify-between items-center text-[11px] text-text-muted">
+<span>10% of total bill</span>
+<span class="text-text-muted">Stable</span>
+</div>
+</div>
+<!-- Lighting -->
+<div class="scard bg-surface-card border border-border-medium rounded-xl p-4 flex flex-col gap-3">
+<div class="flex justify-between">
+<div class="flex items-center gap-3">
+<div class="h-10 w-10 rounded-lg bg-outline/10 flex items-center justify-center text-outline">
+<span class="material-symbols-outlined">light</span>
+</div>
+<div>
+<p class="font-body-bold text-on-background">Smart Lighting</p>
+<p class="text-[10px] text-text-muted uppercase">Distributed Load</p>
+</div>
+</div>
+<span class="font-mono-data text-on-background font-bold">31.8 kWh</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-outline rounded-full" style="width: 8%"></div>
+</div>
+<div class="flex justify-between items-center text-[11px] text-text-muted">
+<span>8% of total bill</span>
+<span class="text-badge-paid-fg font-bold">-18% vs Last Month</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Mobile Bottom Navigation -->
+<nav class="fixed bottom-0 w-full z-50 md:hidden flex justify-around items-center h-14 px-margin-mobile bg-surface border-t border-border-medium shadow-lg">
+<a class="flex flex-col items-center justify-center text-text-muted" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-caps text-label-caps uppercase text-[10px]">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-muted" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-caps text-label-caps uppercase text-[10px]">Bills</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary scale-110 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">insights</span>
+<span class="font-label-caps text-label-caps uppercase text-[10px]">Usage</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-muted" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-caps text-label-caps uppercase text-[10px]">Profile</span>
+</a>
+</nav>
+</main>
+<script>
+        function toggleDensity(mode) {
+            const grid = document.getElementById('device-grid');
+            const toggle = document.getElementById('grid-density-toggle');
+            
+            if (mode === 'compact') {
+                grid.classList.add('lg:grid-cols-4');
+                grid.classList.remove('lg:grid-cols-3');
+                document.querySelectorAll('.scard').forEach(card => {
+                    card.classList.add('p-3');
+                    card.classList.remove('p-4');
+                });
+            } else {
+                grid.classList.remove('lg:grid-cols-4');
+                grid.classList.add('lg:grid-cols-3');
+                document.querySelectorAll('.scard').forEach(card => {
+                    card.classList.add('p-4');
+                    card.classList.remove('p-3');
+                });
+            }
+        }
+
+        // Micro-interactions for bars
+        document.querySelectorAll('.usage-bar').forEach(bar => {
+            bar.addEventListener('mouseenter', () => {
+                bar.style.opacity = '0.8';
+            });
+            bar.addEventListener('mouseleave', () => {
+                bar.style.opacity = '1';
+            });
+        });
+    </script>
+</body></html>

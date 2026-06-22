@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { FiAlertCircle, FiCheck, FiTrash2, FiZap, FiStar, FiSend } from 'react-icons/fi';
 import { SERVICE_CAP, getDeviceId } from '../../../shared/utils/index.js';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -32,17 +31,17 @@ export function RequestSuccessModal({ open, type, email, onClose }) {
 
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 11000 }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw', textAlign: 'center', padding: '40px 24px' }}>
-        <div style={{ width: '64px', height: '64px', background: 'var(--green-light)', color: 'var(--green)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-          <FiCheck size={32} />
+      <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl max-w-[400px] w-[90%] text-center p-8 flex flex-col items-center">
+        <div className="w-14 h-14 bg-green-dim/10 text-green rounded-full flex items-center justify-center mb-5 shadow-sm">
+          <span className="material-symbols-outlined text-[32px]">check_circle</span>
         </div>
-        <h2 className="dialog__title">{type === 'WITHDRAW' ? 'Withdrawal Requested' : 'Request Received'}</h2>
-        <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: '1.6', marginTop: '12px', marginBottom: '24px' }}>
+        <h2 className="font-headline-md text-headline-md text-on-surface">{type === 'WITHDRAW' ? 'Withdrawal Requested' : 'Request Received'}</h2>
+        <p className="text-xs text-text-secondary leading-relaxed mt-3 mb-6">
           {type === 'WITHDRAW' 
-            ? `Your withdrawal request has been sent. We will process it shortly and communicate through your email: ${email}. (Please check your spam or junk folder if you do not receive our confirmation.)` 
-            : `Thank you for your request. Our team will review it and get back to you soon. We will communicate through your email address: ${email}. (Please check your spam or junk folder if you do not receive our response.)`}
+            ? `Your withdrawal request has been sent. We will process it shortly and communicate through your email: ${email}. (Please check your spam folder if you do not receive our confirmation.)` 
+            : `Thank you for your request. Our team will review it and get back to you soon. We will communicate through your email address: ${email}. (Please check your spam folder if you do not receive our response.)`}
         </p>
-        <button className="btn btn--primary" style={{ width: '100%' }} onClick={onClose}>
+        <button className="w-full py-2.5 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-[13px] cursor-pointer" onClick={onClose}>
           Close
         </button>
       </div>
@@ -106,7 +105,6 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
     window.addEventListener('app-back-button', handleBack);
     window.addEventListener('keydown', handleEsc);
 
-    // Auto-submit only if type is WITHDRAW, profile is already complete, and we haven't attempted it yet
     const savedName = localStorage.getItem('user_name');
     const savedEmail = localStorage.getItem('user_email');
     if (type === 'WITHDRAW' && savedName && savedEmail && !isSubmitting && !autoSubmitAttempted.current) {
@@ -122,15 +120,14 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
 
   if (!open) return null;
 
-  // If we are auto-submitting, show a loader
   const isAutoSubmitting = type === 'WITHDRAW' && localStorage.getItem('user_name') && localStorage.getItem('user_email');
 
   if (isAutoSubmitting && isSubmitting) {
     return createPortal(
       <div className="overlay overlay--center" style={{ zIndex: 11000 }}>
-        <div className="dialog" style={{ width: '300px', textAlign: 'center', padding: '32px' }}>
+        <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl w-[300px] text-center p-8 flex flex-col items-center justify-center gap-3">
           <Loader size={24} />
-          <p style={{ marginTop: '16px', color: 'var(--text-2)', fontSize: '14px' }}>Sending request...</p>
+          <p className="text-xs text-text-secondary">Sending request...</p>
         </div>
       </div>,
       document.body
@@ -139,74 +136,82 @@ export function RequestAccessForm({ open, type = 'ACCESS', onClose, onSuccess })
 
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 11000 }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw' }}>
-        <div className="dialog__header" style={{ padding: '24px 24px 16px' }}>
-          <h2 className="dialog__title">{type === 'WITHDRAW' ? 'Withdraw Subscription' : 'Upgrade to Pro'}</h2>
-          <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginTop: '8px' }}>
+      <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl max-w-[420px] w-[92%]" role="dialog">
+        <div className="p-6 pb-4">
+          <h2 className="font-display-lg text-headline-md text-on-surface">{type === 'WITHDRAW' ? 'Withdraw Subscription' : 'Upgrade to Pro'}</h2>
+          <p className="text-xs text-text-muted mt-1.5 leading-relaxed">
             {type === 'WITHDRAW' 
               ? 'Tell us why you want to withdraw your Pro subscription.'
               : 'Unlock more services and premium features by requesting access.'}
           </p>
         </div>
-        <div className="dialog__body" style={{ padding: '0 24px' }}>
+        <div className="px-6 flex flex-col gap-4">
           {type === 'WITHDRAW' && (
-            <div style={{ 
-              backgroundColor: 'rgba(239, 68, 68, 0.08)', 
-              border: '1px solid rgba(239, 68, 68, 0.15)', 
-              borderRadius: '8px', 
-              padding: '12px 14px', 
-              marginBottom: '16px',
-              fontSize: '12px',
-              color: 'var(--red)',
-              lineHeight: '1.4'
-            }}>
-              <strong style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>⚠️ What you will lose:</strong>
-              <ul style={{ margin: '0', paddingLeft: '16px', listStyleType: 'disc' }}>
-                <li style={{ marginBottom: '4px' }}>Ability to track unlimited services (reverts to standard <strong>max 4 services</strong> limit).</li>
-                <li style={{ marginBottom: '4px' }}>Active tracking for any existing services beyond the 4-service cap.</li>
-                <li style={{ marginBottom: '0' }}>Priority status for quick background bill checking.</li>
+            <div className="p-3 bg-red-dim/10 border border-red/20 rounded-xl text-xs text-red leading-normal">
+              <strong className="block mb-1 font-body-bold">⚠️ What you will lose:</strong>
+              <ul className="list-disc pl-4 flex flex-col gap-0.5">
+                <li>Ability to track unlimited services (reverts to standard max 4 limit).</li>
+                <li>Active tracking for any existing services beyond the 4-service cap.</li>
+                <li>Priority status for quick background bill checking.</li>
               </ul>
             </div>
           )}
-          <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px' }}>
-            <div style={{ color: 'var(--text-3)', fontSize: '11px', marginBottom: '4px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Profile Details</div>
-            <div style={{ fontWeight: '600', color: 'var(--text-1)' }}>{name || 'No Name'}</div>
-            <div style={{ color: 'var(--text-2)', fontSize: '12px', marginTop: '2px' }}>{email || 'No Email'}</div>
+          
+          <div className="p-3 bg-surface-container-low border border-border-subtle rounded-xl text-xs flex flex-col gap-1">
+            <div className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Profile Details</div>
+            <div className="font-body-bold text-on-surface text-[13px]">{name || 'No Name'}</div>
+            <div className="text-text-secondary">{email || 'No Email'}</div>
           </div>
+
           {type !== 'WITHDRAW' && (
-            <div className="field" style={{ marginBottom: '16px' }}>
-              <label className="field__label">Requested Subscription Tier *</label>
-              <select
-                className="field__input"
-                value={requestedPlan}
-                onChange={e => setRequestedPlan(e.target.value)}
-                disabled={isSubmitting}
-                style={{ width: '100%', background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px' }}
-              >
-                <option value="BRONZE">Bronze Plan (8 Services max)</option>
-                <option value="SILVER">Silver Plan (16 Services max)</option>
-                <option value="GOLD">Gold Plan (32 Services max)</option>
-                <option value="PLATINUM">Platinum Plan (64 Services max)</option>
-                <option value="DIAMOND">Diamond Plan (Unlimited Services)</option>
-              </select>
+            <div className="flex flex-col gap-1">
+              <label className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">Requested Subscription Tier *</label>
+              <div className="relative flex items-center bg-surface-container-low border border-border-medium rounded-xl px-2.5 py-2">
+                <select
+                  value={requestedPlan}
+                  onChange={e => setRequestedPlan(e.target.value)}
+                  disabled={isSubmitting}
+                  className="w-full bg-transparent border-none outline-none text-xs font-body-bold text-on-surface focus:ring-0 appearance-none pr-8 cursor-pointer"
+                >
+                  <option value="BRONZE">Bronze Plan (8 Services max)</option>
+                  <option value="SILVER">Silver Plan (16 Services max)</option>
+                  <option value="GOLD">Gold Plan (32 Services max)</option>
+                  <option value="PLATINUM">Platinum Plan (64 Services max)</option>
+                  <option value="DIAMOND">Diamond Plan (Unlimited Services)</option>
+                </select>
+                <span className="material-symbols-outlined text-[20px] text-text-muted absolute right-2.5 pointer-events-none">expand_more</span>
+              </div>
             </div>
           )}
-          <div className="field" style={{ marginBottom: '16px' }}>
-            <label className="field__label">Message (Optional)</label>
-            <textarea className="field__input" placeholder={type === 'WITHDRAW' ? "Reason for withdrawal..." : "Describe why you need this tier..."} rows={3} value={message} onChange={e => setMessage(e.target.value)} disabled={isSubmitting} style={{ resize: 'none' }} />
+          
+          <div className="flex flex-col gap-1">
+            <label className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">Message (Optional)</label>
+            <textarea 
+              placeholder={type === 'WITHDRAW' ? "Reason for withdrawal..." : "Describe why you need this tier..."} 
+              rows={3} 
+              value={message} 
+              onChange={e => setMessage(e.target.value)} 
+              disabled={isSubmitting} 
+              className="w-full px-3 py-2 border border-border-medium rounded-xl bg-surface text-xs text-on-surface outline-none focus:ring-1 focus:ring-primary focus:border-primary resize-none" 
+            />
           </div>
-          <p style={{ fontSize: '11px', color: 'var(--text-3)', fontStyle: 'italic', marginTop: '4px' }}>
-            Note: Your contact details are only used to serve you better and provide access if needed. We never share your data.
+          
+          <p className="text-[10px] text-text-muted italic leading-relaxed">
+            Note: Your contact details are only used to verify your identity and manage access. We respect your privacy.
           </p>
         </div>
+
         {error && (
-          <div style={{ margin: '0 24px 12px', padding: '10px 14px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', color: 'var(--red)', fontSize: '12px' }}>
+          <div className="mx-6 mt-4 p-2.5 bg-red-dim/10 border border-red/20 rounded-xl text-xs text-red">
             {error}
           </div>
         )}
-        <div className="dialog__footer" style={{ padding: '0 24px 24px', display: 'flex', gap: '12px' }}>
-          <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={isSubmitting}>Cancel</button>
-          <button className="btn btn--primary" onClick={() => handleSubmit()} style={{ flex: 1.5 }} disabled={isSubmitting || !name || !email}>
+
+        <div className="p-6 flex gap-3">
+          <button className="flex-1 py-2.5 bg-surface-card hover:bg-surface-container border border-border-medium rounded-xl font-body-bold text-xs text-text-secondary cursor-pointer" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </button>
+          <button className="flex-1 py-2.5 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-xs cursor-pointer" onClick={() => handleSubmit()} disabled={isSubmitting || !name || !email}>
             {isSubmitting ? 'Sending...' : 'Send Request'}
           </button>
         </div>
@@ -304,13 +309,13 @@ export function ServiceCapModal({ open, serviceCount = 0, limit = 4, onClose }) 
   if (isSuccess) {
     return createPortal(
       <div className="overlay overlay--center" style={{ zIndex: 10000 }}>
-        <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw', textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ width: '80px', height: '80px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-            <FiStar size={40} fill="currentColor" />
+        <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl w-[90%] max-w-[400px] text-center p-8 flex flex-col items-center">
+          <div className="w-16 h-16 bg-primary-dim text-primary rounded-full flex items-center justify-center mb-5 shadow-sm">
+            <span className="material-symbols-outlined text-[32px]">workspace_premium</span>
           </div>
-          <h2 className="dialog__title">Pro Access Active!</h2>
-          <p style={{ color: 'var(--text-2)', marginTop: '12px', marginBottom: '24px' }}>Thank you for your support. Unlimited tracking is now enabled.</p>
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={onClose}>
+          <h2 className="font-headline-md text-headline-md text-on-surface">Pro Access Active!</h2>
+          <p className="text-xs text-text-secondary leading-relaxed mt-2 mb-6">Thank you for your support. Unlimited connection tracking is now enabled.</p>
+          <button className="w-full py-2.5 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-[13px] cursor-pointer" onClick={onClose}>
             Continue
           </button>
         </div>
@@ -325,64 +330,56 @@ export function ServiceCapModal({ open, serviceCount = 0, limit = 4, onClose }) 
 
   return createPortal(
     <div className="overlay overlay--center" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw' }}>
-        <div className="dialog__header" style={{ textAlign: 'center', paddingTop: '20px' }}>
-          <div style={{ 
-            width: '56px', 
-            height: '56px', 
-            background: isLimitReached ? 'var(--amber-light)' : 'var(--primary-light)', 
-            color: isLimitReached ? 'var(--amber)' : 'var(--primary)', 
-            borderRadius: '50%', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            margin: '0 auto 16px' 
-          }}>
-            {isLimitReached ? <FiAlertCircle size={32} /> : <FiZap size={32} />}
+      <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl max-w-[400px] w-[90%]" role="dialog">
+        <div className="p-6 pb-4 text-center flex flex-col items-center">
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${
+            isLimitReached ? 'bg-amber-dim/10 text-amber' : 'bg-primary-dim/10 text-primary'
+          }`}>
+            <span className="material-symbols-outlined text-[28px]">
+              {isLimitReached ? 'warning' : 'workspace_premium'}
+            </span>
           </div>
-          <h2 className="dialog__title">
+          <h2 className="font-headline-md text-headline-md text-on-surface">
             {isLimitReached ? t('service_limit_reached', 'Service Limit Reached') : 'Get Pro Access'}
           </h2>
-        </div>
-        <div className="dialog__body" style={{ textAlign: 'center', padding: '0 24px' }}>
-          <p style={{ color: 'var(--text-2)', fontSize: '14px', lineHeight: '1.6' }}>
+          <p className="text-xs text-text-secondary leading-relaxed mt-2.5">
             {isLimitReached 
               ? t('service_limit_desc', "You've reached the maximum limit of {{cap}} services. To track more services, please enter a Coupon Code or request for Pro access.", { cap: limit })
-              : 'Upgrade to Pro to add more service numbers, get unlimited tracking, and access premium features. Enter a Coupon Code or raise a request below.'
+              : 'Upgrade to Pro to add more service numbers, get unlimited tracking, and access premium features.'
             }
           </p>
           
-          <div className="field" style={{ marginTop: '20px' }}>
+          <div className="w-full flex flex-col gap-1.5 mt-5">
              <input 
-              className="field__input" 
               placeholder={t('enter_coupon_code', 'Enter Coupon Code')} 
-              style={{ textAlign: 'center', textTransform: 'uppercase' }} 
               value={coupon}
               onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
               disabled={validating}
+              className="w-full px-3 py-2 border border-border-medium rounded-xl bg-surface text-xs text-on-surface text-center uppercase tracking-wider outline-none focus:ring-1 focus:ring-primary focus:border-primary"
             />
           </div>
         </div>
-        <div className="dialog__footer" style={{ flexDirection: 'column', gap: '8px', paddingTop: 0 }}>
+        <div className="p-6 pt-0 flex flex-col gap-2">
           {couponError && (
-            <div style={{ color: 'var(--red)', fontSize: '12px', marginBottom: '8px', textAlign: 'center', fontWeight: '500' }}>
+            <div className="text-xs text-red text-center font-body-bold">
               {couponError}
             </div>
           )}
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
+          <button className="w-full py-2 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-xs cursor-pointer disabled:opacity-50" onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
             {validating ? 'Validating...' : t('apply_coupon', 'Apply Coupon')}
           </button>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
-            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-            <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: '600' }}>OR</span>
-            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+          <div className="flex items-center gap-2.5 my-1.5">
+            <div className="flex-1 h-[1px] bg-border-subtle" />
+            <span className="text-[10px] text-text-muted font-bold tracking-wider">OR</span>
+            <div className="flex-grow h-[1px] bg-border-subtle" />
           </div>
 
-          <button className="btn" style={{ width: '100%', background: 'var(--blue)', color: 'white' }} onClick={handleRequestAccessClick} disabled={validating}>
-            <FiSend size={16} style={{ marginRight: '8px' }} /> {t('request_access', 'Request Access')}
+          <button className="w-full py-2 bg-blue text-white hover:bg-blue/90 active:scale-[0.97] transition-all rounded-xl font-body-bold text-xs cursor-pointer flex items-center justify-center gap-1.5" onClick={handleRequestAccessClick} disabled={validating}>
+            <span className="material-symbols-outlined text-[16px]">send</span> 
+            <span>{t('request_access', 'Request Access')}</span>
           </button>
-          <button className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: '4px' }} onClick={onClose} disabled={validating}>
+          <button className="w-full py-1.5 text-text-secondary hover:bg-surface-container font-body-bold text-[11px] rounded-lg transition-colors cursor-pointer" onClick={onClose} disabled={validating}>
             {t('close', 'Close')}
           </button>
         </div>
@@ -405,7 +402,6 @@ export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
 
   useEffect(() => {
     const handleAuthSuccess = () => {
-      // In this modal, if auth completes successfully, show Request Form
       setRequestFormOpen(true);
     };
     window.addEventListener('auth-success', handleAuthSuccess);
@@ -490,13 +486,13 @@ export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
   if (isSuccess) {
     return createPortal(
       <div className="overlay overlay--center" style={{ zIndex: 10000 }}>
-        <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw', textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ width: '80px', height: '80px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-            <FiStar size={40} fill="currentColor" />
+        <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl w-[90%] max-w-[400px] text-center p-8 flex flex-col items-center">
+          <div className="w-16 h-16 bg-primary-dim text-primary rounded-full flex items-center justify-center mb-5 shadow-sm">
+            <span className="material-symbols-outlined text-[32px]">workspace_premium</span>
           </div>
-          <h2 className="dialog__title">Pro Access Active!</h2>
-          <p style={{ color: 'var(--text-2)', marginTop: '12px', marginBottom: '24px' }}>Thank you for your support. Unlimited tracking is now enabled.</p>
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => onConfirm(services.map(s => s.id), [])}>
+          <h2 className="font-headline-md text-headline-md text-on-surface">Pro Access Active!</h2>
+          <p className="text-xs text-text-secondary leading-relaxed mt-2 mb-6">Thank you for your support. Unlimited tracking is now enabled.</p>
+          <button className="w-full py-2.5 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-[13px] cursor-pointer" onClick={() => onConfirm(services.map(s => s.id), [])}>
             Continue to Dashboard
           </button>
         </div>
@@ -507,60 +503,41 @@ export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
 
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 9999 }}>
-      <div className="dialog" role="dialog" style={{ width: '450px', maxWidth: '94vw' }}>
-        <div className="dialog__header" style={{ padding: '24px 24px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-             <div style={{ width: '40px', height: '40px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <FiZap size={20} />
+      <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl max-w-[455px] w-[94%]" role="dialog">
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-3 mb-2.5">
+             <div className="w-10 h-10 bg-primary-dim/10 text-primary rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-[22px]">warning</span>
              </div>
-             <h2 className="dialog__title">{t('service_limit_update', 'Service Limit Update')}</h2>
+             <h2 className="font-headline-md text-headline-md text-on-surface">{t('service_limit_update', 'Service Limit Update')}</h2>
           </div>
-          <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5' }}>
+          <p className="text-xs text-text-secondary leading-relaxed">
             {t('service_limit_cleanup_desc', "To ensure the best experience for everyone, we've introduced a limit of {{cap}} services per user. Please choose the {{cap}} services you'd like to keep.", { cap: limit })}
           </p>
         </div>
 
-        <div className="dialog__body" style={{ padding: '0 24px', maxHeight: '35vh', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="px-6 max-h-[35vh] overflow-y-auto no-scrollbar">
+          <div className="flex flex-col gap-2">
             {services.map(s => {
               const isSelected = selectedIds.has(s.id);
               return (
                 <div 
                   key={s.id} 
-                  className={`cleanup-item ${isSelected ? 'cleanup-item--selected' : ''}`}
                   onClick={() => toggleSelect(s.id)}
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '12px', 
-                    padding: '12px', 
-                    borderRadius: '12px', 
-                    border: '1px solid var(--border)', 
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    background: isSelected ? 'var(--primary-light)' : 'var(--surface-1)',
-                    borderColor: isSelected ? 'var(--primary)' : 'var(--border)'
-                  }}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all duration-150 ${
+                    isSelected ? 'bg-primary-dim/5 border-primary shadow-xs' : 'bg-surface border-border-medium hover:bg-surface-container-low'
+                  }`}
                 >
-                  <div style={{ 
-                    width: '20px', 
-                    height: '20px', 
-                    borderRadius: '6px', 
-                    border: '2px solid', 
-                    borderColor: isSelected ? 'var(--primary)' : 'var(--text-3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: isSelected ? 'var(--primary)' : 'transparent',
-                    color: 'white'
-                  }}>
-                    {isSelected && <FiCheck size={14} strokeWidth={3} />}
+                  <div className={`w-[18px] h-[18px] rounded border flex items-center justify-center text-white ${
+                    isSelected ? 'bg-primary border-primary' : 'bg-transparent border-border-medium'
+                  }`}>
+                    {isSelected && <span className="material-symbols-outlined text-[14px] font-black">check</span>}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-body-bold text-[13px] text-on-surface truncate">
                       {s.label || s.customerName || t('untitled')}
                     </p>
-                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-3)', fontFamily: 'monospace' }}>
+                    <p className="font-mono-data text-[11px] text-text-muted mt-0.5">
                       {s.serviceNumber}
                     </p>
                   </div>
@@ -570,39 +547,40 @@ export function MandatoryCleanupModal({ services, limit = 4, onConfirm }) {
           </div>
         </div>
 
-        <div className="dialog__footer" style={{ padding: '20px 24px 24px', flexDirection: 'column', gap: '12px' }}>
-          <div className="field" style={{ width: '100%' }}>
-             <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="p-6 flex flex-col gap-3">
+          <div className="flex flex-col gap-1 w-full">
+             <div className="flex gap-2">
                 <input 
-                  className="field__input" 
                   placeholder={t('enter_coupon_code', 'Enter Coupon Code')} 
-                  style={{ textTransform: 'uppercase', flex: 1 }} 
                   value={coupon}
                   onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                   disabled={validating}
+                  className="flex-1 px-3 py-2 border border-border-medium rounded-xl bg-surface text-xs text-on-surface uppercase tracking-wider outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 />
-                <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
+                <button className="px-4 py-2 bg-primary text-white hover:bg-primary-hi rounded-xl font-body-bold text-xs cursor-pointer disabled:opacity-50" onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
                   {validating ? '...' : 'Apply'}
                 </button>
              </div>
              {couponError && (
-               <div style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', fontWeight: '500' }}>
+               <div className="text-[11px] text-red font-body-bold mt-1">
                  {couponError}
                </div>
              )}
           </div>
 
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button className="btn btn--ghost" style={{ width: '100%', height: '40px', border: '1px solid var(--border)' }} onClick={handleConfirm} disabled={selectedIds.size === 0 || selectedIds.size > limit || validating}>
-              <FiTrash2 size={16} style={{ marginRight: '8px' }} /> {t('keep_selected_trash_others', 'Keep Selected & Trash Others')}
+          <div className="flex flex-col gap-2 w-full pt-1.5 border-t border-border-subtle">
+            <button className="flex items-center justify-center gap-1.5 w-full py-2.5 bg-surface-card hover:bg-surface-container border border-border-medium rounded-xl font-body-bold text-xs text-text-secondary cursor-pointer disabled:opacity-50" onClick={handleConfirm} disabled={selectedIds.size === 0 || selectedIds.size > limit || validating}>
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+              <span>{t('keep_selected_trash_others', 'Keep Selected & Trash Others')}</span>
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-               <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-               <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: '600' }}>OR</span>
-               <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            <div className="flex items-center gap-2.5 my-1">
+               <div className="flex-1 h-[1px] bg-border-subtle" />
+               <span className="text-[10px] text-text-muted font-bold tracking-wider">OR</span>
+               <div className="flex-grow h-[1px] bg-border-subtle" />
             </div>
-            <button className="btn" style={{ width: '100%', height: '40px', background: 'var(--blue)', color: 'white' }} onClick={handleRequestAccessClick} disabled={validating}>
-              <FiSend size={16} style={{ marginRight: '8px' }} /> Request Access
+            <button className="flex items-center justify-center gap-1.5 w-full py-2.5 bg-blue text-white hover:bg-blue/90 active:scale-[0.97] transition-all rounded-xl font-body-bold text-xs cursor-pointer" onClick={handleRequestAccessClick} disabled={validating}>
+              <span className="material-symbols-outlined text-[16px]">send</span>
+              <span>Request Access</span>
             </button>
           </div>
         </div>
@@ -627,7 +605,6 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
 
   useEffect(() => {
     const handleAuthSuccess = () => {
-      // In this modal, if auth completes successfully, show Request Form
       setRequestFormOpen(true);
     };
     window.addEventListener('auth-success', handleAuthSuccess);
@@ -729,13 +706,13 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
   if (isSuccess) {
     return createPortal(
       <div className="overlay overlay--center" style={{ zIndex: 10000 }}>
-        <div className="dialog" role="dialog" style={{ width: '400px', maxWidth: '90vw', textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ width: '80px', height: '80px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-            <FiStar size={40} fill="currentColor" />
+        <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl w-[90%] max-w-[400px] text-center p-8 flex flex-col items-center">
+          <div className="w-16 h-16 bg-primary-dim text-primary rounded-full flex items-center justify-center mb-5 shadow-sm">
+            <span className="material-symbols-outlined text-[32px]">workspace_premium</span>
           </div>
-          <h2 className="dialog__title">Pro Access Active!</h2>
-          <p style={{ color: 'var(--text-2)', marginTop: '12px', marginBottom: '24px' }}>Thank you for your support. All services are being added.</p>
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => { onConfirm(entries); onClose(); }}>
+          <h2 className="font-headline-md text-headline-md text-on-surface">Pro Access Active!</h2>
+          <p className="text-xs text-text-secondary leading-relaxed mt-2 mb-6">Thank you for your support. All services are being added.</p>
+          <button className="w-full py-2.5 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-[13px] cursor-pointer" onClick={() => { onConfirm(entries); onClose(); }}>
             Import All Services
           </button>
         </div>
@@ -750,10 +727,10 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
 
   return createPortal(
     <div className="overlay overlay--center" style={{ zIndex: 10000 }}>
-      <div className="dialog" role="dialog" style={{ width: '450px', maxWidth: '94vw' }}>
-        <div className="dialog__header" style={{ padding: '24px 24px 16px' }}>
-          <h2 className="dialog__title">{title}</h2>
-          <p style={{ color: 'var(--text-2)', fontSize: '13px', lineHeight: '1.5', marginTop: '8px' }}>
+      <div className="dialog bg-surface-card border border-border-medium rounded-2xl shadow-xl max-w-[450px] w-[94%]" role="dialog">
+        <div className="p-6 pb-4">
+          <h2 className="font-headline-md text-headline-md text-on-surface">{title}</h2>
+          <p className="text-xs text-text-secondary mt-1.5 leading-relaxed">
             We found <strong>{entries.length} services</strong>. 
             {remaining > 0 
                 ? <> As a standard user, you can add up to <strong>{remaining} more</strong>.</>
@@ -762,8 +739,8 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
           </p>
         </div>
 
-        <div className="dialog__body" style={{ padding: '0 24px', maxHeight: '40vh', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="px-6 max-h-[40vh] overflow-y-auto no-scrollbar">
+          <div className="flex flex-col gap-2">
             {entries.map(e => {
               const sn = e.serviceNumber || e.number;
               const isSelected = selectedIds.has(sn);
@@ -771,38 +748,20 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
                 <div 
                   key={sn} 
                   onClick={() => toggleSelect(sn)}
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '12px', 
-                    padding: '12px', 
-                    borderRadius: '12px', 
-                    border: '1px solid var(--border)', 
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    background: isSelected ? 'var(--primary-light)' : 'var(--surface-1)',
-                    borderColor: isSelected ? 'var(--primary)' : 'var(--border)'
-                  }}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all duration-150 ${
+                    isSelected ? 'bg-primary-dim/5 border-primary shadow-xs' : 'bg-surface border-border-medium hover:bg-surface-container-low'
+                  }`}
                 >
-                  <div style={{ 
-                    width: '20px', 
-                    height: '20px', 
-                    borderRadius: '6px', 
-                    border: '2px solid', 
-                    borderColor: isSelected ? 'var(--primary)' : 'var(--text-3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: isSelected ? 'var(--primary)' : 'transparent',
-                    color: 'white'
-                  }}>
-                    {isSelected && <FiCheck size={14} strokeWidth={3} />}
+                  <div className={`w-[18px] h-[18px] rounded border flex items-center justify-center text-white ${
+                    isSelected ? 'bg-primary border-primary' : 'bg-transparent border-border-medium'
+                  }`}>
+                    {isSelected && <span className="material-symbols-outlined text-[14px] font-black">check</span>}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-body-bold text-[13px] text-on-surface truncate">
                       {e.label || e.customerName || t('untitled')}
                     </p>
-                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-3)', fontFamily: 'monospace' }}>
+                    <p className="font-mono-data text-[11px] text-text-muted mt-0.5">
                       {sn}
                     </p>
                   </div>
@@ -812,36 +771,35 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
           </div>
         </div>
 
-        <div className="dialog__footer" style={{ padding: '20px 24px 24px', flexDirection: 'column', gap: '12px' }}>
-          <div className="field" style={{ width: '100%' }}>
-             <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="p-6 flex flex-col gap-3">
+          <div className="flex flex-col gap-1 w-full">
+             <div className="flex gap-2">
                 <input 
-                  className="field__input" 
                   placeholder={t('enter_coupon_code', 'Enter Coupon Code')} 
-                  style={{ textTransform: 'uppercase', flex: 1 }} 
                   value={coupon}
                   onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                   disabled={validating}
+                  className="flex-1 px-3 py-2 border border-border-medium rounded-xl bg-surface text-xs text-on-surface uppercase tracking-wider outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 />
-                <button className="btn btn--primary" style={{ padding: '0 16px' }} onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
+                <button className="px-4 py-2 bg-primary text-white hover:bg-primary-hi rounded-xl font-body-bold text-xs cursor-pointer disabled:opacity-50" onClick={handleApplyCoupon} disabled={validating || !coupon.trim()}>
                   {validating ? '...' : 'Apply'}
                 </button>
              </div>
              {couponError && (
-               <div style={{ color: 'var(--red)', fontSize: '11px', marginTop: '4px', fontWeight: '500' }}>
+               <div className="text-[11px] text-red font-body-bold mt-1">
                  {couponError}
                </div>
              )}
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button className="btn btn--ghost" onClick={onClose} style={{ flex: 1 }} disabled={validating}>Cancel</button>
-            <button className="btn btn--ghost" onClick={handleRequestAccessClick} style={{ flex: 1, border: '1px solid var(--border)' }} disabled={validating}>
-               <FiSend size={16} style={{ marginRight: '8px' }} /> Request Access
+          <div className="flex gap-2 w-full pt-1.5 border-t border-border-subtle">
+            <button className="flex-1 py-2.5 bg-surface-card hover:bg-surface-container border border-border-medium rounded-xl font-body-bold text-xs text-text-secondary cursor-pointer" onClick={onClose} disabled={validating}>Cancel</button>
+            <button className="flex-1 py-2.5 bg-blue text-white hover:bg-blue/90 border border-transparent rounded-xl font-body-bold text-xs cursor-pointer flex items-center justify-center gap-1" onClick={handleRequestAccessClick} disabled={validating}>
+               <span className="material-symbols-outlined text-[16px]">send</span> 
+               <span>Request Access</span>
             </button>
             <button 
-              className="btn btn--primary" 
-              style={{ flex: 1.5 }} 
+              className="flex-[1.5] py-2.5 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-xl font-body-bold text-xs cursor-pointer disabled:opacity-50" 
               onClick={handleConfirm}
               disabled={selectedIds.size === 0 || validating}
             >
@@ -850,8 +808,6 @@ export function ServiceSelectionModal({ open, entries, isPro, currentCount = 0, 
           </div>
         </div>
       </div>
-      <RequestAccessForm open={requestFormOpen} type="ACCESS" onClose={() => setRequestFormOpen(false)} onSuccess={handleRequestSuccess} />
-      <RequestSuccessModal {...successState} onClose={() => setSuccessState({ open: false, type: '', email: '' })} />
     </div>,
     document.body
   );

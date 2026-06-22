@@ -1,17 +1,20 @@
 import React from 'react';
-import { FiChevronRight } from 'react-icons/fi';
 
-export function SettingsItem({ icon: Icon, label, description, onClick, color = 'var(--primary)' }) {
+export function SettingsItem({ icon: Icon, materialIcon, label, description, onClick, color = 'var(--primary)' }) {
   return (
     <button className="settings-item" onClick={onClick}>
-      <div className="settings-item__icon" style={{ color }}>
-        <Icon size={20} />
+      <div className="settings-item__icon" style={{ color, backgroundColor: `${color}15` }}>
+        {materialIcon ? (
+          <span className="material-symbols-outlined text-[20px]">{materialIcon}</span>
+        ) : (
+          Icon && <Icon size={20} />
+        )}
       </div>
       <div className="settings-item__content">
         <span className="settings-item__label">{label}</span>
         {description && <span className="settings-item__description">{description}</span>}
       </div>
-      <FiChevronRight className="settings-item__chevron" size={18} />
+      <span className="material-symbols-outlined settings-item__chevron text-[20px]">chevron_right</span>
       
       <style>{`
         .settings-item {
@@ -29,13 +32,15 @@ export function SettingsItem({ icon: Icon, label, description, onClick, color = 
         .settings-item:last-child {
           border-bottom: none;
         }
+        .settings-item:hover {
+          background: var(--surface-2);
+        }
         .settings-item:active {
           background: var(--surface-3);
         }
         .settings-item__icon {
           width: 40px;
           height: 40px;
-          background: var(--bg-1);
           border-radius: 12px;
           display: flex;
           align-items: center;

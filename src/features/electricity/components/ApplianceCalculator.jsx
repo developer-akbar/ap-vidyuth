@@ -1,12 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { FiInfo, FiZap, FiPlus, FiMinus, FiTrash2, FiEdit2, FiCheck, FiX, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { calculateEstimatedBill, DEFAULT_DOMESTIC_CONFIG } from '../utils/billing';
 import { formatInr } from '../../../shared/utils';
 import { db } from '../../../shared/db/storage';
+import { Loader } from '../../../shared/components/Loader.jsx';
 
 // ─── Appliance catalogue with star-rating wattage variants ──────────────────
-// Each appliance has a `variants` array: [{ stars, watts, label }]
-// `baseWatts` is used as the default (non-inverter / no rating selected)
 const APPLIANCE_CATALOGUE = [
   {
     name: 'AC — 1 Ton',
@@ -197,7 +195,6 @@ const APPLIANCE_CATALOGUE = [
 ];
 
 const CATEGORIES = ['All', ...new Set(APPLIANCE_CATALOGUE.map(a => a.category))];
-
 const SLAB_BREAKPOINTS = [30, 75, 125, 225, 400];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -214,27 +211,20 @@ function getSlabInfo(units) {
 
 function StarPicker({ variants, selectedWatts, onChange }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-      <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <div className="flex flex-col gap-1.5 mt-2">
+      <span className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">
         Efficiency / Model
       </span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <div className="flex flex-wrap gap-1.5">
         {variants.map(v => (
           <button
             key={v.stars}
             onClick={() => onChange(v.watts)}
-            style={{
-              padding: '4px 10px',
-              borderRadius: 20,
-              border: `1px solid ${selectedWatts === v.watts ? 'var(--primary)' : 'var(--border-md)'}`,
-              background: selectedWatts === v.watts ? 'var(--primary-dim)' : 'transparent',
-              color: selectedWatts === v.watts ? 'var(--primary)' : 'var(--text-2)',
-              fontSize: '0.75rem',
-              fontWeight: selectedWatts === v.watts ? 700 : 400,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              whiteSpace: 'nowrap',
-            }}
+            className={`px-3 py-1 rounded-full text-xs transition-all duration-150 cursor-pointer ${
+              selectedWatts === v.watts
+                ? 'bg-primary-dim text-primary font-body-bold border border-primary'
+                : 'bg-transparent text-text-secondary border border-border-medium hover:bg-surface-container-low'
+            }`}
           >
             {v.label}
           </button>
@@ -262,7 +252,7 @@ function WattEditor({ watts, onChange }) {
 
   if (editing) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span className="inline-flex items-center gap-1">
         <input
           ref={ref}
           type="number"
@@ -270,13 +260,9 @@ function WattEditor({ watts, onChange }) {
           onChange={e => setVal(e.target.value)}
           onBlur={commit}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(String(watts)); setEditing(false); } }}
-          style={{
-            width: 60, fontSize: '0.875rem', fontWeight: 700,
-            background: 'var(--surface-2)', border: '1px solid var(--primary)',
-            borderRadius: 4, padding: '1px 4px', color: 'var(--text-1)',
-          }}
+          className="w-16 font-mono-data text-xs font-bold bg-surface-container border border-primary rounded px-1.5 py-0.5 text-on-surface outline-none"
         />
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>W</span>
+        <span className="text-[10px] text-text-muted font-mono-data">W</span>
       </span>
     );
   }
@@ -285,13 +271,10 @@ function WattEditor({ watts, onChange }) {
     <button
       onClick={() => setEditing(true)}
       title="Tap to edit wattage"
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-      }}
+      className="inline-flex items-center gap-1 cursor-pointer bg-transparent border-none p-0 outline-none hover:text-primary transition-colors"
     >
-      <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)' }}>{watts}W</span>
-      <FiEdit2 size={10} style={{ color: 'var(--text-3)' }} />
+      <span className="font-mono-data text-[12px] font-bold text-on-surface">{watts}W</span>
+      <span className="material-symbols-outlined text-[14px] text-text-muted">edit</span>
     </button>
   );
 }
@@ -311,17 +294,14 @@ function CustomApplianceForm({ onAdd, onCancel }) {
   };
 
   return (
-    <div style={{
-      background: 'var(--surface-2)', border: '1px solid var(--primary-glow)',
-      borderRadius: 'var(--radius)', padding: 16, marginTop: 12,
-    }}>
-      <h4 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: 12, color: 'var(--text-1)' }}>
+    <div className="bg-surface-container-low border border-primary/20 rounded-xl p-4 mt-3 flex flex-col gap-3.5 shadow-inner">
+      <h4 className="font-body-bold text-[14px] text-on-surface">
         Add Custom Appliance
       </h4>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-        <div>
-          <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">
             Appliance Name
           </label>
           <input
@@ -330,15 +310,11 @@ function CustomApplianceForm({ onAdd, onCancel }) {
             value={name}
             onChange={e => setName(e.target.value)}
             maxLength={30}
-            style={{
-              width: '100%', padding: '8px 10px', borderRadius: 8,
-              border: '1px solid var(--border-md)', background: 'var(--surface)',
-              color: 'var(--text-1)', fontSize: '0.875rem', boxSizing: 'border-box',
-            }}
+            className="w-full px-3 py-1.5 rounded-lg border border-border-medium bg-surface text-on-surface text-xs outline-none focus:ring-1 focus:ring-primary focus:border-primary"
           />
         </div>
-        <div>
-          <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+        <div className="flex flex-col gap-1">
+          <label className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">
             Wattage (W)
           </label>
           <input
@@ -347,29 +323,23 @@ function CustomApplianceForm({ onAdd, onCancel }) {
             value={watts}
             onChange={e => setWatts(e.target.value)}
             min={1} max={20000}
-            style={{
-              width: '100%', padding: '8px 10px', borderRadius: 8,
-              border: '1px solid var(--border-md)', background: 'var(--surface)',
-              color: 'var(--text-1)', fontSize: '0.875rem', boxSizing: 'border-box',
-            }}
+            className="w-full px-3 py-1.5 rounded-lg border border-border-medium bg-surface text-on-surface text-xs outline-none focus:ring-1 focus:ring-primary focus:border-primary"
           />
         </div>
       </div>
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+      <div className="flex flex-col gap-1.5">
+        <label className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">
           Icon
         </label>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div className="flex gap-1.5 flex-wrap">
           {QUICK_ICONS.map(em => (
             <button
               key={em}
               onClick={() => setIcon(em)}
-              style={{
-                fontSize: 20, padding: '4px 6px', borderRadius: 8, cursor: 'pointer',
-                border: `2px solid ${icon === em ? 'var(--primary)' : 'transparent'}`,
-                background: icon === em ? 'var(--primary-dim)' : 'transparent',
-              }}
+              className={`text-xl p-1.5 rounded-lg cursor-pointer transition-all ${
+                icon === em ? 'bg-primary-dim border border-primary' : 'bg-transparent border border-transparent hover:bg-surface-container'
+              }`}
             >
               {em}
             </button>
@@ -377,11 +347,11 @@ function CustomApplianceForm({ onAdd, onCancel }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button className="btn btn--primary" style={{ flex: 1, height: 38, justifyContent: 'center', fontSize: '0.875rem' }} onClick={submit}>
+      <div className="flex gap-2">
+        <button className="flex-1 py-2 bg-primary text-white hover:bg-primary-hi active:scale-[0.97] transition-all rounded-lg font-body-bold text-xs cursor-pointer" onClick={submit}>
           Add
         </button>
-        <button className="btn btn--ghost" style={{ height: 38, justifyContent: 'center', fontSize: '0.875rem' }} onClick={onCancel}>
+        <button className="px-4 py-2 bg-surface-card hover:bg-surface-container border border-border-medium rounded-lg font-body-bold text-xs text-text-secondary cursor-pointer" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -401,30 +371,27 @@ function SlabMeter({ units }) {
   };
 
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontWeight: 600 }}>
-          Slab rate: <span style={{ color: slabColour(), fontWeight: 700 }}>₹{currentSlab.rate}/unit</span>
+    <div className="mt-3.5 pt-3 border-t border-border-subtle">
+      <div className="flex justify-between items-center mb-1.5">
+        <span className="text-xs text-text-secondary font-body-bold">
+          Slab rate: <span className="font-mono-data font-bold" style={{ color: slabColour() }}>₹{currentSlab.rate}/unit</span>
         </span>
-        {nextBreakpoint && (
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+        {nextBreakpoint ? (
+          <span className="text-[11px] text-text-muted">
             {nextBreakpoint - units} units until next slab (₹{DEFAULT_DOMESTIC_CONFIG.slabs.find(s => s.min >= nextBreakpoint)?.rate ?? '—'}/u)
           </span>
-        )}
-        {!nextBreakpoint && (
-          <span style={{ fontSize: '0.75rem', color: 'var(--red)', fontWeight: 600 }}>Highest slab</span>
+        ) : (
+          <span className="text-[11px] text-red font-body-bold">Highest slab</span>
         )}
       </div>
-      <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
-        <div style={{
-          height: '100%', borderRadius: 99,
-          width: `${pct}%`,
-          background: slabColour(),
-          transition: 'width 0.4s ease',
-        }} />
+      <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+        <div 
+          className="h-full rounded-full transition-all duration-500" 
+          style={{ width: `${pct}%`, backgroundColor: slabColour() }}
+        />
       </div>
       {slabWidth && (
-        <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginTop: 4 }}>
+        <p className="text-[10px] text-text-muted mt-1.5">
           {unitsIntoSlab} of {slabWidth} units used in this slab
         </p>
       )}
@@ -442,22 +409,22 @@ function BillBreakup({ bill }) {
     { label: 'FAC',              value: bill.fac, note: 'Fuel surcharge' },
   ];
   return (
-    <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-      <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+    <div className="mt-3 pt-3 border-t border-border-subtle flex flex-col gap-2">
+      <p className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">
         Bill Breakup (Est.)
       </p>
       {rows.map(r => (
-        <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6, marginBottom: 6, borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--text-2)' }}>{r.label}</span>
-            <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginLeft: 6 }}>{r.note}</span>
+        <div key={r.label} className="flex justify-between items-center text-xs pb-1.5 border-b border-border-subtle last:border-none">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-text-secondary">{r.label}</span>
+            <span className="text-[10px] text-text-muted font-body-base">({r.note})</span>
           </div>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)' }}>{formatInr(r.value)}</span>
+          <span className="font-mono-data text-on-surface font-semibold">{formatInr(r.value)}</span>
         </div>
       ))}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-        <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-1)' }}>Total</span>
-        <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-hi)' }}>{formatInr(bill.total)}</span>
+      <div className="flex justify-between items-center pt-2 mt-1 border-t border-dashed border-border-medium">
+        <span className="font-body-bold text-on-surface text-xs">Total</span>
+        <span className="font-mono-data text-primary text-[14px] font-bold">{formatInr(bill.total)}</span>
       </div>
     </div>
   );
@@ -467,78 +434,82 @@ function BillBreakup({ bill }) {
 function ApplianceRow({ app, onRemove, onUpdate }) {
   const [expanded, setExpanded] = useState(false);
   const catalogue = APPLIANCE_CATALOGUE.find(c => c.name === app.catalogueName);
-
   const dailyKwh = (app.watts * app.hours * app.count) / 1000;
 
   return (
-    <div className="scard" style={{ padding: 0, border: '1px solid var(--border)', overflow: 'hidden' }}>
-      {/* Row summary — always visible */}
+    <div className="scard bg-surface-card border border-border-medium rounded-xl overflow-hidden shadow-xs">
       <div
-        style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+        className="p-3 flex items-center gap-3 cursor-pointer hover:bg-surface-container-low transition-colors duration-150"
         onClick={() => setExpanded(e => !e)}
       >
-        <span style={{ fontSize: 22, flexShrink: 0 }}>{app.icon || '🔌'}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <h4 style={{ fontSize: '0.875rem', margin: 0, fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span className="text-2xl flex-shrink-0">{app.icon || '🔌'}</span>
+        <div className="flex-grow min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h4 className="font-body-bold text-[14px] text-on-surface truncate max-w-[180px]">
               {app.name}
             </h4>
             <WattEditor watts={app.watts} onChange={w => onUpdate(app.id, 'watts', w)} />
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: '2px 0 0' }}>
-            {app.count} × {app.hours}h/day · {dailyKwh.toFixed(2)} kWh/day
+          <p className="text-[11px] text-text-muted mt-0.5">
+            {app.count} × {app.hours}h/day · <span className="font-mono-data font-semibold">{dailyKwh.toFixed(2)} kWh/day</span>
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="flex items-center gap-2 relative z-10" onClick={e => e.stopPropagation()}>
           <button
-            className="icon-btn-ghost"
-            style={{ color: 'var(--red)', flexShrink: 0 }}
-            onClick={e => { e.stopPropagation(); onRemove(app.id); }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-dim/10 text-red cursor-pointer"
+            onClick={() => onRemove(app.id)}
             aria-label={`Remove ${app.name}`}
           >
-            <FiTrash2 size={14} />
+            <span className="material-symbols-outlined text-[18px]">delete</span>
           </button>
-          {expanded ? <FiChevronUp size={16} color="var(--text-3)" /> : <FiChevronDown size={16} color="var(--text-3)" />}
+          <button 
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container text-text-secondary cursor-pointer"
+            onClick={() => setExpanded(e => !e)}
+          >
+            <span className={`material-symbols-outlined text-[20px] transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
+              expand_more
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* Expanded controls */}
       {expanded && (
-        <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, paddingTop: 12 }}>
+        <div className="p-3 bg-surface-container-low/30 border-t border-border-subtle flex flex-col gap-3.5">
+          <div className="grid grid-cols-2 gap-4">
             {/* Qty */}
-            <div>
-              <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Qty</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button className="icon-btn-ghost icon-btn--sm" onClick={() => onUpdate(app.id, 'count', Math.max(1, app.count - 1))} aria-label="Decrease"><FiMinus size={12} /></button>
-                <span style={{ fontSize: '0.9375rem', fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{app.count}</span>
-                <button className="icon-btn-ghost icon-btn--sm" onClick={() => onUpdate(app.id, 'count', app.count + 1)} aria-label="Increase"><FiPlus size={12} /></button>
+            <div className="flex flex-col gap-1.5">
+              <label className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">Qty</label>
+              <div className="flex items-center gap-3">
+                <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-border-medium hover:bg-surface-container text-text-secondary cursor-pointer" onClick={() => onUpdate(app.id, 'count', Math.max(1, app.count - 1))} aria-label="Decrease">
+                  <span className="material-symbols-outlined text-[16px]">remove</span>
+                </button>
+                <span className="font-mono-data text-[14px] font-black w-6 text-center">{app.count}</span>
+                <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-border-medium hover:bg-surface-container text-text-secondary cursor-pointer" onClick={() => onUpdate(app.id, 'count', app.count + 1)} aria-label="Increase">
+                  <span className="material-symbols-outlined text-[16px]">add</span>
+                </button>
               </div>
             </div>
 
             {/* Hours/Day */}
-            <div>
-              <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-                Hours / Day — <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{app.hours}h</span>
+            <div className="flex flex-col gap-1">
+              <label className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider">
+                Hours / Day — <span className="text-primary font-black">{app.hours}h</span>
               </label>
               <input
                 type="range" min="0.5" max="24" step="0.5"
                 value={app.hours}
                 onChange={e => onUpdate(app.id, 'hours', parseFloat(e.target.value))}
-                style={{ width: '100%', height: 4, accentColor: 'var(--primary)' }}
+                className="w-full accent-primary h-1 bg-surface-container-high rounded-full appearance-none cursor-pointer my-2"
                 aria-label={`${app.name} hours per day`}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>0.5h</span>
-                <span style={{ fontSize: '0.6875rem', color: 'var(--primary)', fontWeight: 600 }}>
-                  {dailyKwh.toFixed(2)} kWh/day
-                </span>
-                <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>24h</span>
+              <div className="flex justify-between text-[9px] text-text-muted font-mono-data">
+                <span>0.5h</span>
+                <span className="text-primary font-bold">{dailyKwh.toFixed(2)} kWh/day</span>
+                <span>24h</span>
               </div>
             </div>
           </div>
 
-          {/* Star / variant picker for catalogue appliances */}
           {catalogue?.variants && (
             <StarPicker
               variants={catalogue.variants}
@@ -553,7 +524,7 @@ function ApplianceRow({ app, onRemove, onUpdate }) {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export function ApplianceCalculator({ onBack }) {
+export function ApplianceCalculator({ onBack, onOpenProfile }) {
   const [appliances, setAppliances] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
@@ -569,7 +540,7 @@ export function ApplianceCalculator({ onBack }) {
     })();
   }, []);
 
-  // Persist on change (debounced via isLoaded guard)
+  // Persist on change
   useEffect(() => {
     if (isLoaded) db.setSetting('saved_appliances_v2', appliances);
   }, [appliances, isLoaded]);
@@ -582,7 +553,6 @@ export function ApplianceCalculator({ onBack }) {
   }, [onBack]);
 
   const addFromCatalogue = (cat) => {
-    const already = appliances.filter(a => a.catalogueName === cat.name).length;
     setAppliances(prev => [...prev, {
       id: Date.now(),
       name: cat.name,
@@ -627,84 +597,89 @@ export function ApplianceCalculator({ onBack }) {
   }, [totals]);
 
   return (
-    <div className="page appliance-page">
+    <div className="page flex-1 p-margin-mobile md:p-margin-desktop max-w-7xl mx-auto w-full pb-20 md:pb-6">
 
-      {/* ── Sticky header ─────────────────────────────── */}
+      {/* ── Sticky header with Back Button ─────────────────────────────── */}
       <header className="page__header page__header--sticky">
-        <div style={{ width: '100%' }}>
-          <h2 className="page__title" style={{ fontSize: '1.25rem' }}>Appliance Cost Estimator</h2>
-          <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-3)' }}>
-            Set your actual model — wattage adjusts per efficiency rating
-          </p>
+        <div className="flex items-center gap-2.5">
+          <button 
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-low text-text-secondary cursor-pointer" 
+            onClick={onBack} 
+            title="Go Back"
+            aria-label="Go Back"
+          >
+            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+          </button>
+          <div>
+            <h2 className="font-headline-md text-headline-md text-on-background">Appliance Cost Estimator</h2>
+            <p className="text-[11px] text-text-muted">
+              Set your actual model — wattage adjusts per efficiency rating
+            </p>
+          </div>
         </div>
+        <button
+          className="icon-btn"
+          onClick={onOpenProfile}
+          title="User Profile"
+          style={{ width: '40px', height: '40px', borderRadius: '50%' }}
+        >
+          <span className="material-symbols-outlined text-[24px]">account_circle</span>
+        </button>
       </header>
 
       {/* ── Sticky summary card ────────────────────────── */}
-      <div className="appliance-summary-sticky">
-        <div className="scard" style={{
-          padding: '14px 16px',
-          background: 'var(--surface-2)',
-          border: '1px solid var(--primary-glow)',
-          boxShadow: 'var(--shadow-lg)',
-        }}>
-          {/* Top row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="mb-4">
+        <div className="scard bg-surface-card border border-border-medium rounded-xl p-4 shadow-sm flex flex-col gap-3">
+          <div className="flex justify-between items-start">
             <div>
-              <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Est. Monthly Bill</p>
-              <h3 style={{ fontSize: '1.625rem', color: 'var(--primary-hi)', margin: 0, lineHeight: 1 }}>
+              <p className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Est. Monthly Bill</p>
+              <h3 className="font-amount-hero text-amount-hero text-primary font-black leading-none">
                 {appliances.length === 0 ? '—' : formatInr(totals.bill.total)}
               </h3>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Consumption</p>
-              <h3 style={{ fontSize: '1.375rem', margin: 0, lineHeight: 1 }}>
+            <div className="text-right">
+              <p className="font-label-caps text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Consumption</p>
+              <h3 className="font-display-lg text-[22px] text-on-surface font-black leading-none">
                 {appliances.length === 0 ? '—' : totals.monthlyUnits}{' '}
-                <span style={{ fontSize: '0.8125rem', fontWeight: 400, color: 'var(--text-3)' }}>units</span>
+                <span className="text-xs font-body-base text-text-muted">units</span>
               </h3>
             </div>
           </div>
 
-          {/* Secondary row */}
           {appliances.length > 0 && (
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 16 }}>
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-2)' }}>
+            <div className="pt-2 border-t border-border-subtle flex justify-between items-center text-xs">
+              <div className="flex gap-4">
+                <span className="text-text-secondary">
                   <strong>{totals.dailyKwh}</strong> kWh/day
                 </span>
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-2)' }}>
+                <span className="text-text-secondary">
                   <strong>{formatInr(Math.round((totals.bill.total / (totals.monthlyUnits || 1)) * 100) / 100)}</strong>/unit avg
                 </span>
               </div>
               <button
                 onClick={() => setShowBreakup(b => !b)}
-                style={{
-                  fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600,
-                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                }}
+                className="text-xs font-body-bold text-primary hover:text-primary-hi cursor-pointer bg-transparent border-none p-0 outline-none"
               >
                 {showBreakup ? 'Hide breakup ▲' : 'Bill breakup ▼'}
               </button>
             </div>
           )}
 
-          {/* Bill breakup panel */}
           {showBreakup && appliances.length > 0 && <BillBreakup bill={totals.bill} />}
 
-          {/* Slab meter */}
           {appliances.length > 0 && <SlabMeter units={totals.monthlyUnits} />}
         </div>
       </div>
 
       {/* ── Your appliances ──────────────────────────────── */}
-      <section style={{ marginTop: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-            Your Appliances {appliances.length > 0 && <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>({appliances.length})</span>}
+      <section className="mb-6">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-label-caps text-label-caps text-text-muted uppercase tracking-wider">
+            Your Appliances {appliances.length > 0 && <span className="text-text-muted font-body-base">({appliances.length})</span>}
           </h3>
           {appliances.length > 0 && (
             <button
-              className="btn btn--ghost"
-              style={{ fontSize: '0.75rem', height: 28, padding: '0 10px', color: 'var(--red)' }}
+              className="px-3 py-1 bg-red-dim/10 hover:bg-red-dim/20 text-red font-body-bold text-[11px] rounded-full cursor-pointer transition-colors"
               onClick={() => setAppliances([])}
             >
               Clear all
@@ -713,16 +688,12 @@ export function ApplianceCalculator({ onBack }) {
         </div>
 
         {appliances.length === 0 ? (
-          <div style={{
-            padding: '32px 16px', textAlign: 'center',
-            color: 'var(--text-3)', fontSize: '0.8125rem',
-            border: '1px dashed var(--border-md)', borderRadius: 'var(--radius)',
-          }}>
-            <FiZap size={24} style={{ opacity: 0.3, display: 'block', margin: '0 auto 8px' }} />
+          <div className="p-8 text-center text-text-muted text-xs border border-dashed border-border-medium rounded-xl bg-surface-card">
+            <span className="material-symbols-outlined text-[28px] text-text-muted mb-2 block mx-auto">bolt</span>
             Add appliances below — wattage auto-adjusts by star rating
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="flex flex-col gap-2">
             {appliances.map(app => (
               <ApplianceRow
                 key={app.id}
@@ -736,40 +707,35 @@ export function ApplianceCalculator({ onBack }) {
       </section>
 
       {/* ── Add from catalogue ─────────────────────────── */}
-      <section style={{ marginTop: 28 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <h3 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+      <section className="mb-6">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-label-caps text-label-caps text-text-muted uppercase tracking-wider">
             Add Appliance
           </h3>
           <button
-            className="btn btn--ghost"
-            style={{ fontSize: '0.75rem', height: 28, padding: '0 10px', color: 'var(--primary)' }}
+            className="flex items-center gap-1 px-3 py-1 bg-primary-dim/10 hover:bg-primary-dim/20 text-primary font-body-bold text-[11px] rounded-full cursor-pointer transition-colors"
             onClick={() => setShowCustomForm(c => !c)}
           >
-            <FiPlus size={12} style={{ marginRight: 4 }} />
+            <span className="material-symbols-outlined text-[14px]">add</span>
             Custom
           </button>
         </div>
 
-        {/* Custom form */}
         {showCustomForm && (
           <CustomApplianceForm onAdd={addCustom} onCancel={() => setShowCustomForm(false)} />
         )}
 
         {/* Category filter chips */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 10 }}>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1.5 mb-3">
           {CATEGORIES.map(cat => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              style={{
-                padding: '4px 12px', borderRadius: 20, whiteSpace: 'nowrap',
-                border: `1px solid ${activeCategory === cat ? 'var(--primary)' : 'var(--border-md)'}`,
-                background: activeCategory === cat ? 'var(--primary-dim)' : 'transparent',
-                color: activeCategory === cat ? 'var(--primary)' : 'var(--text-2)',
-                fontSize: '0.75rem', fontWeight: activeCategory === cat ? 700 : 400,
-                cursor: 'pointer',
-              }}
+              className={`px-3.5 py-1 rounded-full text-xs transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                activeCategory === cat 
+                  ? 'bg-primary-dim text-primary font-body-bold border border-primary' 
+                  : 'bg-surface-card text-text-secondary border border-border-medium hover:bg-surface-container-low'
+              }`}
             >
               {cat}
             </button>
@@ -777,26 +743,20 @@ export function ApplianceCalculator({ onBack }) {
         </div>
 
         {/* Appliance grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
           {filteredCatalogue.map(cat => {
             const alreadyAdded = addedNames.has(cat.name);
             return (
               <button
                 key={cat.name}
-                className="btn btn--ghost"
-                style={{
-                  justifyContent: 'flex-start', padding: '10px 12px',
-                  fontSize: '0.75rem', height: 'auto',
-                  flexDirection: 'column', alignItems: 'flex-start', gap: 3,
-                  border: `1px solid ${alreadyAdded ? 'var(--primary-glow)' : 'var(--border)'}`,
-                  background: alreadyAdded ? 'var(--primary-dim)' : 'transparent',
-                  opacity: 1,
-                }}
+                className={`p-3 bg-surface-card border border-border-medium rounded-xl flex flex-col items-start gap-1 text-left transition-all duration-150 hover:translate-y-[-1px] cursor-pointer hover:border-primary/30 relative overflow-hidden ${
+                  alreadyAdded ? 'bg-primary-dim/10 border-primary/20 ring-1 ring-primary/10' : ''
+                }`}
                 onClick={() => addFromCatalogue(cat)}
               >
-                <span style={{ fontSize: 18 }}>{cat.icon}</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-1)', textAlign: 'left', lineHeight: 1.3 }}>{cat.name}</span>
-                <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>
+                <span className="text-xl">{cat.icon}</span>
+                <span className="font-body-bold text-[12px] text-on-surface line-clamp-1">{cat.name}</span>
+                <span className="text-[10px] text-text-muted font-mono-data mt-0.5">
                   {cat.baseWatts}W · {cat.invertible ? 'Adjustable' : 'Fixed'}
                 </span>
               </button>
@@ -807,15 +767,11 @@ export function ApplianceCalculator({ onBack }) {
 
       {/* ── Saving tip ──────────────────────────────────── */}
       {savingTip && appliances.length > 0 && (
-        <div style={{
-          marginTop: 28, marginBottom: 16,
-          background: 'var(--surface-3)', padding: 14,
-          borderRadius: 'var(--radius)', display: 'flex', gap: 10,
-        }}>
-          <FiInfo size={16} style={{ marginTop: 2, flexShrink: 0, color: 'var(--primary)' }} />
+        <div className="p-4 bg-surface-container-low border border-border-subtle rounded-xl flex items-start gap-3 mt-6 shadow-sm">
+          <span className="material-symbols-outlined text-primary text-[20px] mt-0.5 flex-shrink-0">lightbulb</span>
           <div>
-            <h4 style={{ fontSize: '0.875rem', marginBottom: 4, fontWeight: 700, color: 'var(--primary)' }}>Cost Saving Tip</h4>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', lineHeight: 1.6, margin: 0 }}>{savingTip}</p>
+            <h4 className="font-body-bold text-[14px] text-primary mb-1">Cost Saving Tip</h4>
+            <p className="text-xs text-text-secondary leading-normal">{savingTip}</p>
           </div>
         </div>
       )}

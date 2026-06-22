@@ -1,8 +1,6 @@
-import { FiRefreshCw, FiTrash2, FiPackage } from 'react-icons/fi';
 import { formatDate } from '../../../shared/utils/index.js';
 import { useTranslation } from 'react-i18next';
 import { useRef } from 'react';
-import { Loader } from '../../../shared/components/Loader.jsx';
 
 export function TrashView({ services, onRestore, onDeletePermanent, selectedIds, onToggleSelect, selecting }) {
   const { t } = useTranslation();
@@ -10,10 +8,10 @@ export function TrashView({ services, onRestore, onDeletePermanent, selectedIds,
   const touchPos = useRef({ x: 0, y: 0 });
 
   if (!services.length) return (
-    <div className="empty-state">
-      <div className="empty-state__icon"><FiPackage size={28} /></div>
-      <h3>{t('trash_empty')}</h3>
-      <p>{t('deleted_services_here')}</p>
+    <div className="flex flex-col items-center justify-center p-8 border border-dashed border-border-medium rounded-xl text-center bg-surface-card min-h-[300px]">
+      <span className="material-symbols-outlined text-[36px] text-text-muted mb-3">folder_zip</span>
+      <h3 className="font-headline-md text-headline-md text-on-surface">{t('trash_empty')}</h3>
+      <p className="text-xs text-text-muted mt-1">{t('deleted_services_here')}</p>
     </div>
   );
 
@@ -50,44 +48,62 @@ export function TrashView({ services, onRestore, onDeletePermanent, selectedIds,
   };
 
   return (
-    <div className="trash-container">
-      <div className="trash-list">
-        {services.map(s => (
-          <div 
-            key={s.id} 
-            className={`trash-item ${selectedIds.has(s.id) ? 'trash-item--selected' : ''}`}
-            onMouseDown={handlePressStart(s.id)}
-            onMouseUp={handlePressEnd}
-            onMouseLeave={handlePressEnd}
-            onMouseMove={handlePressMove}
-            onTouchStart={handlePressStart(s.id)}
-            onTouchEnd={handlePressEnd}
-            onTouchMove={handlePressMove}
-            onContextMenu={e => { if (longPressTimer.current || selecting) e.preventDefault(); }}
-            onClick={() => selecting ? onToggleSelect(s.id) : undefined}
-            style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-          >
-            {selecting && (
-              <div className="trash-item__select" style={{ paddingRight: '12px', display: 'flex', alignItems: 'center' }}>
-                <input 
-                  type="checkbox" 
-                  checked={selectedIds.has(s.id)} 
-                  readOnly
-                  style={{ width: '18px', height: '18px', margin: 0, pointerEvents: 'none' }}
-                />
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
+        {services.map(s => {
+          const isSelected = selectedIds.has(s.id);
+          return (
+            <div 
+              key={s.id} 
+              className={`scard bg-surface-card border border-border-medium rounded-xl p-3 flex items-center justify-between shadow-xs transition-colors cursor-pointer ${
+                isSelected ? 'border-primary bg-primary-dim/5' : ''
+              }`}
+              onMouseDown={handlePressStart(s.id)}
+              onMouseUp={handlePressEnd}
+              onMouseLeave={handlePressEnd}
+              onMouseMove={handlePressMove}
+              onTouchStart={handlePressStart(s.id)}
+              onTouchEnd={handlePressEnd}
+              onTouchMove={handlePressMove}
+              onContextMenu={e => { if (longPressTimer.current || selecting) e.preventDefault(); }}
+              onClick={() => selecting ? onToggleSelect(s.id) : undefined}
+              style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+            >
+              <div className="flex items-center gap-3">
+                {selecting && (
+                  <div className="flex items-center">
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected} 
+                      readOnly
+                      className="w-[18px] h-[18px] cursor-pointer rounded border-border-medium text-primary focus:ring-primary"
+                    />
+                  </div>
+                )}
+                <div className="flex flex-col">
+                  <h4 className="font-body-bold text-[14px] text-on-surface">{s.label || t('untitled')}</h4>
+                  <span className="font-mono-data text-xs text-text-secondary mt-0.5">{s.serviceNumber}</span>
+                  <small className="text-[10px] text-text-muted mt-1">{t('deleted')} {formatDate(s.deletedAt)}</small>
+                </div>
               </div>
-            )}
-            <div className="trash-item__info">
-              <h4>{s.label || t('untitled')}</h4>
-              <span className="mono-sm">{s.serviceNumber}</span>
-              <small>{t('deleted')} {formatDate(s.deletedAt)}</small>
+              <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                <button 
+                  className="flex items-center gap-1 px-3 py-1.5 bg-surface-card hover:bg-surface-container-low border border-border-medium rounded-lg text-xs font-body-bold text-text-secondary cursor-pointer"
+                  onClick={() => onRestore(s.id)}
+                >
+                  <span className="material-symbols-outlined text-[16px]">restore</span>
+                  <span>{t('restore')}</span>
+                </button>
+                <button 
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-dim/10 text-red cursor-pointer border border-transparent"
+                  onClick={() => onDeletePermanent(s.id)}
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+                </button>
+              </div>
             </div>
-            <div className="trash-item__actions">
-              <button className="btn btn--ghost btn--xs" onClick={(e) => { e.stopPropagation(); onRestore(s.id); }}><FiRefreshCw size={12} style={{ marginRight: '4px' }} /> {t('restore')}</button>
-              <button className="btn btn--danger btn--xs" onClick={(e) => { e.stopPropagation(); onDeletePermanent(s.id); }}><FiTrash2 size={12} /></button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
