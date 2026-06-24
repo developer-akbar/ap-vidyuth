@@ -16,8 +16,8 @@ function CaptchaModal({ serviceNumber, initialSessionData, resolve, cleanup }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!captcha || captcha.length !== 6) {
-      toast.error('Enter valid 6-digit captcha');
+    if (!captcha || captcha.trim().length === 0) {
+      toast.error('Please enter the captcha code');
       return;
     }
     
@@ -98,11 +98,12 @@ function CaptchaModal({ serviceNumber, initialSessionData, resolve, cleanup }) {
                 type="text"
                 className="field__input"
                 value={captcha}
-                onChange={e => setCaptcha(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter numbers"
+                onChange={e => setCaptcha(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                placeholder="Enter letters and numbers"
                 autoComplete="off"
                 autoFocus
                 disabled={validating}
+                maxLength={20}
               />
             </div>
           </div>
