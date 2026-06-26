@@ -273,29 +273,42 @@ export function useElectricityServices() {
   }, [state.services, reload]);
 
   // ── actions.refreshAll ──────────────────────────────────────────────────────
-  // POST /services/refresh-all
-  // Uses concurrency-limited queue inside servicesApi — at most 2 in-flight.
-  // Returns summary { succeeded, failed, errors }.
+  // Performs bounded client-side concurrency refresh (limit = 2)
+  // Calls reload() incrementally so cards update immediately as each finishes.
   const refreshAll = useCallback(async (onProgress) => {
-    if (!state.services.length) return { succeeded: 0, failed: 0, errors: [] };
-    const session = await getValidSession(state.services[0].serviceNumber);
-    if (!session) throw new Error('CANCELLED');
-    
-    // Mark all as refreshing
     const services = state.services;
-    services.forEach((s) => dispatch({ type: 'REFRESHING_ADD', id: s.id }));
+    if (!services.length) return { succeeded: 0, failed: 0, errors: [] };
+    const session = await getValidSession(services[0].serviceNumber);
+    if (!session) throw new Error('CANCELLED');
 
-    try {
-      const summary = await refreshAllServices(async (completed, total) => {
-        onProgress?.(completed, total);
-        // Reload incrementally so cards update as each service finishes
-        await reload();
-      }, session);
-      return summary;
-    } finally {
-      services.forEach((s) => dispatch({ type: 'REFRESHING_REMOVE', id: s.id }));
-      await reload();
+    let completed = 0;
+    let succeeded = 0;
+    const errors = [];
+    const LIMIT = 2;
+    let next = 0;
+
+    async function worker() {
+      while (next < services.length) {
+        const service = services[next++];
+        if (!service) continue;
+        dispatch({ type: 'REFRESHING_ADD', id: service.id });
+        try {
+          await refreshService(service.id, session);
+          succeeded++;
+          cooldowns.current.set(service.id, Date.now() + 5_000);
+        } catch (err) {
+          errors.push(err.message || 'Refresh failed');
+        } finally {
+          dispatch({ type: 'REFRESHING_REMOVE', id: service.id });
+          await reload(); // updates just-finished card immediately
+          completed++;
+          onProgress?.(completed, services.length);
+        }
+      }
     }
+
+    await Promise.all(Array.from({ length: Math.min(LIMIT, services.length) }, worker));
+    return { succeeded, failed: services.length - succeeded, errors };
   }, [state.services, reload]);
 
   // ── actions.update ──────────────────────────────────────────────────────────
